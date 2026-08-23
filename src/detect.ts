@@ -1,7 +1,10 @@
-import { Annotation, ExcludedRange } from "./types";
+import { AdmonitionBlock, Annotation, ExcludedRange } from "./types";
 
 interface FenceRange extends ExcludedRange {
 	isAdBlock: boolean;
+	infoString: string;
+	bodyStart: number;
+	bodyEnd: number;
 }
 
 interface RawHighlightMatch {
@@ -17,7 +20,7 @@ const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
 const HIGHLIGHT_REGEX = /==(\+\+)?([\s\S]+?)\1==/g;
 const FOOTNOTE_REGEX = /^\^\[((?:\[[^\]]*\])?[^\]]*)\]/;
 const AUTHOR_REGEX = /^\[([^\]]+)\]\s*/;
-const ARROW_REPLACE_REGEX = /^→\s*"([^"]*)"/;
+const ARROW_REPLACE_REGEX = /^→\s*"([^"]*)"\s*,?\s*(.*)$/;
 const DELETE_REGEX = /^delete\b\s*,?\s*(.*)$/i;
 const INSERT_KEYWORD_REGEX = /^insert\b\s*,?\s*(.*)$/i;
 const NATIVE_COMMENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
@@ -53,8 +56,10 @@ function getFenceRanges(content: string): FenceRange[] {
 	const ranges: FenceRange[] = [];
 	const lines = content.split("\n");
 	let currentStart: number | null = null;
+	let currentBodyStart: number | null = null;
 	let currentMarkerChar: string | null = null;
 	let currentIsAd = false;
+	let currentInfoString = "";
 	let pos = 0;
 	for (const line of lines) {
 		const lineStart = pos;
@@ -63,20 +68,38 @@ function getFenceRanges(content: string): FenceRange[] {
 		if (m) {
 			const markerChar = m[1][0];
 			if (currentMarkerChar === markerChar) {
-				ranges.push({ start: currentStart!, end: lineEnd, isAdBlock: currentIsAd });
+				ranges.push({
+					start: currentStart!,
+					end: lineEnd,
+					isAdBlock: currentIsAd,
+					infoString: currentInfoString,
+					bodyStart: currentBodyStart!,
+					bodyEnd: lineStart
+				});
 				currentStart = null;
+				currentBodyStart = null;
 				currentMarkerChar = null;
 				currentIsAd = false;
+				currentInfoString = "";
 			} else if (currentMarkerChar === null) {
 				currentStart = lineStart;
+				currentBodyStart = Math.min(lineEnd + 1, content.length);
 				currentMarkerChar = markerChar;
-				currentIsAd = /^ad-/i.test(m[2] || "");
+				currentInfoString = (m[2] || "").toLowerCase();
+				currentIsAd = /^ad-/i.test(currentInfoString);
 			}
 		}
 		pos = lineEnd + 1;
 	}
 	if (currentStart !== null) {
-		ranges.push({ start: currentStart, end: content.length, isAdBlock: currentIsAd });
+		ranges.push({
+			start: currentStart,
+			end: content.length,
+			isAdBlock: currentIsAd,
+			infoString: currentInfoString,
+			bodyStart: currentBodyStart!,
+			bodyEnd: content.length
+		});
 	}
 	return ranges;
 }
@@ -185,7 +208,6 @@ function classifyHighlightMatch(
 			...base,
 			type: "insert",
 			originalText: "",
-			commentText: reason ? `insert, ${reason}` : "insert",
 			author,
 			reason,
 			insertedText: insertedRaw.trim()
@@ -209,9 +231,9 @@ function classifyHighlightMatch(
 			...base,
 			type: "replace",
 			originalText: match.innerText,
-			commentText: fc,
 			author,
-			replacement: arrowMatch[1]
+			replacement: arrowMatch[1],
+			reason: arrowMatch[2] ? arrowMatch[2].trim() : undefined
 		};
 	}
 
@@ -221,9 +243,20 @@ function classifyHighlightMatch(
 			...base,
 			type: "delete",
 			originalText: match.innerText,
-			commentText: fc,
 			author,
 			reason: deleteMatch[1] ? deleteMatch[1].trim() : undefined
+		};
+	}
+
+	const insertMatch = INSERT_KEYWORD_REGEX.exec(fc);
+	if (insertMatch) {
+		return {
+			...base,
+			type: "insert",
+			originalText: "",
+			author,
+			insertedText: match.innerText,
+			reason: insertMatch[1] ? insertMatch[1].trim() : undefined
 		};
 	}
 
@@ -263,7 +296,6 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			matchEnd,
 			fullMatch: m[0],
 			originalText: "",
-			commentText: "insert",
 			author,
 			insertedText: text.trim(),
 			insideAdBlock: false
@@ -295,4 +327,21 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 	const all = [...highlightAnnotations, ...nativeCommentAnnotations];
 	all.sort((a, b) => a.matchStart - b.matchStart);
 	return all;
+}
+
+export function detectAdmonitionBlocks(content: string, filePath: string): AdmonitionBlock[] {
+	const fenceRanges = getFenceRanges(content).filter(r => r.isAdBlock);
+	return fenceRanges.map(r => {
+		const body = content.slice(r.bodyStart, r.bodyEnd).trim();
+		const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+		return {
+			id: makeId(filePath, r.start, r.infoString),
+			filePath,
+			line: lineAt(content, r.start),
+			matchStart: r.start,
+			matchEnd: r.end,
+			adType: r.infoString || "ad",
+			preview
+		};
+	});
 }

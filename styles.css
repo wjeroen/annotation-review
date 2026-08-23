@@ -58,6 +58,12 @@
 
 .annotation-review-author {
 	font-size: 0.85em;
+	padding: 1px 6px;
+	border-radius: 4px;
+}
+
+.annotation-review-author-none {
+	background-color: var(--background-modifier-border);
 	color: var(--text-muted);
 }
 
@@ -112,5 +118,56 @@
 }
 
 .annotation-review-dismiss {
+	color: var(--text-muted);
+}
+
+.annotation-review-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+	gap: 8px;
+}
+
+.annotation-review-tabs {
+	display: flex;
+	gap: 4px;
+}
+
+.annotation-review-tab {
+	font-size: 0.85em;
+	padding: 3px 10px;
+	border-radius: 4px;
+	background-color: transparent;
+	color: var(--text-muted);
+	box-shadow: none;
+}
+
+.annotation-review-tab.is-active {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.annotation-review-refresh {
+	font-size: 0.85em;
+	padding: 3px 10px;
+}
+
+.annotation-review-filter-row {
+	margin-bottom: 8px;
+}
+
+.annotation-review-filter {
+	font-size: 0.85em;
+	width: 100%;
+}
+
+.annotation-review-ad-badge {
+	background-color: var(--background-modifier-border);
+	color: var(--text-normal);
+	text-transform: lowercase;
+}
+
+.annotation-review-ad-preview {
 	color: var(--text-muted);
 }

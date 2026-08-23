@@ -1,11 +1,12 @@
 import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
-import { detectAnnotations } from "./src/detect";
+import { detectAdmonitionBlocks, detectAnnotations } from "./src/detect";
 import { computeMutation, AnnotationAction } from "./src/actions";
-import { Annotation } from "./src/types";
+import { AdmonitionBlock, Annotation } from "./src/types";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 
 export default class AnnotationReviewPlugin extends Plugin {
 	annotations: Annotation[] = [];
+	admonitions: AdmonitionBlock[] = [];
 	activeFile: TFile | null = null;
 
 	async onload() {
@@ -16,6 +17,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 			id: "open-annotation-review",
 			name: "Open Annotation Review sidebar",
 			callback: () => this.activateView()
+		});
+		this.addCommand({
+			id: "refresh-annotation-review",
+			name: "Refresh Annotation Review",
+			callback: () => this.rescanActiveFile()
 		});
 
 		const debouncedRescan = debounce(() => this.rescanActiveFile(), 400, true);
@@ -52,11 +58,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const file = this.activeFile;
 		if (!file || file.extension !== "md") {
 			this.annotations = [];
+			this.admonitions = [];
 			this.refreshView();
 			return;
 		}
 		const content = await this.app.vault.read(file);
 		this.annotations = detectAnnotations(content, file.path);
+		this.admonitions = detectAdmonitionBlocks(content, file.path);
 		this.refreshView();
 	}
 
@@ -84,14 +92,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.rescanActiveFile();
 	}
 
-	async jumpToAnnotation(annotation: Annotation) {
-		const file = this.app.vault.getAbstractFileByPath(annotation.filePath);
+	async jumpToOffset(filePath: string, offset: number) {
+		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!(file instanceof TFile)) return;
 		const leaf = this.app.workspace.getLeaf(false);
 		await leaf.openFile(file);
 		const view = leaf.view;
 		if (view instanceof MarkdownView) {
-			const pos = view.editor.offsetToPos(annotation.matchStart);
+			const pos = view.editor.offsetToPos(offset);
 			view.editor.setCursor(pos);
 			view.editor.scrollIntoView({ from: pos, to: pos }, true);
 		}

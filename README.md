@@ -6,11 +6,18 @@ An Obsidian plugin that finds text annotations in a note (comments, inserts, del
 
 - **Comment on specific text**: `==Text==^[[Author] Comment text.]` — dismiss only, restores the plain text.
 - **Delete**: `==Text==^[[Author] delete]` or `==Text==^[[Author] delete, reason]` — approve removes the text, dismiss restores it.
-- **Replace**: `==Text==^[[Author] → "New text."]` — approve swaps in the quoted replacement, dismiss restores the original.
+- **Replace**: `==Text==^[[Author] → "New text."]`, optionally with a reason after the quotes — approve swaps in the quoted replacement, dismiss restores the original.
 - **Insert (outside code blocks)**: `%%[Author] New text.%%` — approve keeps the text, dismiss removes it entirely. Also supports the `%%%%...%%%%` form for inserting next to an existing `%%...%%` span.
-- **Insert (inside `ad-*` blocks)**: `==++[Author] New text.++==`, or with a reason: `==++New text.++==^[[Author] insert, reason]`.
+- **Insert (inside `ad-*` blocks, no reason)**: `==++[Author] New text.++==`.
+- **Insert with a reason (inside or outside code blocks)**: `==New text.==^[[Author] insert, reason]` — no `++` needed when there's a footnote.
 
 The `[Author]` label is optional; annotations left by the vault owner usually omit it.
+
+## Sidebar features
+
+- **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author. Each author gets a consistent, hashed color badge (grey if unlabeled), distinct even for similar names.
+- **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type, for quick navigation. These are just listed for browsing, not tracked as annotations.
+- **Refresh button**: forces a rescan of the active note if the list ever looks stale.
 
 ## Code block handling
 
