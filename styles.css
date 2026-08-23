@@ -222,6 +222,47 @@
 	font-style: italic;
 }
 
+.annotation-review-replies {
+	margin-top: 6px;
+	padding-left: 10px;
+	border-left: 2px solid var(--background-modifier-border);
+}
+
+.annotation-review-reply {
+	font-size: 0.9em;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+.annotation-review-reply-author {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.annotation-review-reply-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 4px;
+}
+
+.annotation-review-reply-form {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1;
+}
+
+.annotation-review-reply-form.is-hidden {
+	display: none;
+}
+
+.annotation-review-reply-input {
+	flex: 1;
+	font-size: 0.85em;
+	padding: 2px 6px;
+}
+
 .annotation-review-actions {
 	display: flex;
 	gap: 6px;

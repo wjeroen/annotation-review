@@ -36,6 +36,16 @@ export function computeMutation(content: string, annotation: Annotation, action:
 	return { ok: true, newContent };
 }
 
+export function computeAddReply(content: string, annotation: Annotation, replyText: string): MutationResult {
+	const currentSlice = content.slice(annotation.matchStart, annotation.matchEnd);
+	if (currentSlice !== annotation.fullMatch) {
+		return { ok: false, reason: "The note changed since this annotation was detected. Rescanning, please try again." };
+	}
+	const newFootnote = `^[${replyText}]`;
+	const newContent = content.slice(0, annotation.matchEnd) + newFootnote + content.slice(annotation.matchEnd);
+	return { ok: true, newContent };
+}
+
 export function computeRemoval(content: string, matchStart: number, matchEnd: number, expectedRaw: string): MutationResult {
 	const currentSlice = content.slice(matchStart, matchEnd);
 	if (currentSlice !== expectedRaw) {

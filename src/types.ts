@@ -1,5 +1,10 @@
 export type AnnotationType = "comment" | "delete" | "replace" | "insert";
 
+export interface AnnotationReply {
+	author?: string;
+	text: string;
+}
+
 export interface Annotation {
 	id: string;
 	type: AnnotationType;
@@ -15,6 +20,7 @@ export interface Annotation {
 	replacement?: string;
 	insertedText?: string;
 	insideAdBlock: boolean;
+	replies: AnnotationReply[];
 }
 
 export interface AdmonitionBlock {

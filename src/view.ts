@@ -261,10 +261,25 @@ export class AnnotationReviewView extends ItemView {
 			body.createEl("div", { cls: "annotation-review-comment", text: note });
 		}
 
+		if (annotation.replies.length > 0) {
+			const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
+			for (const reply of annotation.replies) {
+				const replyEl = repliesEl.createEl("div", { cls: "annotation-review-reply" });
+				if (reply.author) {
+					replyEl.createEl("span", { cls: "annotation-review-reply-author", text: `${reply.author}: ` });
+				}
+				replyEl.createEl("span", { text: reply.text });
+			}
+		}
+
 		card.addEventListener("click", evt => {
-			if ((evt.target as HTMLElement).closest("button")) return;
+			if ((evt.target as HTMLElement).closest("button, input")) return;
 			this.plugin.jumpToOffset(annotation.filePath, annotation.matchStart);
 		});
+
+		if (annotation.fullMatch.startsWith("==")) {
+			this.renderReplyForm(card, annotation);
+		}
 
 		const actions = card.createEl("div", { cls: "annotation-review-actions" });
 		if (annotation.type !== "comment") {
@@ -284,6 +299,40 @@ export class AnnotationReviewView extends ItemView {
 		dismissBtn.addEventListener("click", evt => {
 			evt.stopPropagation();
 			this.plugin.applyAction(annotation, "dismiss");
+		});
+	}
+
+	private renderReplyForm(card: Element, annotation: Annotation) {
+		const replyRow = card.createEl("div", { cls: "annotation-review-reply-row" });
+		const toggleBtn = replyRow.createEl("button", { cls: "clickable-icon" });
+		setIcon(toggleBtn, "reply");
+		setTooltip(toggleBtn, "Reply");
+
+		const form = replyRow.createEl("div", { cls: "annotation-review-reply-form is-hidden" });
+		const input = form.createEl("input", { cls: "annotation-review-reply-input", attr: { type: "text", placeholder: "Reply..." } });
+		const sendBtn = form.createEl("button", { cls: "clickable-icon" });
+		setIcon(sendBtn, "send");
+		setTooltip(sendBtn, "Send reply");
+
+		toggleBtn.addEventListener("click", evt => {
+			evt.stopPropagation();
+			const wasHidden = form.hasClass("is-hidden");
+			form.toggleClass("is-hidden", !wasHidden);
+			if (wasHidden) input.focus();
+		});
+
+		const submit = () => {
+			const text = input.value.trim();
+			if (!text) return;
+			this.plugin.addReply(annotation, text);
+		};
+		sendBtn.addEventListener("click", evt => {
+			evt.stopPropagation();
+			submit();
+		});
+		input.addEventListener("click", evt => evt.stopPropagation());
+		input.addEventListener("keydown", evt => {
+			if (evt.key === "Enter") submit();
 		});
 	}
 

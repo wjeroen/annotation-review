@@ -1,4 +1,4 @@
-import { AdmonitionBlock, Annotation, ExcludedRange } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationReply, ExcludedRange } from "./types";
 
 interface FenceRange extends ExcludedRange {
 	isAdBlock: boolean;
@@ -12,7 +12,7 @@ interface RawHighlightMatch {
 	matchEnd: number;
 	isPlusWrapped: boolean;
 	innerText: string;
-	footnoteContent: string | null;
+	footnotes: string[];
 	fullMatch: string;
 }
 
@@ -41,6 +41,31 @@ function lineAt(content: string, offset: number): number {
 		if (content.charCodeAt(i) === 10) line++;
 	}
 	return line;
+}
+
+function extractFootnotes(rest: string): { footnotes: string[]; consumedLength: number } {
+	const footnotes: string[] = [];
+	let pos = 0;
+	while (true) {
+		const m = FOOTNOTE_REGEX.exec(rest.slice(pos));
+		if (!m) break;
+		footnotes.push(m[1]);
+		pos += m[0].length;
+	}
+	return { footnotes, consumedLength: pos };
+}
+
+function parseReplies(footnoteContents: string[]): AnnotationReply[] {
+	return footnoteContents.map(fc => {
+		let text = fc;
+		let author: string | undefined;
+		const authorMatch = AUTHOR_REGEX.exec(text);
+		if (authorMatch) {
+			author = authorMatch[1];
+			text = text.slice(authorMatch[0].length);
+		}
+		return { author, text: text.trim() };
+	});
 }
 
 function makeId(filePath: string, start: number, fullMatch: string): string {
@@ -147,9 +172,8 @@ function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]):
 		if (/\n\s*\n/.test(innerText)) continue;
 
 		const rest = content.slice(highlightEnd);
-		const footnoteMatch = FOOTNOTE_REGEX.exec(rest);
-		const matchEnd = footnoteMatch ? highlightEnd + footnoteMatch[0].length : highlightEnd;
-		const footnoteContent = footnoteMatch ? footnoteMatch[1] : null;
+		const { footnotes, consumedLength } = extractFootnotes(rest);
+		const matchEnd = highlightEnd + consumedLength;
 
 		if (hasDelimiterInsideRanges(fullStart, matchEnd, excludedRanges)) continue;
 
@@ -158,7 +182,7 @@ function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]):
 			matchEnd,
 			isPlusWrapped,
 			innerText,
-			footnoteContent,
+			footnotes,
 			fullMatch: content.slice(fullStart, matchEnd)
 		});
 	}
@@ -193,8 +217,9 @@ function classifyHighlightMatch(
 		}
 
 		let reason: string | undefined;
-		if (match.footnoteContent) {
-			let fc = match.footnoteContent;
+		const firstFootnote = match.footnotes[0];
+		if (firstFootnote) {
+			let fc = firstFootnote;
 			const fAuthor = AUTHOR_REGEX.exec(fc);
 			if (fAuthor && !author) {
 				author = fAuthor[1];
@@ -210,13 +235,14 @@ function classifyHighlightMatch(
 			originalText: "",
 			author,
 			reason,
-			insertedText: insertedRaw.trim()
+			insertedText: insertedRaw.trim(),
+			replies: parseReplies(match.footnotes.slice(1))
 		};
 	}
 
-	if (!match.footnoteContent) return null;
+	if (match.footnotes.length === 0) return null;
 
-	let fc = match.footnoteContent;
+	let fc = match.footnotes[0];
 	let author: string | undefined;
 	const authorMatch = AUTHOR_REGEX.exec(fc);
 	if (authorMatch) {
@@ -224,6 +250,7 @@ function classifyHighlightMatch(
 		fc = fc.slice(authorMatch[0].length);
 	}
 	fc = fc.trim();
+	const replies = parseReplies(match.footnotes.slice(1));
 
 	const arrowMatch = ARROW_REPLACE_REGEX.exec(fc);
 	if (arrowMatch) {
@@ -233,7 +260,8 @@ function classifyHighlightMatch(
 			originalText: match.innerText,
 			author,
 			replacement: arrowMatch[1],
-			reason: arrowMatch[2] ? arrowMatch[2].trim() : undefined
+			reason: arrowMatch[2] ? arrowMatch[2].trim() : undefined,
+			replies
 		};
 	}
 
@@ -244,7 +272,8 @@ function classifyHighlightMatch(
 			type: "delete",
 			originalText: match.innerText,
 			author,
-			reason: deleteMatch[1] ? deleteMatch[1].trim() : undefined
+			reason: deleteMatch[1] ? deleteMatch[1].trim() : undefined,
+			replies
 		};
 	}
 
@@ -256,7 +285,8 @@ function classifyHighlightMatch(
 			originalText: "",
 			author,
 			insertedText: match.innerText,
-			reason: insertMatch[1] ? insertMatch[1].trim() : undefined
+			reason: insertMatch[1] ? insertMatch[1].trim() : undefined,
+			replies
 		};
 	}
 
@@ -265,7 +295,8 @@ function classifyHighlightMatch(
 		type: "comment",
 		originalText: match.innerText,
 		commentText: fc,
-		author
+		author,
+		replies
 	};
 }
 
@@ -298,7 +329,8 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			originalText: "",
 			author,
 			insertedText: text.trim(),
-			insideAdBlock: false
+			insideAdBlock: false,
+			replies: []
 		});
 	}
 	return results;
