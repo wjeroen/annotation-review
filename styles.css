@@ -8,24 +8,133 @@
 	padding: 12px 4px;
 }
 
+/* Toolbar: tabs + refresh */
+
+.annotation-review-toolbar {
+	display: flex;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.annotation-review-tabs {
+	display: flex;
+	flex: 1;
+}
+
+.annotation-review-tab {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 8px 0;
+	border: none !important;
+	background: transparent !important;
+	color: var(--text-muted) !important;
+	cursor: pointer;
+	transition: color 0.2s ease;
+	position: relative;
+	box-shadow: none !important;
+}
+
+.annotation-review-tab:hover {
+	color: var(--text-normal) !important;
+	background-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.annotation-review-tab.is-active {
+	color: var(--text-normal) !important;
+	background-color: transparent !important;
+	box-shadow: none !important;
+}
+
+.annotation-review-tab.is-active::after {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	left: 20%;
+	right: 20%;
+	height: 2px;
+	background-color: var(--interactive-accent);
+}
+
+/* Filter row: filter button(s) + optional expand toggle */
+
+.annotation-review-filter-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.annotation-review-filter-btn {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+	padding: 4px 8px;
+	background-color: var(--background-secondary) !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-radius: var(--radius-m);
+	color: var(--text-muted) !important;
+	box-shadow: none !important;
+}
+
+.annotation-review-filter-btn:hover {
+	color: var(--text-normal) !important;
+	background-color: var(--background-modifier-hover) !important;
+}
+
+.annotation-review-filter-chevron {
+	display: flex;
+	align-items: center;
+}
+
+.annotation-review-filter-chevron svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Cards */
+
 .annotation-review-card {
-	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	border: none;
+	border-left: 4px solid var(--background-modifier-border);
 	border-radius: 6px;
-	padding: 8px 10px;
+	padding: 0;
 	margin-bottom: 8px;
 	cursor: pointer;
+	box-shadow: var(--shadow-s);
 	font-size: inherit;
+	transition: background-color 0.2s ease;
 }
 
 .annotation-review-card:hover {
 	background-color: var(--background-modifier-hover);
 }
 
+.annotation-type-comment {
+	border-left-color: var(--color-blue, var(--interactive-accent));
+}
+
+.annotation-type-delete {
+	border-left-color: var(--color-red, var(--text-error));
+}
+
+.annotation-type-replace {
+	border-left-color: var(--color-orange, var(--text-warning));
+}
+
+.annotation-type-insert {
+	border-left-color: var(--color-green, var(--text-success));
+}
+
 .annotation-review-header {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	margin-bottom: 4px;
+	padding: 8px 10px 6px 10px;
 }
 
 .annotation-review-badge {
@@ -75,6 +184,7 @@
 
 .annotation-review-body {
 	font-size: inherit;
+	padding: 0 10px 8px 10px;
 }
 
 .annotation-review-text {
@@ -105,7 +215,8 @@
 .annotation-review-actions {
 	display: flex;
 	gap: 6px;
-	margin-top: 6px;
+	padding: 6px 10px;
+	border-top: 0.5px solid var(--background-modifier-border);
 }
 
 .annotation-review-actions button {
@@ -121,53 +232,58 @@
 	color: var(--text-muted);
 }
 
-.annotation-review-toolbar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 8px;
-	gap: 8px;
+/* Admonition cards */
+
+.annotation-review-admonition-card {
+	border-left-color: var(--background-modifier-border);
 }
 
-.annotation-review-tabs {
-	display: flex;
-	gap: 4px;
-}
-
-.annotation-review-tab {
-	font-size: 0.85em;
-	padding: 3px 10px;
-	border-radius: 4px;
-	background-color: transparent;
-	color: var(--text-muted);
-	box-shadow: none;
-}
-
-.annotation-review-tab.is-active {
-	background-color: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.annotation-review-refresh {
-	font-size: 0.85em;
-	padding: 3px 10px;
-}
-
-.annotation-review-filter-row {
-	margin-bottom: 8px;
-}
-
-.annotation-review-filter {
-	font-size: 0.85em;
-	width: 100%;
-}
-
-.annotation-review-ad-badge {
-	background-color: var(--background-modifier-border);
-	color: var(--text-normal);
+.annotation-review-ad-type {
+	font-size: 0.8em;
+	color: var(--text-faint);
 	text-transform: lowercase;
 }
 
-.annotation-review-ad-preview {
-	color: var(--text-muted);
+.annotation-review-ad-delete {
+	margin-left: auto;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+.annotation-review-admonition-card:hover .annotation-review-ad-delete {
+	opacity: 0.7;
+}
+
+.annotation-review-ad-delete:hover {
+	opacity: 1 !important;
+}
+
+.annotation-review-ad-render {
+	padding: 0 10px 10px 10px;
+	max-height: 120px;
+	overflow: hidden;
+	position: relative;
+}
+
+.annotation-review-ad-render.is-expanded {
+	max-height: none;
+}
+
+.annotation-review-ad-render:not(.is-expanded)::after {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 32px;
+	background: linear-gradient(to bottom, transparent, var(--background-secondary));
+	pointer-events: none;
+}
+
+.annotation-review-ad-render :first-child {
+	margin-top: 0;
+}
+
+.annotation-review-ad-render :last-child {
+	margin-bottom: 0;
 }

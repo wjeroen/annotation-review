@@ -15,9 +15,9 @@ The `[Author]` label is optional; annotations left by the vault owner usually om
 
 ## Sidebar features
 
-- **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author. Each author gets a consistent, hashed color badge (grey if unlabeled), distinct even for similar names.
-- **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type, for quick navigation. These are just listed for browsing, not tracked as annotations.
-- **Refresh button**: forces a rescan of the active note if the list ever looks stale.
+- **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu (not a native `<select>`, which renders as an ugly OS popup on mobile). Each author gets a consistent, hashed color badge (grey if unlabeled), distinct even for similar names.
+- **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type. Each block is rendered live through Obsidian's own markdown pipeline, so if you have the Admonition plugin installed, it looks exactly like it does in your note, your custom colors, icons, and titles included. Without Admonition installed, it falls back to a plain rendered code block. A trash icon per block deletes that entire block in one action. An expand/collapse-all toggle sits in the filter row for reading full content instead of the clipped preview.
+- **Refresh button**: an icon-only button next to the tabs forces a rescan of the active note if the list ever looks stale.
 
 ## Code block handling
 

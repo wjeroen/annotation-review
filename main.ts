@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import { detectAdmonitionBlocks, detectAnnotations } from "./src/detect";
-import { computeMutation, AnnotationAction } from "./src/actions";
+import { computeMutation, computeRemoval, AnnotationAction } from "./src/actions";
 import { AdmonitionBlock, Annotation } from "./src/types";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 
@@ -83,6 +83,23 @@ export default class AnnotationReviewPlugin extends Plugin {
 		}
 		const content = await this.app.vault.read(file);
 		const result = computeMutation(content, annotation, action);
+		if (!result.ok) {
+			new Notice(`Annotation Review: ${result.reason}`);
+			await this.rescanActiveFile();
+			return;
+		}
+		await this.app.vault.modify(file, result.newContent);
+		await this.rescanActiveFile();
+	}
+
+	async deleteAdmonition(block: AdmonitionBlock) {
+		const file = this.app.vault.getAbstractFileByPath(block.filePath);
+		if (!(file instanceof TFile)) {
+			new Notice("Annotation Review: could not find the file for this block.");
+			return;
+		}
+		const content = await this.app.vault.read(file);
+		const result = computeRemoval(content, block.matchStart, block.matchEnd, block.raw);
 		if (!result.ok) {
 			new Notice(`Annotation Review: ${result.reason}`);
 			await this.rescanActiveFile();

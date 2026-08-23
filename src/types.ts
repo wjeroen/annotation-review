@@ -25,6 +25,7 @@ export interface AdmonitionBlock {
 	matchEnd: number;
 	adType: string;
 	preview: string;
+	raw: string;
 }
 
 export interface ExcludedRange {

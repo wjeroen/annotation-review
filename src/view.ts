@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType } from "./types";
 
@@ -31,6 +31,7 @@ export class AnnotationReviewView extends ItemView {
 	private activeTab: "annotations" | "admonitions" = "annotations";
 	private selectedAuthor: string = ALL_VALUE;
 	private selectedAdType: string = ALL_VALUE;
+	private admonitionsExpanded = false;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
 		super(leaf);
@@ -58,33 +59,57 @@ export class AnnotationReviewView extends ItemView {
 		container.empty();
 		container.addClass("annotation-review-container");
 
-		const header = container.createEl("div", { cls: "annotation-review-toolbar" });
-		const tabs = header.createEl("div", { cls: "annotation-review-tabs" });
-		const annotationsTab = tabs.createEl("button", {
-			cls: `annotation-review-tab ${this.activeTab === "annotations" ? "is-active" : ""}`,
-			text: "Annotations"
-		});
-		annotationsTab.addEventListener("click", () => {
-			this.activeTab = "annotations";
-			this.render();
-		});
-		const admonitionsTab = tabs.createEl("button", {
-			cls: `annotation-review-tab ${this.activeTab === "admonitions" ? "is-active" : ""}`,
-			text: "Admonitions"
-		});
-		admonitionsTab.addEventListener("click", () => {
-			this.activeTab = "admonitions";
-			this.render();
-		});
-
-		const refreshBtn = header.createEl("button", { cls: "annotation-review-refresh", text: "Refresh" });
-		refreshBtn.addEventListener("click", () => this.plugin.rescanActiveFile());
+		this.renderToolbar(container);
 
 		if (this.activeTab === "annotations") {
 			this.renderAnnotationsTab(container);
 		} else {
 			this.renderAdmonitionsTab(container);
 		}
+	}
+
+	private renderToolbar(container: Element) {
+		const toolbar = container.createEl("div", { cls: "annotation-review-toolbar" });
+
+		const tabs = toolbar.createEl("div", { cls: "annotation-review-tabs" });
+		const annotationsTab = tabs.createEl("button", {
+			cls: `annotation-review-tab ${this.activeTab === "annotations" ? "is-active" : ""}`
+		});
+		setIcon(annotationsTab, "check-check");
+		setTooltip(annotationsTab, "Annotations");
+		annotationsTab.addEventListener("click", () => {
+			this.activeTab = "annotations";
+			this.render();
+		});
+
+		const admonitionsTab = tabs.createEl("button", {
+			cls: `annotation-review-tab ${this.activeTab === "admonitions" ? "is-active" : ""}`
+		});
+		setIcon(admonitionsTab, "info");
+		setTooltip(admonitionsTab, "Admonitions");
+		admonitionsTab.addEventListener("click", () => {
+			this.activeTab = "admonitions";
+			this.render();
+		});
+
+		const refreshBtn = toolbar.createEl("button", { cls: "clickable-icon" });
+		setIcon(refreshBtn, "refresh-cw");
+		setTooltip(refreshBtn, "Refresh");
+		refreshBtn.addEventListener("click", () => this.plugin.rescanActiveFile());
+	}
+
+	private createFilterButton(container: Element, label: string, buildMenu: (menu: Menu) => void): HTMLElement {
+		const btn = container.createEl("button", { cls: "annotation-review-filter-btn" });
+		btn.createEl("span", { cls: "annotation-review-filter-label", text: label });
+		const chevron = btn.createEl("span", { cls: "annotation-review-filter-chevron" });
+		setIcon(chevron, "chevron-down");
+		btn.addEventListener("click", () => {
+			const menu = new Menu();
+			buildMenu(menu);
+			const rect = btn.getBoundingClientRect();
+			menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+		});
+		return btn;
 	}
 
 	private renderAnnotationsTab(container: Element) {
@@ -96,20 +121,43 @@ export class AnnotationReviewView extends ItemView {
 			if (a.author) authors.add(a.author);
 			else hasNoAuthor = true;
 		}
+		const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
 
 		const filterRow = container.createEl("div", { cls: "annotation-review-filter-row" });
-		const select = filterRow.createEl("select", { cls: "annotation-review-filter" });
-		select.createEl("option", { value: ALL_VALUE, text: "All authors" });
-		for (const author of Array.from(authors).sort((a, b) => a.localeCompare(b))) {
-			select.createEl("option", { value: author, text: author });
-		}
-		if (hasNoAuthor) {
-			select.createEl("option", { value: NO_AUTHOR, text: "No author" });
-		}
-		select.value = this.selectedAuthor;
-		select.addEventListener("change", () => {
-			this.selectedAuthor = select.value;
-			this.render();
+		const currentLabel =
+			this.selectedAuthor === ALL_VALUE ? "All authors" : this.selectedAuthor === NO_AUTHOR ? "No author" : this.selectedAuthor;
+		this.createFilterButton(filterRow, currentLabel, menu => {
+			menu.addItem(item =>
+				item
+					.setTitle("All authors")
+					.setChecked(this.selectedAuthor === ALL_VALUE)
+					.onClick(() => {
+						this.selectedAuthor = ALL_VALUE;
+						this.render();
+					})
+			);
+			for (const author of sortedAuthors) {
+				menu.addItem(item =>
+					item
+						.setTitle(author)
+						.setChecked(this.selectedAuthor === author)
+						.onClick(() => {
+							this.selectedAuthor = author;
+							this.render();
+						})
+				);
+			}
+			if (hasNoAuthor) {
+				menu.addItem(item =>
+					item
+						.setTitle("No author")
+						.setChecked(this.selectedAuthor === NO_AUTHOR)
+						.onClick(() => {
+							this.selectedAuthor = NO_AUTHOR;
+							this.render();
+						})
+				);
+			}
 		});
 
 		const filtered = annotations.filter(a => {
@@ -145,7 +193,7 @@ export class AnnotationReviewView extends ItemView {
 				cls: "annotation-review-author",
 				text: annotation.author
 			});
-			authorEl.style.backgroundColor = `hsla(${hue}, 45%, 50%, 0.28)`;
+			authorEl.style.backgroundColor = `hsla(${hue}, 55%, 45%, 0.45)`;
 			authorEl.style.color = "var(--text-normal)";
 		} else {
 			header.createEl("span", { cls: "annotation-review-author annotation-review-author-none", text: "No author" });
@@ -172,7 +220,7 @@ export class AnnotationReviewView extends ItemView {
 		}
 
 		card.addEventListener("click", evt => {
-			if ((evt.target as HTMLElement).closest("button, select")) return;
+			if ((evt.target as HTMLElement).closest("button")) return;
 			this.plugin.jumpToOffset(annotation.filePath, annotation.matchStart);
 		});
 
@@ -199,18 +247,38 @@ export class AnnotationReviewView extends ItemView {
 
 	private renderAdmonitionsTab(container: Element) {
 		const blocks = this.plugin.admonitions;
-
 		const types = Array.from(new Set(blocks.map(b => b.adType))).sort((a, b) => a.localeCompare(b));
 
 		const filterRow = container.createEl("div", { cls: "annotation-review-filter-row" });
-		const select = filterRow.createEl("select", { cls: "annotation-review-filter" });
-		select.createEl("option", { value: ALL_VALUE, text: "All types" });
-		for (const t of types) {
-			select.createEl("option", { value: t, text: t });
-		}
-		select.value = this.selectedAdType;
-		select.addEventListener("change", () => {
-			this.selectedAdType = select.value;
+		const currentLabel = this.selectedAdType === ALL_VALUE ? "All types" : this.selectedAdType;
+		this.createFilterButton(filterRow, currentLabel, menu => {
+			menu.addItem(item =>
+				item
+					.setTitle("All types")
+					.setChecked(this.selectedAdType === ALL_VALUE)
+					.onClick(() => {
+						this.selectedAdType = ALL_VALUE;
+						this.render();
+					})
+			);
+			for (const t of types) {
+				menu.addItem(item =>
+					item
+						.setTitle(t)
+						.setChecked(this.selectedAdType === t)
+						.onClick(() => {
+							this.selectedAdType = t;
+							this.render();
+						})
+				);
+			}
+		});
+
+		const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
+		setIcon(expandBtn, this.admonitionsExpanded ? "chevrons-down-up" : "chevrons-up-down");
+		setTooltip(expandBtn, this.admonitionsExpanded ? "Collapse all" : "Expand all");
+		expandBtn.addEventListener("click", () => {
+			this.admonitionsExpanded = !this.admonitionsExpanded;
 			this.render();
 		});
 
@@ -234,12 +302,26 @@ export class AnnotationReviewView extends ItemView {
 		const card = container.createEl("div", { cls: "annotation-review-card annotation-review-admonition-card" });
 
 		const header = card.createEl("div", { cls: "annotation-review-header" });
-		header.createEl("span", { cls: "annotation-review-badge annotation-review-ad-badge", text: block.adType });
+		header.createEl("span", { cls: "annotation-review-ad-type", text: block.adType });
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${block.line}` });
 
-		card.createEl("div", { cls: "annotation-review-text annotation-review-ad-preview", text: block.preview });
+		const deleteBtn = header.createEl("button", { cls: "clickable-icon annotation-review-ad-delete" });
+		setIcon(deleteBtn, "trash-2");
+		setTooltip(deleteBtn, "Delete this block");
+		deleteBtn.addEventListener("click", evt => {
+			evt.stopPropagation();
+			this.plugin.deleteAdmonition(block);
+		});
 
-		card.addEventListener("click", () => {
+		const renderZone = card.createEl("div", {
+			cls: `annotation-review-ad-render ${this.admonitionsExpanded ? "is-expanded" : ""}`
+		});
+		MarkdownRenderer.render(this.app, block.raw, renderZone, block.filePath, this).catch(() => {
+			renderZone.setText(block.preview);
+		});
+
+		card.addEventListener("click", evt => {
+			if ((evt.target as HTMLElement).closest("button")) return;
 			this.plugin.jumpToOffset(block.filePath, block.matchStart);
 		});
 	}

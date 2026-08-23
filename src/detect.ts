@@ -341,7 +341,8 @@ export function detectAdmonitionBlocks(content: string, filePath: string): Admon
 			matchStart: r.start,
 			matchEnd: r.end,
 			adType: r.infoString || "ad",
-			preview
+			preview,
+			raw: content.slice(r.start, r.end)
 		};
 	});
 }

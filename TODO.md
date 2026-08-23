@@ -3,11 +3,12 @@
 ## Current Sprint
 
 ### Testing
-- [ ] Confirm author filter and colored author badges look right, including two similar names getting distinct colors
-- [ ] Confirm the Admonitions tab lists all `ad-*` blocks and the type filter works
-- [ ] Confirm the Refresh button updates a stale list
-- [ ] Confirm the reason field no longer duplicates the type keyword ("delete", "insert", the replacement text)
-- [ ] Confirm the footnote-variant insert works without a `++` wrapper
+- [ ] Confirm the Admonitions tab renders your actual Admonition colors/icons/titles (ad-c orange bot icon, ad-j grey message icon) on desktop and mobile
+- [ ] Confirm the delete button on an admonition card removes the whole block cleanly
+- [ ] Confirm the expand/collapse-all toggle works on the Admonitions tab
+- [ ] Confirm the filter buttons open an Obsidian-native menu, not an OS popup, especially on mobile
+- [ ] Confirm the author badge is clearly visible but still reads as secondary to the type badge
+- [ ] Confirm tabs and refresh icon look right against both light and dark themes
 
 ### Known limitations to revisit later (see README)
 - [ ] `%%...%%` used for unrelated hidden notes (not annotations) will currently show up as false "insert" items
@@ -19,7 +20,9 @@
 - [ ] Settings tab, if any of the above limitations need to become configurable
 - [ ] "Add comment" from within the sidebar (create new annotations, not just review existing ones) — options with pros/cons proposed, not yet decided
 - [ ] Replies/threaded comments on a single annotation — options with pros/cons proposed, not yet decided
+- [ ] Expand/collapse-all pattern on the Annotations tab too, once replies exist to expand
 
 ## Completed Recently
 - [x] Core plugin: detection, approve/dismiss, sidebar, install via BRAT (2026-08-23)
 - [x] Author filter, colored author badges, Admonitions tab, Refresh button, reason-field fixes, corrected insert-footnote syntax (2026-08-23)
+- [x] Redesigned sidebar: icon-only tabs with underline indicator, Menu-based filter buttons, live-rendered admonitions matching the user's Admonition styling, per-block delete, expand/collapse toggle, clearer author badge (2026-08-23)
