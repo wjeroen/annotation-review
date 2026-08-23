@@ -78,7 +78,39 @@ export function computeRemoval(content: string, expectedStart: number, expectedR
 	if (matchStart === null) {
 		return { ok: false, reason: "This block's text couldn't be found anymore. Rescanning, please try again." };
 	}
-	const matchEnd = matchStart + expectedRaw.length;
-	const newContent = content.slice(0, matchStart) + content.slice(matchEnd);
+	let removeStart = matchStart;
+	let removeEnd = matchStart + expectedRaw.length;
+
+	// Removing the block alone leaves the blank line that was above it and
+	// the blank line that was below it sitting next to each other, three
+	// blank lines where there should be one. Collapse the gap below into the
+	// gap above, but only when that line is genuinely empty. Prefer below,
+	// fall back to above, and touch neither if both neighbors have content.
+	const afterBlank = /^\n[ \t]*\n/.exec(content.slice(removeEnd));
+	if (afterBlank) {
+		removeEnd += afterBlank[0].length;
+	} else {
+		const beforeBlank = /\n[ \t]*\n$/.exec(content.slice(0, removeStart));
+		if (beforeBlank) {
+			removeStart -= beforeBlank[0].length;
+		}
+	}
+
+	const newContent = content.slice(0, removeStart) + content.slice(removeEnd);
+	return { ok: true, newContent };
+}
+
+export function computeEdit(content: string, annotation: Annotation, oldText: string, newText: string): MutationResult {
+	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
+	if (matchStart === null) {
+		return { ok: false, reason: "This annotation's text couldn't be found anymore. Rescanning, please try again." };
+	}
+	const idx = annotation.fullMatch.lastIndexOf(oldText);
+	if (idx === -1) {
+		return { ok: false, reason: "Couldn't find that text inside the annotation anymore. Rescanning, please try again." };
+	}
+	const newFullMatch = annotation.fullMatch.slice(0, idx) + newText + annotation.fullMatch.slice(idx + oldText.length);
+	const matchEnd = matchStart + annotation.fullMatch.length;
+	const newContent = content.slice(0, matchStart) + newFullMatch + content.slice(matchEnd);
 	return { ok: true, newContent };
 }

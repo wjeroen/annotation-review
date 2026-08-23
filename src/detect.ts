@@ -169,7 +169,17 @@ function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]):
 		const isPlusWrapped = !!m[1];
 		const innerText = m[2];
 
-		if (/\n\s*\n/.test(innerText)) continue;
+		if (/\n\s*\n/.test(innerText)) {
+			// This pairing is almost certainly wrong, most likely the opening
+			// == is stray text (someone typing == literally, e.g. describing
+			// the syntax itself) rather than a real delimiter, and it happened
+			// to pair with a real annotation's opening ==. Only the first ==
+			// gets treated as consumed, so the second one gets a fresh chance
+			// to pair with its own real closing ==. Without this, one stray ==
+			// desyncs every real annotation for the rest of the file.
+			regex.lastIndex = fullStart + (isPlusWrapped ? 4 : 2);
+			continue;
+		}
 
 		const rest = content.slice(highlightEnd);
 		const { footnotes, consumedLength } = extractFootnotes(rest);
@@ -306,8 +316,13 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 	let m: RegExpExecArray | null;
 	while ((m = regex.exec(content)) !== null) {
 		const fullStart = m.index;
-		const matchEnd = m.index + m[0].length;
-		if (hasDelimiterInsideRanges(fullStart, matchEnd, excludedRanges)) continue;
+		const commentEnd = m.index + m[0].length;
+		if (hasDelimiterInsideRanges(fullStart, commentEnd, excludedRanges)) continue;
+
+		const rest = content.slice(commentEnd);
+		const { footnotes, consumedLength } = extractFootnotes(rest);
+		const matchEnd = commentEnd + consumedLength;
+		regex.lastIndex = matchEnd;
 
 		const raw = m[1] !== undefined ? m[1] : m[2];
 		let text = raw;
@@ -318,19 +333,20 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			text = text.slice(authorMatch[0].length);
 		}
 
+		const fullMatch = content.slice(fullStart, matchEnd);
 		results.push({
-			id: makeId(filePath, fullStart, m[0]),
+			id: makeId(filePath, fullStart, fullMatch),
 			type: "insert",
 			filePath,
 			line: lineAt(content, fullStart),
 			matchStart: fullStart,
 			matchEnd,
-			fullMatch: m[0],
+			fullMatch,
 			originalText: "",
 			author,
 			insertedText: text.trim(),
 			insideAdBlock: false,
-			replies: []
+			replies: parseReplies(footnotes)
 		});
 	}
 	return results;

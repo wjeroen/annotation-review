@@ -32,6 +32,7 @@ export class AnnotationReviewView extends ItemView {
 	private selectedAuthor: string = ALL_VALUE;
 	private selectedAdType: string = ALL_VALUE;
 	private admonitionsExpanded = false;
+	private repliesExpanded = false;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
 		super(leaf);
@@ -117,9 +118,11 @@ export class AnnotationReviewView extends ItemView {
 		if (this.activeTab === "annotations") {
 			const authors = new Set<string>();
 			let hasNoAuthor = false;
+			let hasReplies = false;
 			for (const a of this.plugin.annotations) {
 				if (a.author) authors.add(a.author);
 				else hasNoAuthor = true;
+				if (a.replies.length > 0) hasReplies = true;
 			}
 			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
 			const currentLabel =
@@ -158,6 +161,16 @@ export class AnnotationReviewView extends ItemView {
 					);
 				}
 			});
+
+			if (hasReplies) {
+				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
+				setIcon(expandBtn, this.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
+				setTooltip(expandBtn, this.repliesExpanded ? "Collapse all replies" : "Expand all replies");
+				expandBtn.addEventListener("click", () => {
+					this.repliesExpanded = !this.repliesExpanded;
+					this.render();
+				});
+			}
 		} else {
 			const types = Array.from(new Set(this.plugin.admonitions.map(b => b.adType))).sort((a, b) => a.localeCompare(b));
 			const currentLabel = this.selectedAdType === ALL_VALUE ? "All types" : this.selectedAdType;
@@ -222,6 +235,45 @@ export class AnnotationReviewView extends ItemView {
 		}
 	}
 
+	/** A text field that becomes an inline editor on click, and writes the change back via the plugin. */
+	private renderEditableText(container: Element, cls: string, text: string, onSave: (newText: string) => void) {
+		const el = container.createEl("div", { cls });
+
+		const showDisplay = () => {
+			el.empty();
+			el.setText(text);
+		};
+		showDisplay();
+
+		el.addEventListener("click", evt => {
+			evt.stopPropagation();
+			el.empty();
+			const input = el.createEl("textarea", { cls: "annotation-review-edit-input" });
+			input.value = text;
+			input.focus();
+			input.select();
+
+			const commit = () => {
+				const newVal = input.value.trim();
+				if (newVal && newVal !== text) {
+					onSave(newVal);
+				} else {
+					showDisplay();
+				}
+			};
+			input.addEventListener("click", evt2 => evt2.stopPropagation());
+			input.addEventListener("blur", commit);
+			input.addEventListener("keydown", evt2 => {
+				if (evt2.key === "Enter" && !evt2.shiftKey) {
+					evt2.preventDefault();
+					commit();
+				} else if (evt2.key === "Escape") {
+					showDisplay();
+				}
+			});
+		});
+	}
+
 	private renderAnnotationItem(container: Element, annotation: Annotation) {
 		const card = container.createEl("div", {
 			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type}`
@@ -244,42 +296,51 @@ export class AnnotationReviewView extends ItemView {
 
 		const body = card.createEl("div", { cls: "annotation-review-body" });
 		if (annotation.type === "insert") {
-			body.createEl("div", {
-				cls: "annotation-review-text annotation-review-insert-text",
-				text: annotation.insertedText ?? ""
-			});
+			this.renderEditableText(body, "annotation-review-text annotation-review-insert-text", annotation.insertedText ?? "", newText =>
+				this.plugin.editText(annotation, annotation.insertedText ?? "", newText)
+			);
 		} else {
 			body.createEl("div", { cls: "annotation-review-text", text: annotation.originalText });
 		}
 
 		if (annotation.type === "replace" && annotation.replacement) {
-			body.createEl("div", { cls: "annotation-review-replacement", text: `→ ${annotation.replacement}` });
+			const replacement = annotation.replacement;
+			const replacementEl = body.createEl("div", { cls: "annotation-review-replacement-row" });
+			replacementEl.createEl("span", { cls: "annotation-review-replacement-arrow", text: "→ " });
+			this.renderEditableText(replacementEl, "annotation-review-replacement", replacement, newText =>
+				this.plugin.editText(annotation, replacement, newText)
+			);
 		}
 
 		const note = annotation.type === "comment" ? annotation.commentText : annotation.reason;
 		if (note) {
-			body.createEl("div", { cls: "annotation-review-comment", text: note });
+			this.renderEditableText(body, "annotation-review-comment", note, newText => this.plugin.editText(annotation, note, newText));
 		}
 
 		if (annotation.replies.length > 0) {
-			const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
-			for (const reply of annotation.replies) {
-				const replyEl = repliesEl.createEl("div", { cls: "annotation-review-reply" });
-				if (reply.author) {
-					replyEl.createEl("span", { cls: "annotation-review-reply-author", text: `${reply.author}: ` });
+			if (this.repliesExpanded) {
+				const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
+				for (const reply of annotation.replies) {
+					const replyEl = repliesEl.createEl("div", { cls: "annotation-review-reply" });
+					if (reply.author) {
+						replyEl.createEl("span", { cls: "annotation-review-reply-author", text: `${reply.author}: ` });
+					}
+					this.renderEditableText(replyEl, "annotation-review-reply-text", reply.text, newText =>
+						this.plugin.editText(annotation, reply.text, newText)
+					);
 				}
-				replyEl.createEl("span", { text: reply.text });
+			} else {
+				card.createEl("div", {
+					cls: "annotation-review-replies-collapsed",
+					text: `${annotation.replies.length} ${annotation.replies.length === 1 ? "reply" : "replies"}`
+				});
 			}
 		}
 
 		card.addEventListener("click", evt => {
-			if ((evt.target as HTMLElement).closest("button, input")) return;
+			if ((evt.target as HTMLElement).closest("button, input, textarea")) return;
 			this.plugin.jumpToOffset(annotation.filePath, annotation.matchStart);
 		});
-
-		if (annotation.fullMatch.startsWith("==")) {
-			this.renderReplyForm(card, annotation);
-		}
 
 		const actions = card.createEl("div", { cls: "annotation-review-actions" });
 		if (annotation.type !== "comment") {
@@ -300,10 +361,14 @@ export class AnnotationReviewView extends ItemView {
 			evt.stopPropagation();
 			this.plugin.applyAction(annotation, "dismiss");
 		});
+
+		if (annotation.fullMatch.startsWith("==")) {
+			this.renderReplyForm(actions, annotation);
+		}
 	}
 
-	private renderReplyForm(card: Element, annotation: Annotation) {
-		const replyRow = card.createEl("div", { cls: "annotation-review-reply-row" });
+	private renderReplyForm(actions: Element, annotation: Annotation) {
+		const replyRow = actions.createEl("div", { cls: "annotation-review-reply-row" });
 		const toggleBtn = replyRow.createEl("button", { cls: "clickable-icon" });
 		setIcon(toggleBtn, "reply");
 		setTooltip(toggleBtn, "Reply");

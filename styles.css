@@ -211,15 +211,51 @@
 	color: var(--text-success, var(--text-normal));
 }
 
-.annotation-review-replacement {
-	color: var(--text-success, var(--text-normal));
+.annotation-review-replacement-row {
+	display: flex;
+	align-items: baseline;
 	margin-top: 2px;
+	color: var(--text-success, var(--text-normal));
+}
+
+.annotation-review-replacement-arrow {
+	flex-shrink: 0;
+}
+
+.annotation-review-comment,
+.annotation-review-insert-text,
+.annotation-review-replacement,
+.annotation-review-reply-text {
+	cursor: text;
+	border-radius: 4px;
+	transition: background-color 0.15s ease;
+}
+
+.annotation-review-comment:hover,
+.annotation-review-insert-text:hover,
+.annotation-review-replacement:hover,
+.annotation-review-reply-text:hover {
+	background-color: var(--background-modifier-hover);
 }
 
 .annotation-review-comment {
 	color: var(--text-muted);
 	margin-top: 4px;
 	font-style: italic;
+}
+
+.annotation-review-edit-input {
+	width: 100%;
+	font-size: inherit;
+	font-family: inherit;
+	font-style: normal;
+	color: var(--text-normal);
+	background-color: var(--background-primary);
+	border: 1px solid var(--interactive-accent);
+	border-radius: 4px;
+	padding: 2px 4px;
+	resize: vertical;
+	min-height: 2.4em;
 }
 
 .annotation-review-replies {
@@ -239,18 +275,23 @@
 	color: var(--text-normal);
 }
 
+.annotation-review-replies-collapsed {
+	margin-top: 6px;
+	font-size: 0.85em;
+	color: var(--text-faint);
+}
+
 .annotation-review-reply-row {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	margin-top: 4px;
+	margin-left: auto;
 }
 
 .annotation-review-reply-form {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	flex: 1;
 }
 
 .annotation-review-reply-form.is-hidden {
@@ -258,7 +299,7 @@
 }
 
 .annotation-review-reply-input {
-	flex: 1;
+	width: 110px;
 	font-size: 0.85em;
 	padding: 2px 6px;
 }
