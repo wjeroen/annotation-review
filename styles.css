@@ -225,8 +225,22 @@
 }
 
 .annotation-review-actions button {
+	display: flex;
+	align-items: center;
+	gap: 4px;
 	font-size: 0.85em;
 	padding: 2px 8px;
+	border-radius: 4px;
+}
+
+.annotation-review-action-icon {
+	display: flex;
+	align-items: center;
+}
+
+.annotation-review-action-icon svg {
+	width: 13px;
+	height: 13px;
 }
 
 .annotation-review-approve {
@@ -237,19 +251,20 @@
 	color: var(--text-muted);
 }
 
-/* Admonition cards: their own distinct look, independent of annotation cards */
+/* Admonition items: full width, no wrapping box, the live-rendered admonition
+   (or plain code block fallback) is the only visual frame. */
 
 .annotation-review-admonition-card {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	box-shadow: var(--shadow-s);
+	margin-bottom: 4px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .annotation-review-ad-header {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 8px 10px 6px 10px;
+	padding: 6px 0 4px 0;
 }
 
 .annotation-review-ad-type {
@@ -273,25 +288,12 @@
 }
 
 .annotation-review-ad-render {
-	padding: 0 10px 10px 10px;
 	max-height: 120px;
 	overflow: hidden;
-	position: relative;
 }
 
 .annotation-review-ad-render.is-expanded {
 	max-height: none;
-}
-
-.annotation-review-ad-render:not(.is-expanded)::after {
-	content: "";
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	height: 32px;
-	background: linear-gradient(to bottom, transparent, var(--background-secondary));
-	pointer-events: none;
 }
 
 .annotation-review-ad-render :first-child {

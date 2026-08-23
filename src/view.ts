@@ -268,19 +268,19 @@ export class AnnotationReviewView extends ItemView {
 
 		const actions = card.createEl("div", { cls: "annotation-review-actions" });
 		if (annotation.type !== "comment") {
-			const approveBtn = actions.createEl("button", {
-				cls: "annotation-review-approve",
-				text: "Approve"
-			});
+			const approveBtn = actions.createEl("button", { cls: "annotation-review-approve" });
+			const approveIcon = approveBtn.createEl("span", { cls: "annotation-review-action-icon" });
+			setIcon(approveIcon, "check");
+			approveBtn.createEl("span", { text: "Approve" });
 			approveBtn.addEventListener("click", evt => {
 				evt.stopPropagation();
 				this.plugin.applyAction(annotation, "approve");
 			});
 		}
-		const dismissBtn = actions.createEl("button", {
-			cls: "annotation-review-dismiss",
-			text: "Dismiss"
-		});
+		const dismissBtn = actions.createEl("button", { cls: "annotation-review-dismiss" });
+		const dismissIcon = dismissBtn.createEl("span", { cls: "annotation-review-action-icon" });
+		setIcon(dismissIcon, "x");
+		dismissBtn.createEl("span", { text: "Dismiss" });
 		dismissBtn.addEventListener("click", evt => {
 			evt.stopPropagation();
 			this.plugin.applyAction(annotation, "dismiss");
