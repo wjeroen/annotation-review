@@ -1,7 +1,7 @@
 {
 	"name": "annotation-review",
 	"version": "0.1.0",
-	"description": "Review, approve, and dismiss AI-authored text annotations in Obsidian notes.",
+	"description": "Review, approve, and dismiss text annotations in Obsidian notes.",
 	"main": "main.js",
 	"private": true,
 	"scripts": {

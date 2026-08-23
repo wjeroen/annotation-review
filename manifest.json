@@ -3,7 +3,7 @@
 	"name": "Annotation Review",
 	"version": "0.1.0",
 	"minAppVersion": "1.4.0",
-	"description": "Review, approve, and dismiss AI-authored text annotations (comments, inserts, deletes, replaces) in a note, including inside ad-* admonition blocks.",
+	"description": "Review, approve, and dismiss text annotations (comments, inserts, deletes, replaces) in a note, including inside ad-* admonition blocks.",
 	"author": "",
 	"isDesktopOnly": false
 }
