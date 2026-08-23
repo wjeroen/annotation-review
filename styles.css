@@ -70,8 +70,8 @@
 	content: "";
 	position: absolute;
 	bottom: 0;
-	left: 20%;
-	right: 20%;
+	left: 0;
+	right: 0;
 	height: 2px;
 	background-color: var(--interactive-accent);
 }
@@ -91,12 +91,16 @@
 	align-items: center;
 	gap: 4px;
 	font-size: 0.85em;
-	padding: 4px 8px;
+	padding: 2px 8px;
 	background-color: var(--background-secondary) !important;
 	border: 1px solid var(--background-modifier-border) !important;
 	border-radius: var(--radius-m);
 	color: var(--text-muted) !important;
 	box-shadow: none !important;
+}
+
+.annotation-review-filter-row .clickable-icon {
+	padding: 2px 4px;
 }
 
 .annotation-review-filter-btn:hover {
@@ -229,7 +233,7 @@
 	align-items: center;
 	gap: 4px;
 	font-size: 0.85em;
-	padding: 2px 8px;
+	padding: 1px 8px;
 	border-radius: 4px;
 }
 
@@ -251,20 +255,21 @@
 	color: var(--text-muted);
 }
 
-/* Admonition items: full width, no wrapping box, the live-rendered admonition
-   (or plain code block fallback) is the only visual frame. */
+/* Admonition items: the header is a title bar attached directly to the top of
+   the content, not a box wrapping around the whole thing, so the live-rendered
+   admonition (or plain code block fallback) never sits inside a second box. */
 
 .annotation-review-admonition-card {
-	margin-bottom: 4px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 10px;
 }
 
 .annotation-review-ad-header {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 6px 0 4px 0;
+	padding: 6px 10px;
+	background: var(--background-secondary);
+	border-radius: 6px 6px 0 0;
 }
 
 .annotation-review-ad-type {
@@ -288,12 +293,27 @@
 }
 
 .annotation-review-ad-render {
+	background: var(--background-secondary);
+	border-radius: 0 0 6px 6px;
+	padding: 0 10px 10px 10px;
 	max-height: 120px;
 	overflow: hidden;
+	position: relative;
 }
 
 .annotation-review-ad-render.is-expanded {
 	max-height: none;
+}
+
+.annotation-review-ad-render:not(.is-expanded)::after {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 32px;
+	background: linear-gradient(to bottom, transparent, var(--background-secondary));
+	pointer-events: none;
 }
 
 .annotation-review-ad-render :first-child {

@@ -23,6 +23,7 @@
 - [ ] Expand/collapse-all pattern on the Annotations tab too, once replies exist to expand
 
 ## Completed Recently
+- [x] Admonition header now sits attached to the top of the content as a title bar (shared background, rounded only where they meet), fade-on-collapse restored, tab underline is a full-width 50/50 split, Approve/Dismiss and filter row buttons thinned slightly (2026-08-23)
 - [x] Admonitions now render full width with no wrapping box, Approve/Dismiss got check/x icons and less rounded corners (2026-08-23)
 - [x] Fix: reverted unrequested annotation card restyle (colored left border), moved refresh next to expand in the filter row, made tabs+filter row sticky with only the list scrolling, tabs now show full text labels again (2026-08-23)
 - [x] Core plugin: detection, approve/dismiss, sidebar, install via BRAT (2026-08-23)
