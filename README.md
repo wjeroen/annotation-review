@@ -54,7 +54,7 @@ For an insertion the syntax is picked for you: `==++text++==` inside a fenced bl
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, grey if unlabeled, distinct even for similar names.
 - **Editing in place**: click the comment or reason text, the replacement text, the inserted text, or a reply's text to edit it inline. Click an author chip to set, change, or clear the author, on the annotation itself or on any reply. Everything saves straight back to the note.
 - **Adding a reason**: annotations without a reason get a plus button next to the reply button, since there would otherwise be no field to click. It disappears once a reason exists.
-- **Replies**: the reply button opens a field above the buttons, where the reply itself will appear. Replies collapse to a count by default, with an expand/collapse-all toggle in the filter row once any annotation has one.
+- **Replies**: the reply button opens a field above the buttons, where the reply itself will appear. The field is prefilled with an author bracket, since a reply's author is part of its own text, and the cursor lands inside the brackets when there's no default author to fill in. Each reply has its own dismiss button. Replies collapse to a count by default, with an expand/collapse-all toggle in the filter row once any annotation has one, and adding one expands them automatically. A reply sits beside its author when it fits on one line, and moves below the author name when it needs more.
 - **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type. Each block is rendered live through Obsidian's own markdown pipeline, so if you have the Admonition plugin installed, it looks exactly like it does in your note, your custom colors, icons, and titles included. Without Admonition installed, it falls back to a plain rendered code block. A trash icon per block deletes that entire block in one action, also collapsing the blank line left behind so you don't end up with three blank lines where there should be one. An expand/collapse-all toggle sits in the filter row for reading full content instead of the clipped preview.
 - **Refresh button**: an icon-only button in the filter row forces a rescan of the active note if the list ever looks stale.
 
@@ -67,6 +67,8 @@ For an insertion the syntax is picked for you: `==++text++==` inside a fenced bl
 ## How edits reach the note
 
 While a note is open, Obsidian keeps your typing in memory and only writes it to disk a second or two later. So the plugin reads from the open editor rather than from the file on disk, which is what keeps the sidebar in step with what you are actually looking at, and it writes through the editor too, so its changes join the normal undo history and never overwrite unsaved typing.
+
+Refreshing rebuilds the panel, which would otherwise lose your scroll position and close whatever field you had open, so a refresh is skipped entirely when the annotations haven't actually changed, and while a field inside the panel has focus. Scroll position is restored across the rebuilds that do happen.
 
 ## Development
 

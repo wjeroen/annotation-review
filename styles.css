@@ -1,8 +1,15 @@
+/* Obsidian pads the view body, which inset the tab row and stopped its
+   underline reaching the panel edges. Padding is applied per section instead
+   so the tabs can span the full width and split it exactly in half. */
+.workspace-leaf-content[data-type="annotation-review-view"] .view-content {
+	padding: 0;
+}
+
 .annotation-review-container {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	padding: 8px;
+	padding: 0;
 	box-sizing: border-box;
 	overflow: hidden;
 	font-size: inherit;
@@ -12,6 +19,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	padding: 0 8px 8px 8px;
 }
 
 .annotation-review-empty {
@@ -79,6 +87,7 @@
 	gap: 6px;
 	flex-shrink: 0;
 	margin-bottom: 8px;
+	padding: 0 8px;
 }
 
 .annotation-review-filter-btn {
@@ -92,6 +101,9 @@
 	border-radius: var(--radius-m);
 	color: var(--text-muted) !important;
 	box-shadow: none !important;
+	height: auto;
+	min-height: 0;
+	line-height: 1.4;
 }
 
 .annotation-review-filter-btn:hover {
@@ -270,24 +282,52 @@
 	border-left: 2px solid var(--background-modifier-border);
 }
 
+/* Normal inline flow, so a short reply sits beside its author chip. When the
+   text needs a second line the row gets .is-stacked and the chip moves onto
+   its own line, giving the reply the full width. */
 .annotation-review-reply {
-	display: flex;
-	align-items: baseline;
-	gap: 4px;
+	position: relative;
+	padding-right: 18px;
 	font-size: 0.9em;
 	color: var(--text-muted);
-	margin-top: 2px;
+	margin-top: 3px;
 }
 
 .annotation-review-reply-author {
-	flex-shrink: 0;
+	display: inline-block;
 	font-size: 0.9em;
 }
 
+.annotation-review-reply.is-stacked .annotation-review-reply-author {
+	display: block;
+	margin-bottom: 2px;
+	width: fit-content;
+}
+
 .annotation-review-reply-text {
-	flex: 1;
-	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+.annotation-review-reply-dismiss {
+	position: absolute;
+	right: 0;
+	top: 0;
+	padding: 0 2px;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+.annotation-review-reply:hover .annotation-review-reply-dismiss {
+	opacity: 0.6;
+}
+
+.annotation-review-reply-dismiss:hover {
+	opacity: 1 !important;
+}
+
+.annotation-review-reply-dismiss svg {
+	width: 12px;
+	height: 12px;
 }
 
 .annotation-review-replies-collapsed {
@@ -325,13 +365,18 @@
 	margin-top: 6px;
 }
 
+/* Obsidian gives buttons a fixed height, so padding alone had no visible
+   effect. Releasing the height lets these sit tighter than a normal button. */
 .annotation-review-actions button {
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	font-size: 0.85em;
-	padding: 1px 8px;
+	padding: 2px 8px;
 	border-radius: 4px;
+	height: auto;
+	min-height: 0;
+	line-height: 1.4;
 }
 
 .annotation-review-trailing-actions {

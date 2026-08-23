@@ -2,6 +2,10 @@
 
 ## Current Sprint
 
+### Known gaps worth deciding on
+- [ ] A reason can be added but not removed. Editing it to empty is rejected, and clearing it would need to take the preceding comma with it, so it needs its own dismiss button like replies have
+- [ ] Every unlabeled reply shows a "No author" chip, which is a bit heavy in a list of replies. A quieter affordance might read better
+
 ### Testing
 - [ ] Confirm the sidebar now updates while typing in a note, without waiting for Obsidian to save
 - [ ] Confirm replies can be added to `%%...%%` inserts, not just highlight annotations
@@ -19,6 +23,14 @@
 - [ ] Adding a reason to a `%%...%%` insert writes an `^[insert, reason]` footnote. Worth checking that reads well in practice, since the reason is invisible in the note itself
 
 ## Completed Recently
+- [x] Fix: the panel jumped to the top constantly and swallowed clicks on author chips. It rebuilt itself on every rescan, including when clicking into the sidebar counted as switching panes, which destroyed the field the click had just opened. Refreshes are now skipped when nothing changed and while a field has focus, scroll position survives the rebuilds that do happen, and switching panes only refreshes on landing on a different note (2026-08-23)
+- [x] Fix: jumping to an annotation used the active leaf, which is the sidebar itself once you click a card, so the note could open on top of the panel. It now targets the main area explicitly (2026-08-23)
+- [x] Fix: the comment and replace commands wrote their result with `replaceSelection` after a modal had taken focus, which risked inserting the annotation while leaving the original text in place. They now replace an explicit range captured before the modal opened (2026-08-23)
+- [x] Reply field is prefilled with an author bracket, and no longer double-labels when a default author is set (2026-08-23)
+- [x] Each reply has its own dismiss button, and adding a reply expands the replies list (2026-08-23)
+- [x] A reply moves below its author name when it needs more than one line, and stays beside it when it fits (2026-08-23)
+- [x] Tabs span the full panel width so the active underline splits it exactly in half. Obsidian's own view padding was insetting them (2026-08-23)
+- [x] Approve, Dismiss and the filter buttons are genuinely shorter now. Obsidian gives buttons a fixed height, so the earlier padding change had no visible effect (2026-08-23)
 - [x] Sidebar now reads from the open editor instead of from disk, so it updates while you type instead of waiting for Obsidian's autosave. Writes go through the editor too, so they join the undo history and never overwrite unsaved typing (2026-08-23)
 - [x] Replies work on `%%...%%` inserts, previously only on highlight annotations (2026-08-23)
 - [x] Reply and reason fields moved above the action buttons, where their result appears, so they get the full card width (2026-08-23)

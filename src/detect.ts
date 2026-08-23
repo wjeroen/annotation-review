@@ -7,11 +7,15 @@ interface FenceRange extends ExcludedRange {
 	bodyEnd: number;
 }
 
-/** A footnote's content range, in whatever coordinate space the caller passed in. */
+/** A footnote's ranges, in whatever coordinate space the caller passed in. */
 interface FootnoteSpan {
 	content: string;
+	/** Just the content, between `^[` and `]`. */
 	start: number;
 	end: number;
+	/** The whole footnote including its `^[` and `]` delimiters. */
+	fullStart: number;
+	fullEnd: number;
 }
 
 interface RawHighlightMatch {
@@ -187,7 +191,9 @@ function extractFootnotes(rest: string): { footnotes: FootnoteSpan[]; consumedLe
 		footnotes.push({
 			content: m[1],
 			start: contentStart,
-			end: contentStart + m[1].length
+			end: contentStart + m[1].length,
+			fullStart: pos,
+			fullEnd: pos + m[0].length
 		});
 		pos += m[0].length;
 	}
@@ -196,7 +202,13 @@ function extractFootnotes(rest: string): { footnotes: FootnoteSpan[]; consumedLe
 
 /** Shifts footnote spans from `rest` coordinates into `fullMatch` coordinates. */
 function shiftFootnotes(footnotes: FootnoteSpan[], offset: number): FootnoteSpan[] {
-	return footnotes.map(f => ({ content: f.content, start: f.start + offset, end: f.end + offset }));
+	return footnotes.map(f => ({
+		content: f.content,
+		start: f.start + offset,
+		end: f.end + offset,
+		fullStart: f.fullStart + offset,
+		fullEnd: f.fullEnd + offset
+	}));
 }
 
 function parseReplies(fullMatch: string, footnotes: FootnoteSpan[]): AnnotationReply[] {
@@ -208,7 +220,8 @@ function parseReplies(fullMatch: string, footnotes: FootnoteSpan[]): AnnotationR
 			authorSpan: parsed.authorSpan,
 			authorInsertAt: parsed.authorInsertAt,
 			text: fullMatch.slice(textSpan.start, textSpan.end),
-			textSpan
+			textSpan,
+			fullSpan: { start: fn.fullStart, end: fn.fullEnd }
 		};
 	});
 }

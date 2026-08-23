@@ -38,10 +38,37 @@ export class AnnotationReviewView extends ItemView {
 	private selectedAdType: string = ALL_VALUE;
 	private admonitionsExpanded = false;
 	private repliesExpanded = false;
+	private scrollArea: HTMLElement | null = null;
+	private lastSignature = "";
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
 		super(leaf);
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Rebuilding wipes the panel, which loses the scroll position and any open
+	 * field, so a data refresh only redraws when something actually changed.
+	 * Typing in a note fires constant rescans that mostly produce identical
+	 * results, and redrawing on each of those made the list jump to the top.
+	 */
+	refreshFromData() {
+		if (this.dataSignature() === this.lastSignature) return;
+		if (this.isEditing()) return;
+		this.render();
+	}
+
+	private dataSignature(): string {
+		const annotations = this.plugin.annotations.map(a => `${a.matchStart}:${a.fullMatch}`).join("|");
+		const admonitions = this.plugin.admonitions.map(b => `${b.matchStart}:${b.raw}`).join("|");
+		return `${this.plugin.scannedPath}##${annotations}##${admonitions}`;
+	}
+
+	/** True while a field inside the panel has focus, so it isn't torn down mid-edit. */
+	private isEditing(): boolean {
+		const el = document.activeElement;
+		if (!el || !this.containerEl.contains(el)) return false;
+		return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 	}
 
 	getViewType() {
@@ -62,6 +89,7 @@ export class AnnotationReviewView extends ItemView {
 
 	render() {
 		const container = this.containerEl.children[1];
+		const previousScroll = this.scrollArea?.scrollTop ?? 0;
 		container.empty();
 		container.addClass("annotation-review-container");
 
@@ -69,11 +97,22 @@ export class AnnotationReviewView extends ItemView {
 		this.renderFilterRow(container);
 
 		const scrollArea = container.createEl("div", { cls: "annotation-review-scroll-area" });
+		this.scrollArea = scrollArea;
 		if (this.activeTab === "annotations") {
 			this.renderAnnotationsList(scrollArea);
 		} else {
 			this.renderAdmonitionsList(scrollArea);
 		}
+
+		if (previousScroll > 0) {
+			scrollArea.scrollTop = previousScroll;
+			// Admonitions render asynchronously and change the height as they
+			// land, so put the scroll position back once more after that.
+			window.setTimeout(() => {
+				if (this.scrollArea === scrollArea) scrollArea.scrollTop = previousScroll;
+			}, 0);
+		}
+		this.lastSignature = this.dataSignature();
 	}
 
 	private renderToolbar(container: Element) {
@@ -87,7 +126,11 @@ export class AnnotationReviewView extends ItemView {
 		setIcon(annIcon, "check-check");
 		annotationsTab.createEl("span", { text: "Annotations" });
 		annotationsTab.addEventListener("click", () => {
+			if (this.activeTab === "annotations") return;
 			this.activeTab = "annotations";
+			// A fresh tab starts at the top rather than inheriting the other
+			// tab's scroll position.
+			this.scrollArea = null;
 			this.render();
 		});
 
@@ -98,7 +141,9 @@ export class AnnotationReviewView extends ItemView {
 		setIcon(admIcon, "info");
 		admonitionsTab.createEl("span", { text: "Admonitions" });
 		admonitionsTab.addEventListener("click", () => {
+			if (this.activeTab === "admonitions") return;
 			this.activeTab = "admonitions";
+			this.scrollArea = null;
 			this.render();
 		});
 	}
@@ -241,8 +286,15 @@ export class AnnotationReviewView extends ItemView {
 	}
 
 	/** A text field that turns into an inline editor on click. */
-	private renderEditableText(container: Element, cls: string, annotation: Annotation, span: TextSpan, text: string) {
-		const el = container.createEl("div", { cls: `${cls} annotation-review-editable` });
+	private renderEditableText(
+		container: Element,
+		cls: string,
+		annotation: Annotation,
+		span: TextSpan,
+		text: string,
+		inline = false
+	): HTMLElement {
+		const el = container.createEl(inline ? "span" : "div", { cls: `${cls} annotation-review-editable` });
 
 		const showDisplay = () => {
 			el.empty();
@@ -259,8 +311,15 @@ export class AnnotationReviewView extends ItemView {
 			input.focus();
 			input.select();
 
+			let committed = false;
 			const commit = () => {
+				if (committed) return;
+				committed = true;
 				const newVal = input.value.trim();
+				// Give up focus first, otherwise the refresh that follows the
+				// save is suppressed as an edit in progress and the panel keeps
+				// showing the old text.
+				input.blur();
 				if (newVal && newVal !== text) {
 					this.plugin.replaceSpan(annotation, span.start, span.end, newVal);
 				} else {
@@ -278,6 +337,8 @@ export class AnnotationReviewView extends ItemView {
 				}
 			});
 		});
+
+		return el;
 	}
 
 	/** An author chip that turns into an inline editor on click. */
@@ -314,8 +375,12 @@ export class AnnotationReviewView extends ItemView {
 			input.focus();
 			input.select();
 
+			let committed = false;
 			const commit = () => {
+				if (committed) return;
+				committed = true;
 				const newVal = input.value.trim();
+				input.blur();
 				if (newVal !== (author ?? "")) onSave(newVal);
 				else showDisplay();
 			};
@@ -337,7 +402,12 @@ export class AnnotationReviewView extends ItemView {
 	 * replies and reasons, which sit above the action buttons so the field has
 	 * the full card width and appears where its result will show up.
 	 */
-	private createInlineForm(container: Element, placeholder: string, onSubmit: (text: string) => void) {
+	private createInlineForm(
+		container: Element,
+		placeholder: string,
+		onSubmit: (text: string) => void,
+		prefill?: { value: string; cursor: number }
+	) {
 		const form = container.createEl("div", { cls: "annotation-review-inline-form is-hidden" });
 		const input = form.createEl("input", {
 			cls: "annotation-review-inline-input",
@@ -350,6 +420,7 @@ export class AnnotationReviewView extends ItemView {
 		const submit = () => {
 			const text = input.value.trim();
 			if (!text) return;
+			input.blur();
 			onSubmit(text);
 		};
 		sendBtn.addEventListener("click", evt => {
@@ -362,6 +433,7 @@ export class AnnotationReviewView extends ItemView {
 				evt.preventDefault();
 				submit();
 			} else if (evt.key === "Escape") {
+				input.blur();
 				form.addClass("is-hidden");
 			}
 		});
@@ -370,7 +442,10 @@ export class AnnotationReviewView extends ItemView {
 			toggle: () => {
 				const wasHidden = form.hasClass("is-hidden");
 				form.toggleClass("is-hidden", !wasHidden);
-				if (wasHidden) input.focus();
+				if (!wasHidden) return;
+				if (prefill) input.value = prefill.value;
+				input.focus();
+				if (prefill) input.setSelectionRange(prefill.cursor, prefill.cursor);
 			}
 		};
 	}
@@ -446,7 +521,29 @@ export class AnnotationReviewView extends ItemView {
 							this.plugin.replaceSpan(annotation, reply.authorInsertAt, reply.authorInsertAt, replacement);
 						}
 					});
-					this.renderEditableText(replyEl, "annotation-review-reply-text", annotation, reply.textSpan, reply.text);
+					replyEl.appendText(" ");
+					const textEl = this.renderEditableText(
+						replyEl,
+						"annotation-review-reply-text",
+						annotation,
+						reply.textSpan,
+						reply.text,
+						true
+					);
+					const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });
+					setIcon(removeBtn, "x");
+					setTooltip(removeBtn, "Dismiss this reply");
+					removeBtn.addEventListener("click", evt => {
+						evt.stopPropagation();
+						this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
+					});
+
+					// An inline span reports one rect per line it occupies, so
+					// more than one means the reply didn't fit beside its author
+					// and reads better with the author on its own line above.
+					window.setTimeout(() => {
+						if (textEl.getClientRects().length > 1) replyEl.addClass("is-stacked");
+					}, 0);
 				}
 			} else {
 				card.createEl("div", {
@@ -456,7 +553,24 @@ export class AnnotationReviewView extends ItemView {
 			}
 		}
 
-		const replyForm = this.createInlineForm(card, "Reply...", text => this.plugin.addReply(annotation, text));
+		// Prefilled with an author bracket, since a reply's author has to be
+		// typed as part of its text. The cursor lands inside the brackets when
+		// there is no default author to fill in.
+		const defaultAuthor = this.plugin.settings.defaultAuthor;
+		const replyPrefill = defaultAuthor
+			? { value: `[${defaultAuthor}] `, cursor: defaultAuthor.length + 3 }
+			: { value: "[] ", cursor: 1 };
+		const replyForm = this.createInlineForm(
+			card,
+			"Reply...",
+			text => {
+				// Show the replies, otherwise a new one lands under a collapsed
+				// count and looks like nothing happened.
+				this.repliesExpanded = true;
+				this.plugin.addReply(annotation, text);
+			},
+			replyPrefill
+		);
 
 		card.addEventListener("click", evt => {
 			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author")) return;

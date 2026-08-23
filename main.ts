@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
+import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, InsertContext } from "./src/types";
@@ -25,6 +25,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 	annotations: Annotation[] = [];
 	admonitions: AdmonitionBlock[] = [];
 	settings: AnnotationReviewSettings = { ...DEFAULT_SETTINGS };
+	/** Path of the note the current annotation list came from. */
+	scannedPath: string | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -49,7 +51,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 		this.registerEvent(this.app.workspace.on("file-open", () => this.rescanActiveFile()));
 		this.registerEvent(this.app.workspace.on("editor-change", () => debouncedRescan()));
-		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.rescanActiveFile()));
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", () => {
+				// Only react to actually landing on a different note. Clicking
+				// into the sidebar is an active-leaf-change too, and rescanning
+				// there would rebuild the panel out from under whatever the
+				// click just opened, such as an author field.
+				const file = this.app.workspace.getActiveFile();
+				if (file && file.path !== this.scannedPath) this.rescanActiveFile();
+			})
+		);
 
 		this.app.workspace.onLayoutReady(() => this.rescanActiveFile());
 	}
@@ -125,19 +136,21 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (!file || file.extension !== "md") {
 			this.annotations = [];
 			this.admonitions = [];
+			this.scannedPath = null;
 			this.refreshView();
 			return;
 		}
 		const content = await this.readContent(file);
 		this.annotations = detectAnnotations(content, file.path);
 		this.admonitions = detectAdmonitionBlocks(content, file.path);
+		this.scannedPath = file.path;
 		this.refreshView();
 	}
 
 	refreshView() {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
 			const view = leaf.view;
-			if (view instanceof AnnotationReviewView) view.render();
+			if (view instanceof AnnotationReviewView) view.refreshFromData();
 		}
 	}
 
@@ -148,11 +161,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.applyMutation(file, computeMutation(content, annotation, action));
 	}
 
+	/**
+	 * The reply field is prefilled with an author bracket, so its text already
+	 * carries whatever label the user wants. Empty brackets mean they left it
+	 * blank, so drop them rather than writing `^[[] text]`.
+	 */
 	async addReply(annotation: Annotation, replyText: string) {
+		const cleaned = replyText.replace(/^\[\s*\]\s*/, "").trim();
+		if (!cleaned) return;
 		const file = this.fileFor(annotation.filePath);
 		if (!file) return;
 		const content = await this.readContent(file);
-		await this.applyMutation(file, computeAddReply(content, annotation, replyText, this.settings.defaultAuthor));
+		await this.applyMutation(file, computeAddReply(content, annotation, cleaned));
 	}
 
 	/** Replaces a span inside an annotation, or inserts when start equals end. */
@@ -173,7 +193,9 @@ export default class AnnotationReviewPlugin extends Plugin {
 	async jumpToOffset(filePath: string, offset: number) {
 		const file = this.fileFor(filePath);
 		if (!file) return;
-		const leaf = this.app.workspace.getLeaf(false);
+		// Clicking a card makes the sidebar the active leaf, and the note has
+		// to open in the main area rather than on top of this panel.
+		const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
 		await leaf.openFile(file);
 		const view = leaf.view;
 		if (view instanceof MarkdownView) {
@@ -223,13 +245,22 @@ export default class AnnotationReviewPlugin extends Plugin {
 		});
 	}
 
-	private requireSelection(editor: Editor): string | null {
-		const selection = editor.getSelection();
-		if (!selection) {
+	/**
+	 * The selected text together with its range.
+	 *
+	 * The range matters for the commands that open a modal first: the modal
+	 * takes focus, and writing the result back with `replaceSelection` would
+	 * rely on a selection that may no longer be there, which would insert the
+	 * annotation while leaving the original text behind. Replacing an explicit
+	 * range avoids depending on that.
+	 */
+	private requireSelection(editor: Editor): { text: string; from: EditorPosition; to: EditorPosition } | null {
+		const text = editor.getSelection();
+		if (!text) {
 			new Notice("Annotation Review: select the text you want to annotate first.");
 			return null;
 		}
-		return selection;
+		return { text, from: editor.getCursor("from"), to: editor.getCursor("to") };
 	}
 
 	private pickAnnotationType(editor: Editor) {
@@ -243,11 +274,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 				{ id: "insert-highlight", label: "Insert (highlight form)", description: "Force the ==++text++== form" }
 			],
 			id => {
-				if (id === "comment") this.annotateComment(editor);
-				else if (id === "delete") this.annotateDelete(editor);
-				else if (id === "replace") this.annotateReplace(editor);
-				else if (id === "insert") this.annotateInsert(editor);
-				else this.annotateInsert(editor, "fenced");
+				// Let the picker finish closing before another modal opens.
+				window.setTimeout(() => {
+					if (id === "comment") this.annotateComment(editor);
+					else if (id === "delete") this.annotateDelete(editor);
+					else if (id === "replace") this.annotateReplace(editor);
+					else if (id === "insert") this.annotateInsert(editor);
+					else this.annotateInsert(editor, "fenced");
+				}, 0);
 			}
 		).open();
 	}
@@ -263,7 +297,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			submitLabel: "Add comment",
 			onSubmit: async (text, author) => {
 				await this.rememberAuthor(author);
-				editor.replaceSelection(`==${selection}==^[${authorLabel(author)}${text}]`);
+				editor.replaceRange(`==${selection.text}==^[${authorLabel(author)}${text}]`, selection.from, selection.to);
 			}
 		}).open();
 	}
@@ -273,7 +307,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (selection === null) return;
 		// No prompt: a deletion needs nothing beyond the selection itself, and
 		// a reason can still be added later from the sidebar.
-		editor.replaceSelection(`==${selection}==^[${authorLabel(this.settings.defaultAuthor)}delete]`);
+		editor.replaceRange(
+			`==${selection.text}==^[${authorLabel(this.settings.defaultAuthor)}delete]`,
+			selection.from,
+			selection.to
+		);
 	}
 
 	private annotateReplace(editor: Editor) {
@@ -287,7 +325,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 			submitLabel: "Add replacement",
 			onSubmit: async (text, author) => {
 				await this.rememberAuthor(author);
-				editor.replaceSelection(`==${selection}==^[${authorLabel(author)}→ "${text}"]`);
+				editor.replaceRange(
+					`==${selection.text}==^[${authorLabel(author)}→ "${text}"]`,
+					selection.from,
+					selection.to
+				);
 			}
 		}).open();
 	}
@@ -295,21 +337,21 @@ export default class AnnotationReviewPlugin extends Plugin {
 	private annotateInsert(editor: Editor, forcedContext?: InsertContext) {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
-		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(editor.getCursor("from")));
+		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
 		const label = authorLabel(this.settings.defaultAuthor);
 
 		let wrapped: string;
 		if (context === "fenced") {
-			wrapped = `==++${label}${selection}++==`;
+			wrapped = `==++${label}${selection.text}++==`;
 		} else if (context === "native-comment") {
 			// Inside an existing %% %% span, so close it, add this insert, and
 			// reopen the original. Without the doubled marks the surrounding
 			// text would break out of its comment and become visible prose.
-			wrapped = `%%%%${label}${selection}%%%%`;
+			wrapped = `%%%%${label}${selection.text}%%%%`;
 		} else {
-			wrapped = `%%${label}${selection}%%`;
+			wrapped = `%%${label}${selection.text}%%`;
 		}
-		editor.replaceSelection(wrapped);
+		editor.replaceRange(wrapped, selection.from, selection.to);
 	}
 
 	private setDefaultAuthor() {

@@ -78,12 +78,11 @@ export function computeMutation(content: string, annotation: Annotation, action:
 	return replaceRange(content, matchStart, matchEnd, replacement);
 }
 
-export function computeAddReply(content: string, annotation: Annotation, replyText: string, author?: string): MutationResult {
+export function computeAddReply(content: string, annotation: Annotation, replyText: string): MutationResult {
 	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
 	if (matchStart === null) return { ok: false, reason: NOT_FOUND };
 	const matchEnd = matchStart + annotation.fullMatch.length;
-	const label = author ? `[${author}] ` : "";
-	return replaceRange(content, matchEnd, matchEnd, `^[${label}${replyText}]`);
+	return replaceRange(content, matchEnd, matchEnd, `^[${replyText}]`);
 }
 
 /**

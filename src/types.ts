@@ -25,6 +25,8 @@ export interface AnnotationReply {
 	authorSpan?: TextSpan;
 	authorInsertAt: number;
 	textSpan: TextSpan;
+	/** The whole `^[...]` footnote, so a single reply can be removed. */
+	fullSpan: TextSpan;
 }
 
 export interface Annotation {
