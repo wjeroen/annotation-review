@@ -54,12 +54,7 @@
 	align-items: center;
 }
 
-.annotation-review-tab:hover {
-	color: var(--text-normal) !important;
-	background-color: transparent !important;
-	box-shadow: none !important;
-}
-
+.annotation-review-tab:hover,
 .annotation-review-tab.is-active {
 	color: var(--text-normal) !important;
 	background-color: transparent !important;
@@ -76,7 +71,7 @@
 	background-color: var(--interactive-accent);
 }
 
-/* Filter row: filter button + optional expand toggle + refresh */
+/* Filter row: filter button, optional expand toggle, refresh */
 
 .annotation-review-filter-row {
 	display: flex;
@@ -99,13 +94,13 @@
 	box-shadow: none !important;
 }
 
-.annotation-review-filter-row .clickable-icon {
-	padding: 2px 4px;
-}
-
 .annotation-review-filter-btn:hover {
 	color: var(--text-normal) !important;
 	background-color: var(--background-modifier-hover) !important;
+}
+
+.annotation-review-filter-row .clickable-icon {
+	padding: 2px 4px;
 }
 
 .annotation-review-filter-chevron {
@@ -122,7 +117,7 @@
 	margin-left: auto;
 }
 
-/* Annotation cards: plain bordered box, no color strip */
+/* Annotation cards */
 
 .annotation-review-card {
 	border-radius: 6px;
@@ -180,11 +175,19 @@
 	font-size: 0.85em;
 	padding: 1px 6px;
 	border-radius: 4px;
+	cursor: pointer;
 }
 
 .annotation-review-author-none {
 	background-color: var(--background-modifier-border);
 	color: var(--text-muted);
+}
+
+.annotation-review-author-input {
+	font-size: 1em;
+	width: 8em;
+	padding: 0 4px;
+	height: auto;
 }
 
 .annotation-review-line {
@@ -207,41 +210,42 @@
 	color: var(--text-muted);
 }
 
+/* The text being replaced is tinted to match its own type badge. */
+.annotation-type-replace .annotation-review-text {
+	color: var(--color-orange, var(--text-warning));
+}
+
 .annotation-review-insert-text {
 	color: var(--text-success, var(--text-normal));
 }
 
-.annotation-review-replacement-row {
-	display: flex;
-	align-items: baseline;
-	margin-top: 2px;
+.annotation-review-arrow {
+	color: var(--text-faint);
+	line-height: 1.2;
+}
+
+.annotation-review-replacement {
 	color: var(--text-success, var(--text-normal));
-}
-
-.annotation-review-replacement-arrow {
-	flex-shrink: 0;
-}
-
-.annotation-review-comment,
-.annotation-review-insert-text,
-.annotation-review-replacement,
-.annotation-review-reply-text {
-	cursor: text;
-	border-radius: 4px;
-	transition: background-color 0.15s ease;
-}
-
-.annotation-review-comment:hover,
-.annotation-review-insert-text:hover,
-.annotation-review-replacement:hover,
-.annotation-review-reply-text:hover {
-	background-color: var(--background-modifier-hover);
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 .annotation-review-comment {
 	color: var(--text-muted);
 	margin-top: 4px;
 	font-style: italic;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.annotation-review-editable {
+	cursor: text;
+	border-radius: 4px;
+	transition: background-color 0.15s ease;
+}
+
+.annotation-review-editable:hover {
+	background-color: var(--background-modifier-hover);
 }
 
 .annotation-review-edit-input {
@@ -258,6 +262,8 @@
 	min-height: 2.4em;
 }
 
+/* Replies */
+
 .annotation-review-replies {
 	margin-top: 6px;
 	padding-left: 10px;
@@ -265,14 +271,23 @@
 }
 
 .annotation-review-reply {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
 	font-size: 0.9em;
 	color: var(--text-muted);
 	margin-top: 2px;
 }
 
 .annotation-review-reply-author {
-	font-weight: 600;
-	color: var(--text-normal);
+	flex-shrink: 0;
+	font-size: 0.9em;
+}
+
+.annotation-review-reply-text {
+	flex: 1;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 .annotation-review-replies-collapsed {
@@ -281,31 +296,31 @@
 	color: var(--text-faint);
 }
 
-.annotation-review-reply-row {
+/* Reply and reason forms, placed above the buttons so they get full width */
+
+.annotation-review-inline-form {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	margin-left: auto;
+	margin-top: 6px;
 }
 
-.annotation-review-reply-form {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-}
-
-.annotation-review-reply-form.is-hidden {
+.annotation-review-inline-form.is-hidden {
 	display: none;
 }
 
-.annotation-review-reply-input {
-	width: 110px;
+.annotation-review-inline-input {
+	flex: 1;
+	min-width: 0;
 	font-size: 0.85em;
 	padding: 2px 6px;
 }
 
+/* Action row */
+
 .annotation-review-actions {
 	display: flex;
+	align-items: center;
 	gap: 6px;
 	margin-top: 6px;
 }
@@ -317,6 +332,17 @@
 	font-size: 0.85em;
 	padding: 1px 8px;
 	border-radius: 4px;
+}
+
+.annotation-review-trailing-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: auto;
+}
+
+.annotation-review-trailing-actions button {
+	padding: 2px 4px;
 }
 
 .annotation-review-action-icon {
@@ -404,4 +430,17 @@
 
 .annotation-review-ad-render :last-child {
 	margin-bottom: 0;
+}
+
+/* Modals for creating annotations from the editor */
+
+.annotation-review-modal-textarea {
+	width: 100%;
+	min-height: 5em;
+	resize: vertical;
+}
+
+.annotation-review-picker-desc {
+	display: block;
+	color: var(--text-muted);
 }
