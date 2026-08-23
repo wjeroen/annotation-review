@@ -75,6 +75,9 @@ Refreshing rebuilds the panel, which would otherwise lose your scroll position a
 ```
 npm install
 npm run build
+npm test
 ```
+
+`npm test` covers the parsing and rewriting rules, plus the note-switching behaviour. The latter matters because scanning a note is asynchronous while several Obsidian events can ask for a scan at once, and an older read landing after a newer one used to leave the panel showing a different note's annotations.
 
 Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/annotation-review/`, then enable the plugin from Obsidian's Community Plugins settings.

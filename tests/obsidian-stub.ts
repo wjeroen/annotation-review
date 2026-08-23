@@ -1,0 +1,82 @@
+/* Minimal stand-ins for the Obsidian API, so the plugin class can be loaded
+   and exercised outside Obsidian. Only what the plugin actually touches. */
+export class Plugin {
+	app: any;
+	constructor(app?: any) {
+		this.app = app;
+	}
+	registerView() {}
+	addRibbonIcon() {}
+	addCommand() {}
+	registerEvent() {}
+	async loadData() {
+		return {};
+	}
+	async saveData() {}
+}
+export class ItemView {
+	leaf: any;
+	containerEl: any = { children: [null, { empty() {}, addClass() {} }] };
+	constructor(leaf: any) {
+		this.leaf = leaf;
+	}
+}
+export class Modal {
+	app: any;
+	contentEl: any;
+	scope: any = { register() {} };
+	constructor(app: any) {
+		this.app = app;
+	}
+	open() {}
+	close() {}
+}
+export class FuzzySuggestModal {
+	app: any;
+	constructor(app: any) {
+		this.app = app;
+	}
+	setPlaceholder() {}
+	open() {}
+}
+export class Setting {
+	constructor(_el: any) {}
+	setName() {
+		return this;
+	}
+	setDesc() {
+		return this;
+	}
+	addText() {
+		return this;
+	}
+	addTextArea() {
+		return this;
+	}
+	addButton() {
+		return this;
+	}
+}
+export class Notice {
+	constructor(_msg: string) {}
+}
+export class TFile {
+	path = "";
+	extension = "md";
+}
+export class MarkdownView {}
+export class WorkspaceLeaf {}
+export class Menu {}
+export const MarkdownRenderer = {
+	async render() {}
+};
+export function setIcon() {}
+export function setTooltip() {}
+export function debounce(cb: any) {
+	return cb;
+}
+export type Editor = any;
+export type EditorPosition = any;
+export type App = any;
+export type FuzzyMatch<T> = { item: T };
+export type TextAreaComponent = any;

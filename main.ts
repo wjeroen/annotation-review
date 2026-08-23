@@ -27,6 +27,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 	settings: AnnotationReviewSettings = { ...DEFAULT_SETTINGS };
 	/** Path of the note the current annotation list came from. */
 	scannedPath: string | null = null;
+	/** Only the newest scan is allowed to publish its result. */
+	private scanToken = 0;
 
 	async onload() {
 		await this.loadSettings();
@@ -49,18 +51,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 		const debouncedRescan = debounce(() => this.rescanActiveFile(), RESCAN_DELAY_MS, true);
 
+		// All three of these just ask for a rescan. Concurrency is handled
+		// inside rescanActiveFile rather than by trying to predict which events
+		// are worth reacting to, and a rescan that finds nothing new does not
+		// redraw the panel, so the redundant ones cost nothing visible.
 		this.registerEvent(this.app.workspace.on("file-open", () => this.rescanActiveFile()));
 		this.registerEvent(this.app.workspace.on("editor-change", () => debouncedRescan()));
-		this.registerEvent(
-			this.app.workspace.on("active-leaf-change", () => {
-				// Only react to actually landing on a different note. Clicking
-				// into the sidebar is an active-leaf-change too, and rescanning
-				// there would rebuild the panel out from under whatever the
-				// click just opened, such as an author field.
-				const file = this.app.workspace.getActiveFile();
-				if (file && file.path !== this.scannedPath) this.rescanActiveFile();
-			})
-		);
+		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.rescanActiveFile()));
 
 		this.app.workspace.onLayoutReady(() => this.rescanActiveFile());
 	}
@@ -131,8 +128,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return file;
 	}
 
+	/**
+	 * Rescans whichever note is on screen.
+	 *
+	 * Switching notes fires several events at once, and reading a note is
+	 * asynchronous, so without the token an older read could finish last and
+	 * overwrite a newer one, leaving the panel showing a different note's
+	 * annotations than the one in front of you.
+	 */
 	async rescanActiveFile() {
+		const token = ++this.scanToken;
 		const file = this.app.workspace.getActiveFile();
+
 		if (!file || file.extension !== "md") {
 			this.annotations = [];
 			this.admonitions = [];
@@ -140,11 +147,19 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.refreshView();
 			return;
 		}
+
 		const content = await this.readContent(file);
+		if (token !== this.scanToken) return;
+
 		this.annotations = detectAnnotations(content, file.path);
 		this.admonitions = detectAdmonitionBlocks(content, file.path);
 		this.scannedPath = file.path;
 		this.refreshView();
+
+		// The note on screen changed while this one was being read, so nothing
+		// above describes what the user is looking at. Go again for the new one.
+		const current = this.app.workspace.getActiveFile();
+		if (current && current.path !== file.path) void this.rescanActiveFile();
 	}
 
 	refreshView() {
