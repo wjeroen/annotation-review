@@ -1,6 +1,17 @@
 .annotation-review-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 	padding: 8px;
+	box-sizing: border-box;
+	overflow: hidden;
 	font-size: inherit;
+}
+
+.annotation-review-scroll-area {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
 }
 
 .annotation-review-empty {
@@ -8,11 +19,12 @@
 	padding: 12px 4px;
 }
 
-/* Toolbar: tabs + refresh */
+/* Toolbar: tabs */
 
 .annotation-review-toolbar {
 	display: flex;
 	align-items: center;
+	flex-shrink: 0;
 	margin-bottom: 8px;
 }
 
@@ -26,6 +38,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	gap: 6px;
 	padding: 8px 0;
 	border: none !important;
 	background: transparent !important;
@@ -34,6 +47,11 @@
 	transition: color 0.2s ease;
 	position: relative;
 	box-shadow: none !important;
+}
+
+.annotation-review-tab-icon {
+	display: flex;
+	align-items: center;
 }
 
 .annotation-review-tab:hover {
@@ -58,12 +76,13 @@
 	background-color: var(--interactive-accent);
 }
 
-/* Filter row: filter button(s) + optional expand toggle */
+/* Filter row: filter button + optional expand toggle + refresh */
 
 .annotation-review-filter-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	flex-shrink: 0;
 	margin-bottom: 8px;
 }
 
@@ -95,46 +114,34 @@
 	height: 12px;
 }
 
-/* Cards */
+.annotation-review-refresh {
+	margin-left: auto;
+}
+
+/* Annotation cards: plain bordered box, no color strip */
 
 .annotation-review-card {
-	background: var(--background-secondary);
-	border: none;
-	border-left: 4px solid var(--background-modifier-border);
 	border-radius: 6px;
-	padding: 0;
 	margin-bottom: 8px;
 	cursor: pointer;
-	box-shadow: var(--shadow-s);
 	font-size: inherit;
+}
+
+.annotation-review-annotation-card {
+	border: 1px solid var(--background-modifier-border);
+	padding: 8px 10px;
 	transition: background-color 0.2s ease;
 }
 
-.annotation-review-card:hover {
+.annotation-review-annotation-card:hover {
 	background-color: var(--background-modifier-hover);
-}
-
-.annotation-type-comment {
-	border-left-color: var(--color-blue, var(--interactive-accent));
-}
-
-.annotation-type-delete {
-	border-left-color: var(--color-red, var(--text-error));
-}
-
-.annotation-type-replace {
-	border-left-color: var(--color-orange, var(--text-warning));
-}
-
-.annotation-type-insert {
-	border-left-color: var(--color-green, var(--text-success));
 }
 
 .annotation-review-header {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 8px 10px 6px 10px;
+	margin-bottom: 4px;
 }
 
 .annotation-review-badge {
@@ -184,7 +191,6 @@
 
 .annotation-review-body {
 	font-size: inherit;
-	padding: 0 10px 8px 10px;
 }
 
 .annotation-review-text {
@@ -215,8 +221,7 @@
 .annotation-review-actions {
 	display: flex;
 	gap: 6px;
-	padding: 6px 10px;
-	border-top: 0.5px solid var(--background-modifier-border);
+	margin-top: 6px;
 }
 
 .annotation-review-actions button {
@@ -232,10 +237,19 @@
 	color: var(--text-muted);
 }
 
-/* Admonition cards */
+/* Admonition cards: their own distinct look, independent of annotation cards */
 
 .annotation-review-admonition-card {
-	border-left-color: var(--background-modifier-border);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: var(--shadow-s);
+}
+
+.annotation-review-ad-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 10px 6px 10px;
 }
 
 .annotation-review-ad-type {

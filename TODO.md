@@ -23,6 +23,7 @@
 - [ ] Expand/collapse-all pattern on the Annotations tab too, once replies exist to expand
 
 ## Completed Recently
+- [x] Fix: reverted unrequested annotation card restyle (colored left border), moved refresh next to expand in the filter row, made tabs+filter row sticky with only the list scrolling, tabs now show full text labels again (2026-08-23)
 - [x] Core plugin: detection, approve/dismiss, sidebar, install via BRAT (2026-08-23)
 - [x] Author filter, colored author badges, Admonitions tab, Refresh button, reason-field fixes, corrected insert-footnote syntax (2026-08-23)
 - [x] Redesigned sidebar: icon-only tabs with underline indicator, Menu-based filter buttons, live-rendered admonitions matching the user's Admonition styling, per-block delete, expand/collapse toggle, clearer author badge (2026-08-23)

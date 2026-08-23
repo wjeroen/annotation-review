@@ -60,11 +60,13 @@ export class AnnotationReviewView extends ItemView {
 		container.addClass("annotation-review-container");
 
 		this.renderToolbar(container);
+		this.renderFilterRow(container);
 
+		const scrollArea = container.createEl("div", { cls: "annotation-review-scroll-area" });
 		if (this.activeTab === "annotations") {
-			this.renderAnnotationsTab(container);
+			this.renderAnnotationsList(scrollArea);
 		} else {
-			this.renderAdmonitionsTab(container);
+			this.renderAdmonitionsList(scrollArea);
 		}
 	}
 
@@ -75,8 +77,9 @@ export class AnnotationReviewView extends ItemView {
 		const annotationsTab = tabs.createEl("button", {
 			cls: `annotation-review-tab ${this.activeTab === "annotations" ? "is-active" : ""}`
 		});
-		setIcon(annotationsTab, "check-check");
-		setTooltip(annotationsTab, "Annotations");
+		const annIcon = annotationsTab.createEl("span", { cls: "annotation-review-tab-icon" });
+		setIcon(annIcon, "check-check");
+		annotationsTab.createEl("span", { text: "Annotations" });
 		annotationsTab.addEventListener("click", () => {
 			this.activeTab = "annotations";
 			this.render();
@@ -85,17 +88,13 @@ export class AnnotationReviewView extends ItemView {
 		const admonitionsTab = tabs.createEl("button", {
 			cls: `annotation-review-tab ${this.activeTab === "admonitions" ? "is-active" : ""}`
 		});
-		setIcon(admonitionsTab, "info");
-		setTooltip(admonitionsTab, "Admonitions");
+		const admIcon = admonitionsTab.createEl("span", { cls: "annotation-review-tab-icon" });
+		setIcon(admIcon, "info");
+		admonitionsTab.createEl("span", { text: "Admonitions" });
 		admonitionsTab.addEventListener("click", () => {
 			this.activeTab = "admonitions";
 			this.render();
 		});
-
-		const refreshBtn = toolbar.createEl("button", { cls: "clickable-icon" });
-		setIcon(refreshBtn, "refresh-cw");
-		setTooltip(refreshBtn, "Refresh");
-		refreshBtn.addEventListener("click", () => this.plugin.rescanActiveFile());
 	}
 
 	private createFilterButton(container: Element, label: string, buildMenu: (menu: Menu) => void): HTMLElement {
@@ -112,54 +111,97 @@ export class AnnotationReviewView extends ItemView {
 		return btn;
 	}
 
-	private renderAnnotationsTab(container: Element) {
-		const annotations = this.plugin.annotations;
-
-		const authors = new Set<string>();
-		let hasNoAuthor = false;
-		for (const a of annotations) {
-			if (a.author) authors.add(a.author);
-			else hasNoAuthor = true;
-		}
-		const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
-
+	private renderFilterRow(container: Element) {
 		const filterRow = container.createEl("div", { cls: "annotation-review-filter-row" });
-		const currentLabel =
-			this.selectedAuthor === ALL_VALUE ? "All authors" : this.selectedAuthor === NO_AUTHOR ? "No author" : this.selectedAuthor;
-		this.createFilterButton(filterRow, currentLabel, menu => {
-			menu.addItem(item =>
-				item
-					.setTitle("All authors")
-					.setChecked(this.selectedAuthor === ALL_VALUE)
-					.onClick(() => {
-						this.selectedAuthor = ALL_VALUE;
-						this.render();
-					})
-			);
-			for (const author of sortedAuthors) {
-				menu.addItem(item =>
-					item
-						.setTitle(author)
-						.setChecked(this.selectedAuthor === author)
-						.onClick(() => {
-							this.selectedAuthor = author;
-							this.render();
-						})
-				);
-			}
-			if (hasNoAuthor) {
-				menu.addItem(item =>
-					item
-						.setTitle("No author")
-						.setChecked(this.selectedAuthor === NO_AUTHOR)
-						.onClick(() => {
-							this.selectedAuthor = NO_AUTHOR;
-							this.render();
-						})
-				);
-			}
-		});
 
+		if (this.activeTab === "annotations") {
+			const authors = new Set<string>();
+			let hasNoAuthor = false;
+			for (const a of this.plugin.annotations) {
+				if (a.author) authors.add(a.author);
+				else hasNoAuthor = true;
+			}
+			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
+			const currentLabel =
+				this.selectedAuthor === ALL_VALUE ? "All authors" : this.selectedAuthor === NO_AUTHOR ? "No author" : this.selectedAuthor;
+
+			this.createFilterButton(filterRow, currentLabel, menu => {
+				menu.addItem(item =>
+					item
+						.setTitle("All authors")
+						.setChecked(this.selectedAuthor === ALL_VALUE)
+						.onClick(() => {
+							this.selectedAuthor = ALL_VALUE;
+							this.render();
+						})
+				);
+				for (const author of sortedAuthors) {
+					menu.addItem(item =>
+						item
+							.setTitle(author)
+							.setChecked(this.selectedAuthor === author)
+							.onClick(() => {
+								this.selectedAuthor = author;
+								this.render();
+							})
+					);
+				}
+				if (hasNoAuthor) {
+					menu.addItem(item =>
+						item
+							.setTitle("No author")
+							.setChecked(this.selectedAuthor === NO_AUTHOR)
+							.onClick(() => {
+								this.selectedAuthor = NO_AUTHOR;
+								this.render();
+							})
+					);
+				}
+			});
+		} else {
+			const types = Array.from(new Set(this.plugin.admonitions.map(b => b.adType))).sort((a, b) => a.localeCompare(b));
+			const currentLabel = this.selectedAdType === ALL_VALUE ? "All types" : this.selectedAdType;
+
+			this.createFilterButton(filterRow, currentLabel, menu => {
+				menu.addItem(item =>
+					item
+						.setTitle("All types")
+						.setChecked(this.selectedAdType === ALL_VALUE)
+						.onClick(() => {
+							this.selectedAdType = ALL_VALUE;
+							this.render();
+						})
+				);
+				for (const t of types) {
+					menu.addItem(item =>
+						item
+							.setTitle(t)
+							.setChecked(this.selectedAdType === t)
+							.onClick(() => {
+								this.selectedAdType = t;
+								this.render();
+							})
+					);
+				}
+			});
+
+			const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
+			setIcon(expandBtn, this.admonitionsExpanded ? "chevrons-down-up" : "chevrons-up-down");
+			setTooltip(expandBtn, this.admonitionsExpanded ? "Collapse all" : "Expand all");
+			expandBtn.addEventListener("click", () => {
+				this.admonitionsExpanded = !this.admonitionsExpanded;
+				this.render();
+			});
+		}
+
+		const refreshBtn = filterRow.createEl("button", { cls: "clickable-icon annotation-review-refresh" });
+		setIcon(refreshBtn, "refresh-cw");
+		setTooltip(refreshBtn, "Refresh");
+		refreshBtn.addEventListener("click", () => this.plugin.rescanActiveFile());
+	}
+
+	private renderAnnotationsList(container: Element) {
+		const annotations = this.plugin.annotations;
 		const filtered = annotations.filter(a => {
 			if (this.selectedAuthor === ALL_VALUE) return true;
 			if (this.selectedAuthor === NO_AUTHOR) return !a.author;
@@ -182,7 +224,7 @@ export class AnnotationReviewView extends ItemView {
 
 	private renderAnnotationItem(container: Element, annotation: Annotation) {
 		const card = container.createEl("div", {
-			cls: `annotation-review-card annotation-type-${annotation.type}`
+			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type}`
 		});
 
 		const header = card.createEl("div", { cls: "annotation-review-header" });
@@ -245,43 +287,8 @@ export class AnnotationReviewView extends ItemView {
 		});
 	}
 
-	private renderAdmonitionsTab(container: Element) {
+	private renderAdmonitionsList(container: Element) {
 		const blocks = this.plugin.admonitions;
-		const types = Array.from(new Set(blocks.map(b => b.adType))).sort((a, b) => a.localeCompare(b));
-
-		const filterRow = container.createEl("div", { cls: "annotation-review-filter-row" });
-		const currentLabel = this.selectedAdType === ALL_VALUE ? "All types" : this.selectedAdType;
-		this.createFilterButton(filterRow, currentLabel, menu => {
-			menu.addItem(item =>
-				item
-					.setTitle("All types")
-					.setChecked(this.selectedAdType === ALL_VALUE)
-					.onClick(() => {
-						this.selectedAdType = ALL_VALUE;
-						this.render();
-					})
-			);
-			for (const t of types) {
-				menu.addItem(item =>
-					item
-						.setTitle(t)
-						.setChecked(this.selectedAdType === t)
-						.onClick(() => {
-							this.selectedAdType = t;
-							this.render();
-						})
-				);
-			}
-		});
-
-		const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
-		setIcon(expandBtn, this.admonitionsExpanded ? "chevrons-down-up" : "chevrons-up-down");
-		setTooltip(expandBtn, this.admonitionsExpanded ? "Collapse all" : "Expand all");
-		expandBtn.addEventListener("click", () => {
-			this.admonitionsExpanded = !this.admonitionsExpanded;
-			this.render();
-		});
-
 		const filtered = blocks.filter(b => this.selectedAdType === ALL_VALUE || b.adType === this.selectedAdType);
 
 		const list = container.createEl("div", { cls: "annotation-review-list" });
@@ -301,7 +308,7 @@ export class AnnotationReviewView extends ItemView {
 	private renderAdmonitionItem(container: Element, block: AdmonitionBlock) {
 		const card = container.createEl("div", { cls: "annotation-review-card annotation-review-admonition-card" });
 
-		const header = card.createEl("div", { cls: "annotation-review-header" });
+		const header = card.createEl("div", { cls: "annotation-review-ad-header" });
 		header.createEl("span", { cls: "annotation-review-ad-type", text: block.adType });
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${block.line}` });
 
