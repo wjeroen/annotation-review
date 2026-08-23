@@ -1,0 +1,116 @@
+.annotation-review-container {
+	padding: 8px;
+	font-size: inherit;
+}
+
+.annotation-review-empty {
+	color: var(--text-muted);
+	padding: 12px 4px;
+}
+
+.annotation-review-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 8px 10px;
+	margin-bottom: 8px;
+	cursor: pointer;
+	font-size: inherit;
+}
+
+.annotation-review-card:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.annotation-review-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+
+.annotation-review-badge {
+	font-weight: 600;
+	font-size: 0.85em;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background-color: var(--background-modifier-border);
+}
+
+.annotation-type-comment .annotation-review-badge {
+	background-color: var(--color-blue, var(--interactive-accent));
+	color: var(--text-on-accent);
+}
+
+.annotation-type-delete .annotation-review-badge {
+	background-color: var(--color-red, var(--text-error));
+	color: var(--text-on-accent);
+}
+
+.annotation-type-replace .annotation-review-badge {
+	background-color: var(--color-orange, var(--text-warning));
+	color: var(--text-on-accent);
+}
+
+.annotation-type-insert .annotation-review-badge {
+	background-color: var(--color-green, var(--text-success));
+	color: var(--text-on-accent);
+}
+
+.annotation-review-author {
+	font-size: 0.85em;
+	color: var(--text-muted);
+}
+
+.annotation-review-line {
+	margin-left: auto;
+	font-size: 0.85em;
+	color: var(--text-faint);
+}
+
+.annotation-review-body {
+	font-size: inherit;
+}
+
+.annotation-review-text {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.annotation-type-delete .annotation-review-text {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+.annotation-review-insert-text {
+	color: var(--text-success, var(--text-normal));
+}
+
+.annotation-review-replacement {
+	color: var(--text-success, var(--text-normal));
+	margin-top: 2px;
+}
+
+.annotation-review-comment {
+	color: var(--text-muted);
+	margin-top: 4px;
+	font-style: italic;
+}
+
+.annotation-review-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.annotation-review-actions button {
+	font-size: 0.85em;
+	padding: 2px 8px;
+}
+
+.annotation-review-approve {
+	color: var(--text-success, var(--text-normal));
+}
+
+.annotation-review-dismiss {
+	color: var(--text-muted);
+}

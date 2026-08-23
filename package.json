@@ -1,0 +1,19 @@
+{
+	"name": "annotation-review",
+	"version": "0.1.0",
+	"description": "Review, approve, and dismiss AI-authored text annotations in Obsidian notes.",
+	"main": "main.js",
+	"private": true,
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+	},
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"esbuild": "0.17.3",
+		"obsidian": "latest",
+		"tslib": "2.6.2",
+		"typescript": "^5.4.5"
+	}
+}
