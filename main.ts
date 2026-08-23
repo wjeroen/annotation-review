@@ -24,7 +24,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			callback: () => this.rescanActiveFile()
 		});
 
-		const debouncedRescan = debounce(() => this.rescanActiveFile(), 400, true);
+		const debouncedRescan = debounce(() => this.rescanActiveFile(), 150, true);
 
 		this.registerEvent(
 			this.app.workspace.on("file-open", file => {
@@ -116,7 +116,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			return;
 		}
 		const content = await this.app.vault.read(file);
-		const result = computeRemoval(content, block.matchStart, block.matchEnd, block.raw);
+		const result = computeRemoval(content, block.matchStart, block.raw);
 		if (!result.ok) {
 			new Notice(`Annotation Review: ${result.reason}`);
 			await this.rescanActiveFile();

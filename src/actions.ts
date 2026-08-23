@@ -6,12 +6,38 @@ export type MutationResult =
 	| { ok: true; newContent: string }
 	| { ok: false; reason: string };
 
-export function computeMutation(content: string, annotation: Annotation, action: AnnotationAction): MutationResult {
-	const { matchStart, matchEnd, fullMatch, type } = annotation;
-	const currentSlice = content.slice(matchStart, matchEnd);
-	if (currentSlice !== fullMatch) {
-		return { ok: false, reason: "The note changed since this annotation was detected. Rescanning, please try again." };
+/**
+ * The exact text we last saw may have shifted position, since an earlier
+ * approve/dismiss elsewhere in the file changes its length. Look for the
+ * expected text near its last known offset before giving up, so an action
+ * doesn't fail just because a different annotation was handled a moment
+ * earlier. Only a genuinely missing or changed match should fail.
+ */
+function locateMatch(content: string, expectedStart: number, expectedText: string): number | null {
+	if (content.slice(expectedStart, expectedStart + expectedText.length) === expectedText) {
+		return expectedStart;
 	}
+	let bestIndex = -1;
+	let bestDistance = Infinity;
+	let idx = content.indexOf(expectedText);
+	while (idx !== -1) {
+		const distance = Math.abs(idx - expectedStart);
+		if (distance < bestDistance) {
+			bestDistance = distance;
+			bestIndex = idx;
+		}
+		idx = content.indexOf(expectedText, idx + 1);
+	}
+	return bestIndex === -1 ? null : bestIndex;
+}
+
+export function computeMutation(content: string, annotation: Annotation, action: AnnotationAction): MutationResult {
+	const { fullMatch, type } = annotation;
+	const matchStart = locateMatch(content, annotation.matchStart, fullMatch);
+	if (matchStart === null) {
+		return { ok: false, reason: "This annotation's text couldn't be found anymore. Rescanning, please try again." };
+	}
+	const matchEnd = matchStart + fullMatch.length;
 
 	let replacement: string;
 	if (action === "dismiss") {
@@ -37,20 +63,22 @@ export function computeMutation(content: string, annotation: Annotation, action:
 }
 
 export function computeAddReply(content: string, annotation: Annotation, replyText: string): MutationResult {
-	const currentSlice = content.slice(annotation.matchStart, annotation.matchEnd);
-	if (currentSlice !== annotation.fullMatch) {
-		return { ok: false, reason: "The note changed since this annotation was detected. Rescanning, please try again." };
+	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
+	if (matchStart === null) {
+		return { ok: false, reason: "This annotation's text couldn't be found anymore. Rescanning, please try again." };
 	}
+	const matchEnd = matchStart + annotation.fullMatch.length;
 	const newFootnote = `^[${replyText}]`;
-	const newContent = content.slice(0, annotation.matchEnd) + newFootnote + content.slice(annotation.matchEnd);
+	const newContent = content.slice(0, matchEnd) + newFootnote + content.slice(matchEnd);
 	return { ok: true, newContent };
 }
 
-export function computeRemoval(content: string, matchStart: number, matchEnd: number, expectedRaw: string): MutationResult {
-	const currentSlice = content.slice(matchStart, matchEnd);
-	if (currentSlice !== expectedRaw) {
-		return { ok: false, reason: "The note changed since this block was detected. Rescanning, please try again." };
+export function computeRemoval(content: string, expectedStart: number, expectedRaw: string): MutationResult {
+	const matchStart = locateMatch(content, expectedStart, expectedRaw);
+	if (matchStart === null) {
+		return { ok: false, reason: "This block's text couldn't be found anymore. Rescanning, please try again." };
 	}
+	const matchEnd = matchStart + expectedRaw.length;
 	const newContent = content.slice(0, matchStart) + content.slice(matchEnd);
 	return { ok: true, newContent };
 }

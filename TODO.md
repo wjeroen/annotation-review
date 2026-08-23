@@ -16,6 +16,7 @@
 - [ ] "Add comment" from within the editor, not the sidebar. Proposal in progress: command structure and how to differentiate annotation types from the editor
 
 ## Completed Recently
+- [x] Fix: approve/dismiss/reply/delete now relocate an annotation's text if an earlier action shifted its position, instead of failing when acting on two things in a row. Also shortened the typing-triggered rescan delay (2026-08-23)
 - [x] Core plugin: detection, approve/dismiss, sidebar, install via BRAT (2026-08-23)
 - [x] Author filter, colored author badges, Admonitions tab, Refresh button, reason-field fixes, corrected insert-footnote syntax (2026-08-23)
 - [x] Redesigned sidebar: icon-only tabs with underline indicator, Menu-based filter buttons, live-rendered admonitions matching the user's Admonition styling, per-block delete, expand/collapse toggle, clearer author badge (2026-08-23)
