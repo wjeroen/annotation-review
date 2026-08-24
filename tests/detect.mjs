@@ -6,6 +6,7 @@ const built = await esbuild.build({
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
 			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
+			export { composeComment, composeDelete, composeReplace, composeInsert } from "./src/compose";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -29,7 +30,11 @@ const {
 	computeMutation,
 	computeAddReply,
 	computeSpanReplace,
-	computeRemoval
+	computeRemoval,
+	composeComment,
+	composeDelete,
+	composeReplace,
+	composeInsert
 } = mod.exports;
 
 let pass = 0, fail = 0;
@@ -124,6 +129,28 @@ check("inside an existing insert", getInsertContext(ctx, ctx.indexOf("an insert"
 
 console.log("\n=== Adding a reply ===");
 check("author typed into the field", computeAddReply(withAuthor, wa, "[J] hmm").newContent, `==T.==^[[C] delete]^[[J] hmm]`);
+
+console.log("\n=== What the editor commands write is read back correctly ===");
+function roundTrip(written) {
+	const a = one(written);
+	return a ? [a.type, a.author ?? null, a.originalText || a.insertedText, a.replacement ?? null] : null;
+}
+check("comment", roundTrip(composeComment("Sel.", "My note.", "C")), ["comment", "C", "Sel.", null]);
+check("comment without an author", roundTrip(composeComment("Sel.", "My note.", "")), ["comment", null, "Sel.", null]);
+check("delete", roundTrip(composeDelete("Sel.", "C")), ["delete", "C", "Sel.", null]);
+check("replace", roundTrip(composeReplace("Sel.", "New.", "C")), ["replace", "C", "Sel.", "New."]);
+check("insert, plain", roundTrip(composeInsert("Sel.", "C", "plain")), ["insert", "C", "Sel.", null]);
+check("insert, highlight form", roundTrip(composeInsert("Sel.", "C", "fenced")), ["insert", "C", "Sel.", null]);
+check("insert, nested in another insert", roundTrip(composeInsert("Sel.", "C", "native-comment")), ["insert", "C", "Sel.", null]);
+check("comment text survives the round trip", one(composeComment("Sel.", "My note.", "C")).commentText, "My note.");
+// A nested insert only makes sense written into a surrounding one, so check
+// that the whole thing still reads as three separate inserts afterwards.
+const surrounding = `%%[C] Before. After.%%`;
+const splitPoint = surrounding.indexOf(" After.");
+const nested = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", "native-comment") + surrounding.slice(splitPoint);
+check("nesting keeps all three inserts",
+	detectAnnotations(nested, "t.md").map(a => [a.author, a.insertedText]),
+	[["C", "Before."], ["G", "Mine."], [null, "After."]]);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -6,15 +6,39 @@
 - [ ] A reason can be added but not removed. Editing it to empty is rejected, and clearing it would need to take the preceding comma with it, so it needs its own dismiss button like replies have
 - [ ] Every unlabeled reply shows a "No author" chip, which is a bit heavy in a list of replies. A quieter affordance might read better
 
-### Testing
-- [ ] Confirm the sidebar now updates while typing in a note, without waiting for Obsidian to save
-- [ ] Confirm replies can be added to `%%...%%` inserts, not just highlight annotations
-- [ ] Confirm the reply and reason fields appear above the buttons with full width
-- [ ] Confirm clicking an author chip lets you set, change, and clear the author, on annotations and on replies
-- [ ] Confirm the plus button appears only when an annotation has no reason yet, and disappears once it has one
-- [ ] Confirm the replace layout reads well: original text in orange, arrow on its own line, replacement left aligned under it
-- [ ] Try each editor command on a selection, including inside an `ad-` block and inside an existing `%%...%%` insert
-- [ ] Confirm the Admonitions tab still renders your Admonition colours and icons on desktop and mobile
+### Needs checking in Obsidian
+
+Nothing below has been confirmed working in the app. Parsing and text rewriting are covered by `npm test`, so the risk is concentrated in the interface and in the editor commands. Roughly highest risk first.
+
+**Never used at all, built but never run in Obsidian**
+- [ ] Each editor command on a selection: comment, delete, replace, insert, insert (highlight form)
+- [ ] The type picker command, which asks which of the above you want
+- [ ] Set default author, and whether it then prefills the modals and new annotations
+- [ ] Insert inside an `ad-` block should produce `==++text++==`, not percent marks
+- [ ] Insert inside an existing `%%...%%` should produce the doubled form and leave three separate inserts, with none of the surrounding text becoming visible
+- [ ] The comment and replace modals write to an explicit range now, so check the original text is replaced rather than left behind alongside the annotation
+
+**Recently broken, fixed, not yet confirmed**
+- [ ] Switching notes shows the right note's annotations, both ways, including switching quickly
+- [ ] Clicking an author chip opens a field that stays open long enough to type in, on annotations and on replies
+- [ ] The list keeps its scroll position instead of jumping to the top
+- [ ] Clicking a card opens the note in the main area, never on top of the sidebar
+
+**New, never confirmed**
+- [ ] Reply field is prefilled with brackets, cursor inside them, and no doubled author label
+- [ ] Each reply's own dismiss button removes just that reply
+- [ ] Adding a reply expands the replies list
+- [ ] A reply sits beside its author on one line and moves below it when it needs two
+- [ ] The plus button appears only when there is no reason yet, and adding one works
+- [ ] Editing comment, reason, replacement, inserted text and reply text in place
+- [ ] The sidebar updates while typing, without waiting for Obsidian to save
+- [ ] Deleting an admonition leaves one blank line, not three
+
+**Cosmetic, unconfirmed**
+- [ ] Tabs span the full width with the underline splitting it in half
+- [ ] Approve, Dismiss and the filter buttons look shorter than a standard button
+- [ ] Replace layout reads well: original in orange, arrow on its own line, replacement left aligned under it
+- [ ] Admonitions tab still renders the Admonition plugin's own colours and icons, on desktop and mobile
 
 ## Future Ideas
 - [ ] Periodically review upstream `obsidian-sidebar-highlights` for relevant improvements to port over

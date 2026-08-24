@@ -80,4 +80,6 @@ npm test
 
 `npm test` covers the parsing and rewriting rules, plus the note-switching behaviour. The latter matters because scanning a note is asynchronous while several Obsidian events can ask for a scan at once, and an older read landing after a newer one used to leave the panel showing a different note's annotations.
 
+Changes ship as pre-releases (`0.5.0-beta.1` and so on) so they can be tested through BRAT before being called a version. See `CLAUDE.md` for the architecture map and the gotchas worth knowing before changing the parser or the sidebar.
+
 Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/annotation-review/`, then enable the plugin from Obsidian's Community Plugins settings.

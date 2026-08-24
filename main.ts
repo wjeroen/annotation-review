@@ -3,6 +3,7 @@ import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./s
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, InsertContext } from "./src/types";
 import { AnnotationInputModal, AnnotationTypePicker } from "./src/modals";
+import { composeComment, composeDelete, composeInsert, composeReplace } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 
 interface AnnotationReviewSettings {
@@ -16,10 +17,6 @@ const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 
 /** How long to wait after the last keystroke before rescanning the note. */
 const RESCAN_DELAY_MS = 400;
-
-function authorLabel(author: string): string {
-	return author ? `[${author}] ` : "";
-}
 
 export default class AnnotationReviewPlugin extends Plugin {
 	annotations: Annotation[] = [];
@@ -312,7 +309,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			submitLabel: "Add comment",
 			onSubmit: async (text, author) => {
 				await this.rememberAuthor(author);
-				editor.replaceRange(`==${selection.text}==^[${authorLabel(author)}${text}]`, selection.from, selection.to);
+				editor.replaceRange(composeComment(selection.text, text, author), selection.from, selection.to);
 			}
 		}).open();
 	}
@@ -322,11 +319,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (selection === null) return;
 		// No prompt: a deletion needs nothing beyond the selection itself, and
 		// a reason can still be added later from the sidebar.
-		editor.replaceRange(
-			`==${selection.text}==^[${authorLabel(this.settings.defaultAuthor)}delete]`,
-			selection.from,
-			selection.to
-		);
+		editor.replaceRange(composeDelete(selection.text, this.settings.defaultAuthor), selection.from, selection.to);
 	}
 
 	private annotateReplace(editor: Editor) {
@@ -340,11 +333,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			submitLabel: "Add replacement",
 			onSubmit: async (text, author) => {
 				await this.rememberAuthor(author);
-				editor.replaceRange(
-					`==${selection.text}==^[${authorLabel(author)}→ "${text}"]`,
-					selection.from,
-					selection.to
-				);
+				editor.replaceRange(composeReplace(selection.text, text, author), selection.from, selection.to);
 			}
 		}).open();
 	}
@@ -353,20 +342,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
 		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
-		const label = authorLabel(this.settings.defaultAuthor);
-
-		let wrapped: string;
-		if (context === "fenced") {
-			wrapped = `==++${label}${selection.text}++==`;
-		} else if (context === "native-comment") {
-			// Inside an existing %% %% span, so close it, add this insert, and
-			// reopen the original. Without the doubled marks the surrounding
-			// text would break out of its comment and become visible prose.
-			wrapped = `%%%%${label}${selection.text}%%%%`;
-		} else {
-			wrapped = `%%${label}${selection.text}%%`;
-		}
-		editor.replaceRange(wrapped, selection.from, selection.to);
+		editor.replaceRange(composeInsert(selection.text, this.settings.defaultAuthor, context), selection.from, selection.to);
 	}
 
 	private setDefaultAuthor() {
