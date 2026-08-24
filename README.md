@@ -4,6 +4,8 @@ An Obsidian plugin that finds text annotations in a note (comments, inserts, del
 
 ## Annotation syntax it recognizes
 
+`markdown-annotations.md` in this repo is the full syntax reference, written to be handed to an AI tool as a skill or system prompt so its output is readable by the plugin. The summary below is the short version.
+
 - **Comment on specific text**: `==Text==^[[Author] Comment text.]`. Dismiss only, restores the plain text.
 - **Delete**: `==Text==^[[Author] delete]` or `==Text==^[[Author] delete, reason]`. Approve removes the text, dismiss restores it.
 - **Replace**: `==Text==^[[Author] → "New text."]`, optionally with a reason after the quotes. Approve swaps in the quoted replacement, dismiss restores the original.

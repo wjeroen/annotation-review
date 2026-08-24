@@ -16,6 +16,7 @@ Read this before grepping. Each file owns one job, and most questions are answer
 | `src/modals.ts` | Dialogs used by the editor commands. |
 | `src/types.ts` | Shared types. Start here to understand the data model. |
 | `tests/` | Parsing and rewriting tests, plus note-switching behaviour. |
+| `markdown-annotations.md` | The syntax reference for whoever writes the annotations, human or AI. Two halves of one contract with `detect.ts`, so changing either means checking the examples in it still parse. |
 
 `detect.ts` and `compose.ts` are two halves of the same contract: one writes the syntax, the other reads it. Change one and the round-trip tests in `tests/detect.mjs` will tell you if they no longer agree.
 

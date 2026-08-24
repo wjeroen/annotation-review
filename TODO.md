@@ -17,8 +17,23 @@ Everything else has been confirmed working in the app. These are the changes in 
 - [ ] Clicking a card in reading view scrolls to the right line, since nothing can be selected there
 
 ## Future Ideas
-- [ ] Periodically review upstream `obsidian-sidebar-highlights` for relevant improvements to port over
-- [ ] Settings tab, if more options than the default author ever need configuring
+
+### Agreed for a next version
+
+- [ ] **Author label to the left of the comment or reason**, not italic, matching how replies read. When there is no comment or reason, the label stays where it is now. Small layout change, low risk.
+- [ ] **Label percent mark inserts as `%%Insert%%`** in the sidebar, to set them apart from the highlight forms. The form is already tracked as `insertForm`, so this is a badge change only.
+- [ ] **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
+- [ ] **Sync the cursor to the sidebar.** With the caret inside a highlight or its footnote, scroll that card into view and mark it as active. Every annotation already knows its offset range, so mapping a cursor position to a card is a lookup. The main choice is which event to listen on, since Obsidian has no dedicated caret-moved event, so it likely means checking the cursor on editor changes and on active leaf changes. Probably the cheapest of the four for how much it helps.
+
+### Rethinking the syntax, not decided
+
+Worth taking seriously, but every option here breaks documents already annotated in the old syntax, so a reader that accepts both for a while is part of the cost.
+
+- [ ] **The comma separator before a reason.** It parses fine with a capitalised reason, so this is about how it reads rather than whether it works. A colon (`delete: Reason.`) reads better and is just as unambiguous, since the split happens at the first one only.
+- [ ] **Quotes around a replacement.** A real defect, not a style question: a replacement containing a double quote cannot be expressed at all. Options are a different delimiter, an escape, or accepting curly quotes as well.
+- [ ] **The arrow.** Accepting `->` alongside `→` is a couple of characters in one regex and removes the typing problem entirely. Worth doing whatever else changes.
+- [ ] **Keywords inside brackets**, so `^[[Claude] [delete] Reason.]`. Removes the separator question completely, at the cost of looking similar to the author label right next to it.
+- [ ] **Percent marks for every annotation type, not just inserts.** Worth thinking through carefully, because the two markers do different jobs. Percent marks *hide* their contents and highlights *show* them. That is exactly why inserts use percent marks: the inserted text is a proposal, so hiding it until approval is correct. A comment, deletion or replacement points at text the reader is supposed to keep seeing, so hiding it would be wrong. The choice between them is not arbitrary, so a switch would only make sense for the annotation's own metadata, not for the text it points at.
 
 ## Completed Recently
 - [x] An insertion now changes shape with its reason. The `++` markers only mark inserted text when no footnote says so, so adding a reason drops them and clearing it brings them back. Percent mark inserts keep their marks either way, since those hide the text rather than label it, and converting one would reveal hidden text and not survive a round trip (2026-08-24)
