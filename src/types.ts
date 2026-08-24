@@ -50,8 +50,16 @@ export interface Annotation {
 	authorInsertAt: number;
 	/** The comment text for a comment, or the inserted text for an insert. */
 	bodySpan?: TextSpan;
+	/** The highlighted source text, for the types that have one. */
+	originalSpan?: TextSpan;
 	replacementSpan?: TextSpan;
 	reasonSpan?: TextSpan;
+	/**
+	 * What to remove to clear the reason. Wider than `reasonSpan`, since it
+	 * also takes the separator before it, or the whole footnote when the
+	 * footnote exists only to carry the reason.
+	 */
+	reasonClearSpan?: TextSpan;
 	/** Set only when there is no reason yet, so one can still be added. */
 	reasonInsert?: InsertPoint;
 }

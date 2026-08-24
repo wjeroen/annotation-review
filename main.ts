@@ -2,17 +2,22 @@ import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceL
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, InsertContext } from "./src/types";
-import { AnnotationInputModal, AnnotationTypePicker } from "./src/modals";
-import { composeComment, composeDelete, composeInsert, composeReplace } from "./src/compose";
+import { AuthorModal, AnnotationTypePicker } from "./src/modals";
+import { Composed, composeComment, composeDelete, composeInsert, composeInsertWithReason, composeReplace } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 
 interface AnnotationReviewSettings {
 	/** Prefilled author label for new annotations. Blank means no label. */
 	defaultAuthor: string;
+	/** Expanded state carries across notes, and is tracked per tab. */
+	repliesExpanded: boolean;
+	admonitionsExpanded: boolean;
 }
 
 const DEFAULT_SETTINGS: AnnotationReviewSettings = {
-	defaultAuthor: ""
+	defaultAuthor: "",
+	repliesExpanded: false,
+	admonitionsExpanded: false
 };
 
 /** How long to wait after the last keystroke before rescanning the note. */
@@ -202,7 +207,12 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.applyMutation(file, computeRemoval(content, block.matchStart, block.raw));
 	}
 
-	async jumpToOffset(filePath: string, offset: number) {
+	/**
+	 * Reveals an annotation in the note, selecting the whole thing rather than
+	 * placing a caret, since a card in the middle of the screen is otherwise
+	 * hard to match up with the text it refers to.
+	 */
+	async revealRange(filePath: string, start: number, end: number) {
 		const file = this.fileFor(filePath);
 		if (!file) return;
 		// Clicking a card makes the sidebar the active leaf, and the note has
@@ -211,61 +221,107 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await leaf.openFile(file);
 		const view = leaf.view;
 		if (view instanceof MarkdownView) {
-			const pos = view.editor.offsetToPos(offset);
-			view.editor.setCursor(pos);
-			view.editor.scrollIntoView({ from: pos, to: pos }, true);
+			const from = view.editor.offsetToPos(start);
+			const to = view.editor.offsetToPos(end);
+			view.editor.setSelection(from, to);
+			view.editor.scrollIntoView({ from, to }, true);
 		}
 	}
 
+
 	// Creating annotations from the editor.
 
+	/**
+	 * Every annotation type, in the order they appear in menus. Each one writes
+	 * straight into the note and leaves the caret where text is still needed,
+	 * so none of them opens a dialog first.
+	 */
+	private annotationActions(): { id: string; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
+		return [
+			{
+				id: "comment",
+				label: "Comment",
+				icon: "message-square",
+				description: "Leave a remark on the selected text",
+				run: editor => this.annotate(editor, sel => composeComment(sel, this.settings.defaultAuthor))
+			},
+			{
+				id: "delete",
+				label: "Delete",
+				icon: "strikethrough",
+				description: "Propose removing the selected text",
+				run: editor => this.annotate(editor, sel => composeDelete(sel, this.settings.defaultAuthor))
+			},
+			{
+				id: "replace",
+				label: "Replace",
+				icon: "replace",
+				description: "Propose new wording for the selected text",
+				run: editor => this.annotate(editor, sel => composeReplace(sel, this.settings.defaultAuthor))
+			},
+			{
+				id: "insert",
+				label: "Insert",
+				icon: "text-cursor-input",
+				description: "Mark the selected text as newly inserted",
+				run: editor => this.annotateInsert(editor)
+			},
+			{
+				id: "insert-highlight",
+				label: "Insert (highlight form)",
+				icon: "highlighter",
+				description: "Always uses the ==++text++== form",
+				run: editor => this.annotateInsert(editor, "fenced")
+			},
+			{
+				id: "insert-reason",
+				label: "Insert with a reason",
+				icon: "list-plus",
+				description: "Uses the footnote form, so a reason can be given",
+				run: editor => this.annotate(editor, sel => composeInsertWithReason(sel, this.settings.defaultAuthor))
+			}
+		];
+	}
+
 	private registerAnnotationCommands() {
-		this.addCommand({
-			id: "annotate-comment",
-			name: "Annotate: comment on selection",
-			editorCallback: editor => this.annotateComment(editor)
-		});
-		this.addCommand({
-			id: "annotate-delete",
-			name: "Annotate: mark selection for deletion",
-			editorCallback: editor => this.annotateDelete(editor)
-		});
-		this.addCommand({
-			id: "annotate-replace",
-			name: "Annotate: replace selection",
-			editorCallback: editor => this.annotateReplace(editor)
-		});
-		this.addCommand({
-			id: "annotate-insert",
-			name: "Annotate: mark selection as an insertion",
-			editorCallback: editor => this.annotateInsert(editor)
-		});
-		this.addCommand({
-			id: "annotate-insert-highlight",
-			name: "Annotate: mark selection as an insertion (highlight form)",
-			editorCallback: editor => this.annotateInsert(editor, "fenced")
-		});
+		for (const action of this.annotationActions()) {
+			this.addCommand({
+				id: `annotate-${action.id}`,
+				name: action.label,
+				editorCallback: editor => action.run(editor)
+			});
+		}
 		this.addCommand({
 			id: "annotate-pick",
-			name: "Annotate: choose type for selection",
+			name: "Choose type of annotation",
 			editorCallback: editor => this.pickAnnotationType(editor)
 		});
 		this.addCommand({
 			id: "annotate-set-author",
-			name: "Annotate: set default author",
+			name: "Set default author",
 			callback: () => this.setDefaultAuthor()
 		});
+
+		// The same actions on the editor's right click menu. setSection groups
+		// them together so Obsidian draws a divider around them, since the API
+		// has no submenus.
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu, editor) => {
+				if (!editor.getSelection()) return;
+				for (const action of this.annotationActions()) {
+					menu.addItem(item =>
+						item
+							.setSection("annotation-review")
+							.setTitle(action.label)
+							.setIcon(action.icon)
+							.onClick(() => action.run(editor))
+					);
+				}
+			})
+		);
 	}
 
-	/**
-	 * The selected text together with its range.
-	 *
-	 * The range matters for the commands that open a modal first: the modal
-	 * takes focus, and writing the result back with `replaceSelection` would
-	 * rely on a selection that may no longer be there, which would insert the
-	 * annotation while leaving the original text behind. Replacing an explicit
-	 * range avoids depending on that.
-	 */
+	/** The selected text with its range, which stays valid even if focus moves. */
 	private requireSelection(editor: Editor): { text: string; from: EditorPosition; to: EditorPosition } | null {
 		const text = editor.getSelection();
 		if (!text) {
@@ -275,93 +331,42 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return { text, from: editor.getCursor("from"), to: editor.getCursor("to") };
 	}
 
-	private pickAnnotationType(editor: Editor) {
-		new AnnotationTypePicker(
-			this.app,
-			[
-				{ id: "comment", label: "Comment", description: "Leave a remark on the selected text" },
-				{ id: "delete", label: "Delete", description: "Propose removing the selected text" },
-				{ id: "replace", label: "Replace", description: "Propose new wording for the selected text" },
-				{ id: "insert", label: "Insert", description: "Mark the selected text as newly inserted" },
-				{ id: "insert-highlight", label: "Insert (highlight form)", description: "Force the ==++text++== form" }
-			],
-			id => {
-				// Let the picker finish closing before another modal opens.
-				window.setTimeout(() => {
-					if (id === "comment") this.annotateComment(editor);
-					else if (id === "delete") this.annotateDelete(editor);
-					else if (id === "replace") this.annotateReplace(editor);
-					else if (id === "insert") this.annotateInsert(editor);
-					else this.annotateInsert(editor, "fenced");
-				}, 0);
-			}
-		).open();
-	}
-
-	private annotateComment(editor: Editor) {
+	/** Writes an annotation over the selection and puts the caret where it belongs. */
+	private annotate(editor: Editor, build: (selected: string) => Composed) {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
-		new AnnotationInputModal(this.app, {
-			title: "Comment on selection",
-			textLabel: "Comment",
-			placeholder: "What do you want to say about this text?",
-			initialAuthor: this.settings.defaultAuthor,
-			submitLabel: "Add comment",
-			onSubmit: async (text, author) => {
-				await this.rememberAuthor(author);
-				editor.replaceRange(composeComment(selection.text, text, author), selection.from, selection.to);
-			}
-		}).open();
-	}
-
-	private annotateDelete(editor: Editor) {
-		const selection = this.requireSelection(editor);
-		if (selection === null) return;
-		// No prompt: a deletion needs nothing beyond the selection itself, and
-		// a reason can still be added later from the sidebar.
-		editor.replaceRange(composeDelete(selection.text, this.settings.defaultAuthor), selection.from, selection.to);
-	}
-
-	private annotateReplace(editor: Editor) {
-		const selection = this.requireSelection(editor);
-		if (selection === null) return;
-		new AnnotationInputModal(this.app, {
-			title: "Replace selection",
-			textLabel: "Replacement text",
-			placeholder: "What should this text say instead?",
-			initialAuthor: this.settings.defaultAuthor,
-			submitLabel: "Add replacement",
-			onSubmit: async (text, author) => {
-				await this.rememberAuthor(author);
-				editor.replaceRange(composeReplace(selection.text, text, author), selection.from, selection.to);
-			}
-		}).open();
+		const composed = build(selection.text);
+		const startOffset = editor.posToOffset(selection.from);
+		editor.replaceRange(composed.text, selection.from, selection.to);
+		editor.setCursor(editor.offsetToPos(startOffset + composed.cursor));
+		editor.focus();
 	}
 
 	private annotateInsert(editor: Editor, forcedContext?: InsertContext) {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
 		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
-		editor.replaceRange(composeInsert(selection.text, this.settings.defaultAuthor, context), selection.from, selection.to);
+		this.annotate(editor, sel => composeInsert(sel, this.settings.defaultAuthor, context));
+	}
+
+	private pickAnnotationType(editor: Editor) {
+		const actions = this.annotationActions();
+		new AnnotationTypePicker(
+			this.app,
+			actions.map(a => ({ id: a.id, label: a.label, description: a.description })),
+			id => {
+				const action = actions.find(a => a.id === id);
+				// Let the picker finish closing before the editor is touched.
+				if (action) window.setTimeout(() => action.run(editor), 0);
+			}
+		).open();
 	}
 
 	private setDefaultAuthor() {
-		new AnnotationInputModal(this.app, {
-			title: "Default author for new annotations",
-			textLabel: null,
-			initialAuthor: this.settings.defaultAuthor,
-			submitLabel: "Save",
-			onSubmit: async (_text, author) => {
-				this.settings.defaultAuthor = author;
-				await this.saveSettings();
-				new Notice(author ? `Annotation Review: author set to ${author}.` : "Annotation Review: author label cleared.");
-			}
+		new AuthorModal(this.app, this.settings.defaultAuthor, async author => {
+			this.settings.defaultAuthor = author;
+			await this.saveSettings();
+			new Notice(author ? `Annotation Review: author set to ${author}.` : "Annotation Review: author label cleared.");
 		}).open();
-	}
-
-	private async rememberAuthor(author: string) {
-		if (author === this.settings.defaultAuthor) return;
-		this.settings.defaultAuthor = author;
-		await this.saveSettings();
 	}
 }

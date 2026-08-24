@@ -6,7 +6,7 @@ const built = await esbuild.build({
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
 			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
-			export { composeComment, composeDelete, composeReplace, composeInsert } from "./src/compose";
+			export { composeComment, composeDelete, composeReplace, composeInsert, composeInsertWithReason } from "./src/compose";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -34,7 +34,8 @@ const {
 	composeComment,
 	composeDelete,
 	composeReplace,
-	composeInsert
+	composeInsert,
+	composeInsertWithReason
 } = mod.exports;
 
 let pass = 0, fail = 0;
@@ -130,24 +131,65 @@ check("inside an existing insert", getInsertContext(ctx, ctx.indexOf("an insert"
 console.log("\n=== Adding a reply ===");
 check("author typed into the field", computeAddReply(withAuthor, wa, "[J] hmm").newContent, `==T.==^[[C] delete]^[[J] hmm]`);
 
+console.log("\n=== Clearing a reason ===");
+function clearReason(doc) {
+	const ann = one(doc);
+	const c = ann.reasonClearSpan;
+	return c ? computeSpanReplace(doc, ann, c.start, c.end, "").newContent : "(nothing to clear)";
+}
+check("delete keeps its keyword", clearReason(`==T.==^[[C] delete, why]`), `==T.==^[[C] delete]`);
+check("replace keeps its replacement", clearReason(`==T.==^[[C] → "N.", why]`), `==T.==^[[C] → "N."]`);
+check("footnote insert keeps its keyword", clearReason(`==T.==^[[C] insert, why]`), `==T.==^[[C] insert]`);
+check("percent insert drops the whole footnote", clearReason(`%%[C] N.%%^[insert, why]`), `%%[C] N.%%`);
+check("highlight insert drops the whole footnote", clearReason(`==++[C] N.++==^[insert, why]`), `==++[C] N.++==`);
+check("a cleared reason offers to be added again", one(`==T.==^[[C] delete]`).reasonInsert !== undefined, true);
+check("replies are untouched by clearing", clearReason(`==T.==^[[C] delete, why]^[[A] hmm]`), `==T.==^[[C] delete]^[[A] hmm]`);
+
+console.log("\n=== Editing the highlighted source text ===");
+const srcDoc = `==Old text.==^[[C] delete]`;
+const src = one(srcDoc);
+check("delete exposes its source text", computeSpanReplace(srcDoc, src, src.originalSpan.start, src.originalSpan.end, "New text.").newContent,
+	`==New text.==^[[C] delete]`);
+check("comment exposes its source text", one(`==T.==^[[C] note]`).originalSpan !== undefined, true);
+check("an insert has no separate source text", one(`%%[C] N.%%`).originalSpan, undefined);
+
+console.log("\n=== Mentioning the syntax must not desync what follows ===");
+// A backticked == is ignored, but it used to be consumed all the same, which
+// paired it with the next real annotation's opening delimiter and shifted
+// every pairing after it.
+const mentioned = "Wrap it in `==` like so.\n" +
+	"First: ==one==^[[C] delete]\n" +
+	"Second: ==two==^[[C] delete]\n" +
+	"Third: ==three==^[[C] delete]";
+check("all three still parse", detectAnnotations(mentioned, "t.md").map(a => a.originalText), ["one", "two", "three"]);
+const mentionedPlus = "Wrap it in `==++text++==` like so.\n\nReal: ==++[C] inserted++==";
+check("a backticked highlight insert does not swallow the next one",
+	detectAnnotations(mentionedPlus, "t.md").map(a => a.insertedText), ["inserted"]);
+
 console.log("\n=== What the editor commands write is read back correctly ===");
 function roundTrip(written) {
 	const a = one(written);
 	return a ? [a.type, a.author ?? null, a.originalText || a.insertedText, a.replacement ?? null] : null;
 }
-check("comment", roundTrip(composeComment("Sel.", "My note.", "C")), ["comment", "C", "Sel.", null]);
-check("comment without an author", roundTrip(composeComment("Sel.", "My note.", "")), ["comment", null, "Sel.", null]);
-check("delete", roundTrip(composeDelete("Sel.", "C")), ["delete", "C", "Sel.", null]);
-check("replace", roundTrip(composeReplace("Sel.", "New.", "C")), ["replace", "C", "Sel.", "New."]);
-check("insert, plain", roundTrip(composeInsert("Sel.", "C", "plain")), ["insert", "C", "Sel.", null]);
-check("insert, highlight form", roundTrip(composeInsert("Sel.", "C", "fenced")), ["insert", "C", "Sel.", null]);
-check("insert, nested in another insert", roundTrip(composeInsert("Sel.", "C", "native-comment")), ["insert", "C", "Sel.", null]);
-check("comment text survives the round trip", one(composeComment("Sel.", "My note.", "C")).commentText, "My note.");
+/** Types `typed` at the caret position the command would have left. */
+function fill(composed, typed) {
+	return composed.text.slice(0, composed.cursor) + typed + composed.text.slice(composed.cursor);
+}
+check("comment", roundTrip(fill(composeComment("Sel.", "C"), "My note.")), ["comment", "C", "Sel.", null]);
+check("comment without an author", roundTrip(fill(composeComment("Sel.", ""), "My note.")), ["comment", null, "Sel.", null]);
+check("comment text lands at the caret", one(fill(composeComment("Sel.", "C"), "My note.")).commentText, "My note.");
+check("delete", roundTrip(composeDelete("Sel.", "C").text), ["delete", "C", "Sel.", null]);
+check("a reason typed at the caret", one(fill(composeDelete("Sel.", "C"), ", why")).reason, "why");
+check("replace", roundTrip(fill(composeReplace("Sel.", "C"), "New.")), ["replace", "C", "Sel.", "New."]);
+check("insert with a reason", one(fill(composeInsertWithReason("Sel.", "C"), "context")).reason, "context");
+check("insert, plain", roundTrip(composeInsert("Sel.", "C", "plain").text), ["insert", "C", "Sel.", null]);
+check("insert, highlight form", roundTrip(composeInsert("Sel.", "C", "fenced").text), ["insert", "C", "Sel.", null]);
+check("insert, nested in another insert", roundTrip(composeInsert("Sel.", "C", "native-comment").text), ["insert", "C", "Sel.", null]);
 // A nested insert only makes sense written into a surrounding one, so check
 // that the whole thing still reads as three separate inserts afterwards.
 const surrounding = `%%[C] Before. After.%%`;
 const splitPoint = surrounding.indexOf(" After.");
-const nested = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", "native-comment") + surrounding.slice(splitPoint);
+const nested = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", "native-comment").text + surrounding.slice(splitPoint);
 check("nesting keeps all three inserts",
 	detectAnnotations(nested, "t.md").map(a => [a.author, a.insertedText]),
 	[["C", "Before."], ["G", "Mine."], [null, "After."]]);

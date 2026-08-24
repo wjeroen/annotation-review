@@ -35,9 +35,11 @@ const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
 const HIGHLIGHT_REGEX = /==(\+\+)?([\s\S]+?)\1==/g;
 const FOOTNOTE_REGEX = /^\^\[((?:\[[^\]]*\])?[^\]]*)\]/;
 const AUTHOR_REGEX = /^\[([^\]]+)\]\s*/;
-const ARROW_REPLACE_REGEX = /^(→\s*")([^"]*)("\s*,?\s*)([\s\S]*)$/;
-const DELETE_REGEX = /^(delete\b\s*,?\s*)([\s\S]*)$/i;
-const INSERT_KEYWORD_REGEX = /^(insert\b\s*,?\s*)([\s\S]*)$/i;
+// Each of these splits into keyword, separator, then reason, so the reason can
+// be removed along with the separator that introduces it.
+const ARROW_REPLACE_REGEX = /^(→\s*")([^"]*)(")(\s*,?\s*)([\s\S]*)$/;
+const DELETE_REGEX = /^(delete\b)(\s*,?\s*)([\s\S]*)$/i;
+const INSERT_KEYWORD_REGEX = /^(insert\b)(\s*,?\s*)([\s\S]*)$/i;
 /**
  * Stricter than INSERT_KEYWORD_REGEX, for the forms where a trailing footnote
  * could just as easily be a reply. "insert" and "insert, reason" match, while
@@ -252,7 +254,15 @@ function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]):
 		const { footnotes, consumedLength } = extractFootnotes(rest);
 		const matchEnd = highlightEnd + consumedLength;
 
-		if (hasDelimiterInsideRanges(fullStart, matchEnd, excludedRanges)) continue;
+		if (hasDelimiterInsideRanges(fullStart, matchEnd, excludedRanges)) {
+			// Same recovery as above. One delimiter of this pair sits in code
+			// or a link, so the pairing is wrong rather than the annotation
+			// being invalid. Text that merely mentions the syntax, like a
+			// backticked ==, would otherwise swallow the opening delimiter of
+			// the next real annotation and shift every pairing after it.
+			regex.lastIndex = fullStart + (isPlusWrapped ? 4 : 2);
+			continue;
+		}
 
 		const highlightLen = highlightEnd - fullStart;
 		const innerStart = isPlusWrapped ? 4 : 2;
@@ -278,13 +288,23 @@ function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]):
 function readInsertReasonFootnote(
 	fullMatch: string,
 	footnote: FootnoteSpan
-): { author?: string; authorSpan?: TextSpan; authorInsertAt: number; reason?: string; reasonSpan?: TextSpan; reasonInsertAt: number } | null {
+): {
+	author?: string;
+	authorSpan?: TextSpan;
+	authorInsertAt: number;
+	reason?: string;
+	reasonSpan?: TextSpan;
+	reasonInsertAt: number;
+	/** This footnote exists only to carry the reason, so clearing it removes the lot. */
+	footnoteSpan: TextSpan;
+} | null {
 	const parsed = parseAuthorAt(fullMatch, footnote.start, footnote.end);
 	const segment = fullMatch.slice(parsed.restStart, footnote.end);
 	const m = INSERT_REASON_REGEX.exec(segment.trim());
 	if (!m) return null;
 
 	const contentEnd = trimmedSpan(fullMatch, parsed.restStart, footnote.end).end;
+	const footnoteSpan = { start: footnote.fullStart, end: footnote.fullEnd };
 	if (m[1] && m[1].trim()) {
 		const reasonStart = fullMatch.lastIndexOf(m[1].trim(), contentEnd);
 		return {
@@ -293,14 +313,16 @@ function readInsertReasonFootnote(
 			authorInsertAt: parsed.authorInsertAt,
 			reason: m[1].trim(),
 			reasonSpan: { start: reasonStart, end: reasonStart + m[1].trim().length },
-			reasonInsertAt: contentEnd
+			reasonInsertAt: contentEnd,
+			footnoteSpan
 		};
 	}
 	return {
 		author: parsed.author,
 		authorSpan: parsed.authorSpan,
 		authorInsertAt: parsed.authorInsertAt,
-		reasonInsertAt: contentEnd
+		reasonInsertAt: contentEnd,
+		footnoteSpan
 	};
 }
 
@@ -332,6 +354,7 @@ function classifyHighlightMatch(
 		let authorInsertAt = innerAuthor.authorInsertAt;
 		let reason: string | undefined;
 		let reasonSpan: TextSpan | undefined;
+		let reasonClearSpan: TextSpan | undefined;
 		let reasonInsert: InsertPoint | undefined;
 		let replies: AnnotationReply[];
 
@@ -344,7 +367,8 @@ function classifyHighlightMatch(
 			}
 			reason = reasonFootnote.reason;
 			reasonSpan = reasonFootnote.reasonSpan;
-			if (!reason) reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
+			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
+			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
 			replies = parseReplies(fullMatch, match.footnotes.slice(1));
 		} else {
 			replies = parseReplies(fullMatch, match.footnotes);
@@ -365,6 +389,7 @@ function classifyHighlightMatch(
 			authorInsertAt,
 			bodySpan,
 			reasonSpan,
+			reasonClearSpan,
 			reasonInsert
 		};
 	}
@@ -383,54 +408,58 @@ function classifyHighlightMatch(
 		authorInsertAt: parsed.authorInsertAt
 	};
 
+	/** Reason fields shared by every keyword-led footnote. */
+	const reasonFields = (keywordEnd: number, separator: string, reasonText: string) => {
+		const hasReason = !!reasonText.trim();
+		return {
+			reason: hasReason ? reasonText.trim() : undefined,
+			reasonSpan: hasReason ? trimmedSpan(fullMatch, keywordEnd + separator.length, first.end) : undefined,
+			reasonClearSpan: hasReason ? { start: keywordEnd, end: contentEnd } : undefined,
+			reasonInsert: hasReason ? undefined : { at: contentEnd, prefix: ", ", suffix: "" }
+		};
+	};
+
 	const arrowMatch = ARROW_REPLACE_REGEX.exec(segment);
 	if (arrowMatch) {
 		const replacementStart = segStart + arrowMatch[1].length;
-		const reasonStart = replacementStart + arrowMatch[2].length + arrowMatch[3].length;
-		const hasReason = !!arrowMatch[4].trim();
+		const keywordEnd = replacementStart + arrowMatch[2].length + arrowMatch[3].length;
 		return {
 			...base,
 			...authorBits,
 			type: "replace",
 			originalText: match.innerText,
 			replacement: arrowMatch[2],
-			reason: hasReason ? arrowMatch[4].trim() : undefined,
 			replies,
+			originalSpan: match.innerSpan,
 			replacementSpan: { start: replacementStart, end: replacementStart + arrowMatch[2].length },
-			reasonSpan: hasReason ? trimmedSpan(fullMatch, reasonStart, first.end) : undefined,
-			reasonInsert: hasReason ? undefined : { at: contentEnd, prefix: ", ", suffix: "" }
+			...reasonFields(keywordEnd, arrowMatch[4], arrowMatch[5])
 		};
 	}
 
 	const deleteMatch = DELETE_REGEX.exec(segment);
 	if (deleteMatch) {
-		const hasReason = !!deleteMatch[2].trim();
 		return {
 			...base,
 			...authorBits,
 			type: "delete",
 			originalText: match.innerText,
-			reason: hasReason ? deleteMatch[2].trim() : undefined,
 			replies,
-			reasonSpan: hasReason ? trimmedSpan(fullMatch, segStart + deleteMatch[1].length, first.end) : undefined,
-			reasonInsert: hasReason ? undefined : { at: contentEnd, prefix: ", ", suffix: "" }
+			originalSpan: match.innerSpan,
+			...reasonFields(segStart + deleteMatch[1].length, deleteMatch[2], deleteMatch[3])
 		};
 	}
 
 	const insertMatch = INSERT_KEYWORD_REGEX.exec(segment);
 	if (insertMatch) {
-		const hasReason = !!insertMatch[2].trim();
 		return {
 			...base,
 			...authorBits,
 			type: "insert",
 			originalText: "",
 			insertedText: match.innerText,
-			reason: hasReason ? insertMatch[2].trim() : undefined,
 			replies,
 			bodySpan: match.innerSpan,
-			reasonSpan: hasReason ? trimmedSpan(fullMatch, segStart + insertMatch[1].length, first.end) : undefined,
-			reasonInsert: hasReason ? undefined : { at: contentEnd, prefix: ", ", suffix: "" }
+			...reasonFields(segStart + insertMatch[1].length, insertMatch[2], insertMatch[3])
 		};
 	}
 
@@ -442,6 +471,7 @@ function classifyHighlightMatch(
 		originalText: match.innerText,
 		commentText: fullMatch.slice(bodySpan.start, bodySpan.end),
 		replies,
+		originalSpan: match.innerSpan,
 		bodySpan
 	};
 }
@@ -475,6 +505,7 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 		let authorInsertAt = innerAuthor.authorInsertAt;
 		let reason: string | undefined;
 		let reasonSpan: TextSpan | undefined;
+		let reasonClearSpan: TextSpan | undefined;
 		let reasonInsert: InsertPoint | undefined;
 		let replies: AnnotationReply[];
 
@@ -487,7 +518,8 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			}
 			reason = reasonFootnote.reason;
 			reasonSpan = reasonFootnote.reasonSpan;
-			if (!reason) reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
+			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
+			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
 			replies = parseReplies(fullMatch, shifted.slice(1));
 		} else {
 			replies = parseReplies(fullMatch, shifted);
@@ -512,6 +544,7 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			authorInsertAt,
 			bodySpan,
 			reasonSpan,
+			reasonClearSpan,
 			reasonInsert
 		});
 	}

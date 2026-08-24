@@ -232,7 +232,7 @@
 }
 
 .annotation-review-arrow {
-	color: var(--text-faint);
+	color: var(--text-muted);
 	line-height: 1.2;
 }
 

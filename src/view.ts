@@ -36,8 +36,6 @@ export class AnnotationReviewView extends ItemView {
 	private activeTab: "annotations" | "admonitions" = "annotations";
 	private selectedAuthor: string = ALL_VALUE;
 	private selectedAdType: string = ALL_VALUE;
-	private admonitionsExpanded = false;
-	private repliesExpanded = false;
 	private scrollArea: HTMLElement | null = null;
 	private lastSignature = "";
 
@@ -214,10 +212,11 @@ export class AnnotationReviewView extends ItemView {
 
 			if (hasReplies) {
 				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
-				setIcon(expandBtn, this.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
-				setTooltip(expandBtn, this.repliesExpanded ? "Collapse all replies" : "Expand all replies");
+				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
+				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse all replies" : "Expand all replies");
 				expandBtn.addEventListener("click", () => {
-					this.repliesExpanded = !this.repliesExpanded;
+					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
+					void this.plugin.saveSettings();
 					this.render();
 				});
 			}
@@ -249,10 +248,11 @@ export class AnnotationReviewView extends ItemView {
 			});
 
 			const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
-			setIcon(expandBtn, this.admonitionsExpanded ? "chevrons-down-up" : "chevrons-up-down");
-			setTooltip(expandBtn, this.admonitionsExpanded ? "Collapse all" : "Expand all");
+			setIcon(expandBtn, this.plugin.settings.admonitionsExpanded ? "chevrons-down-up" : "chevrons-up-down");
+			setTooltip(expandBtn, this.plugin.settings.admonitionsExpanded ? "Collapse all" : "Expand all");
 			expandBtn.addEventListener("click", () => {
-				this.admonitionsExpanded = !this.admonitionsExpanded;
+				this.plugin.settings.admonitionsExpanded = !this.plugin.settings.admonitionsExpanded;
+				void this.plugin.saveSettings();
 				this.render();
 			});
 		}
@@ -285,14 +285,22 @@ export class AnnotationReviewView extends ItemView {
 		}
 	}
 
-	/** A text field that turns into an inline editor on click. */
+	/**
+	 * A text field that turns into an inline editor on click.
+	 *
+	 * `clearSpan` makes the field erasable: submitting it empty removes that
+	 * wider range instead, which is how a reason takes the separator before it
+	 * with it rather than leaving a dangling comma. Without one, an empty
+	 * submit just cancels.
+	 */
 	private renderEditableText(
 		container: Element,
 		cls: string,
 		annotation: Annotation,
 		span: TextSpan,
 		text: string,
-		inline = false
+		inline = false,
+		clearSpan?: TextSpan
 	): HTMLElement {
 		const el = container.createEl(inline ? "span" : "div", { cls: `${cls} annotation-review-editable` });
 
@@ -320,7 +328,9 @@ export class AnnotationReviewView extends ItemView {
 				// save is suppressed as an edit in progress and the panel keeps
 				// showing the old text.
 				input.blur();
-				if (newVal && newVal !== text) {
+				if (!newVal && clearSpan) {
+					this.plugin.replaceSpan(annotation, clearSpan.start, clearSpan.end, "");
+				} else if (newVal && newVal !== text) {
 					this.plugin.replaceSpan(annotation, span.start, span.end, newVal);
 				} else {
 					showDisplay();
@@ -419,8 +429,15 @@ export class AnnotationReviewView extends ItemView {
 
 		const submit = () => {
 			const text = input.value.trim();
-			if (!text) return;
 			input.blur();
+			// Submitting an empty field, including one left at just its
+			// prefilled brackets, closes it. Otherwise there is no way to put
+			// away a field opened by mistake.
+			if (!text || text === "[]") {
+				input.value = "";
+				form.addClass("is-hidden");
+				return;
+			}
 			onSubmit(text);
 		};
 		sendBtn.addEventListener("click", evt => {
@@ -476,8 +493,14 @@ export class AnnotationReviewView extends ItemView {
 				annotation.bodySpan,
 				annotation.insertedText ?? ""
 			);
-		} else if (annotation.type !== "insert") {
-			body.createEl("div", { cls: "annotation-review-text", text: annotation.originalText });
+		} else if (annotation.type !== "insert" && annotation.originalSpan) {
+			this.renderEditableText(
+				body,
+				"annotation-review-text",
+				annotation,
+				annotation.originalSpan,
+				annotation.originalText
+			);
 		}
 
 		// The arrow sits on its own line so the old and new text stay left
@@ -496,7 +519,17 @@ export class AnnotationReviewView extends ItemView {
 		if (annotation.type === "comment" && annotation.bodySpan) {
 			this.renderEditableText(body, "annotation-review-comment", annotation, annotation.bodySpan, annotation.commentText ?? "");
 		} else if (annotation.reasonSpan) {
-			this.renderEditableText(body, "annotation-review-comment", annotation, annotation.reasonSpan, annotation.reason ?? "");
+			// Clearing the field removes the reason, along with the comma that
+			// introduced it, or the whole footnote when that is all it carried.
+			this.renderEditableText(
+				body,
+				"annotation-review-comment",
+				annotation,
+				annotation.reasonSpan,
+				annotation.reason ?? "",
+				false,
+				annotation.reasonClearSpan
+			);
 		}
 
 		// Each form sits where its result will end up: a reason under the body
@@ -509,7 +542,7 @@ export class AnnotationReviewView extends ItemView {
 			: null;
 
 		if (annotation.replies.length > 0) {
-			if (this.repliesExpanded) {
+			if (this.plugin.settings.repliesExpanded) {
 				const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
 				for (const reply of annotation.replies) {
 					const replyEl = repliesEl.createEl("div", { cls: "annotation-review-reply" });
@@ -566,7 +599,8 @@ export class AnnotationReviewView extends ItemView {
 			text => {
 				// Show the replies, otherwise a new one lands under a collapsed
 				// count and looks like nothing happened.
-				this.repliesExpanded = true;
+				this.plugin.settings.repliesExpanded = true;
+				void this.plugin.saveSettings();
 				this.plugin.addReply(annotation, text);
 			},
 			replyPrefill
@@ -574,7 +608,7 @@ export class AnnotationReviewView extends ItemView {
 
 		card.addEventListener("click", evt => {
 			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author")) return;
-			this.plugin.jumpToOffset(annotation.filePath, annotation.matchStart);
+			this.plugin.revealRange(annotation.filePath, annotation.matchStart, annotation.matchEnd);
 		});
 
 		const actions = card.createEl("div", { cls: "annotation-review-actions" });
@@ -650,7 +684,7 @@ export class AnnotationReviewView extends ItemView {
 		});
 
 		const renderZone = card.createEl("div", {
-			cls: `annotation-review-ad-render ${this.admonitionsExpanded ? "is-expanded" : ""}`
+			cls: `annotation-review-ad-render ${this.plugin.settings.admonitionsExpanded ? "is-expanded" : ""}`
 		});
 		MarkdownRenderer.render(this.app, block.raw, renderZone, block.filePath, this).catch(() => {
 			renderZone.setText(block.preview);
@@ -658,7 +692,7 @@ export class AnnotationReviewView extends ItemView {
 
 		card.addEventListener("click", evt => {
 			if ((evt.target as HTMLElement).closest("button")) return;
-			this.plugin.jumpToOffset(block.filePath, block.matchStart);
+			this.plugin.revealRange(block.filePath, block.matchStart, block.matchEnd);
 		});
 	}
 }

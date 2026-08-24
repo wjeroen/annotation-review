@@ -54,7 +54,7 @@ These are all real bugs that shipped once. The comments in the code explain the 
 
 **Rebuilding the sidebar destroys state.** A redraw resets the scroll position and removes any field the user has open, including one they are typing into. Redraws are skipped when the data has not changed and while a field inside the panel has focus, and scroll position is restored across the redraws that do happen. Anything that forces a redraw on every event will feel broken.
 
-**Two equals signs in ordinary prose are indistinguishable from a delimiter.** Text that merely mentions the syntax used to pair with the next real annotation and desync every annotation after it in the file. When a pairing is rejected, only the opening delimiter is treated as consumed so the other one gets a fresh chance to pair correctly.
+**Two equals signs in ordinary prose are indistinguishable from a delimiter.** Text that merely mentions the syntax, including a backticked one inside a sentence explaining it, used to pair with the next real annotation's opening delimiter and shift every pairing after it for the rest of the file. Whenever a pairing is rejected, whether for spanning a blank line or for having a delimiter inside code, only the opening delimiter counts as consumed, so the other one gets a fresh chance to pair correctly. Rejecting a match must never consume both.
 
 **Percent marks do not render inside fenced blocks.** Inserts use `%%text%%` normally, `==++text++==` inside a fenced block, and the doubled `%%%%text%%%%` when nesting inside an existing insert, where the surrounding comment has to close and reopen. Get this wrong and the surrounding text escapes its comment and becomes visible prose.
 

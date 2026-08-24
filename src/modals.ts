@@ -1,78 +1,52 @@
-import { App, FuzzyMatch, FuzzySuggestModal, Modal, Setting, TextAreaComponent } from "obsidian";
+import { App, FuzzyMatch, FuzzySuggestModal, Modal, Setting } from "obsidian";
 
-export interface InputModalOptions {
-	title: string;
-	/** Label for the main text field, or null for an author-only prompt. */
-	textLabel: string | null;
-	placeholder?: string;
-	initialText?: string;
-	initialAuthor: string;
-	submitLabel: string;
-	onSubmit: (text: string, author: string) => void;
-}
-
-export class AnnotationInputModal extends Modal {
-	private text: string;
+/**
+ * Setting the author label used for new annotations. The annotation commands
+ * themselves never open a dialog, they write straight into the note and leave
+ * the caret where text is needed, so this is the only prompt left.
+ */
+export class AuthorModal extends Modal {
 	private author: string;
-	private opts: InputModalOptions;
+	private onSubmit: (author: string) => void;
 
-	constructor(app: App, opts: InputModalOptions) {
+	constructor(app: App, initialAuthor: string, onSubmit: (author: string) => void) {
 		super(app);
-		this.opts = opts;
-		this.text = opts.initialText ?? "";
-		this.author = opts.initialAuthor;
+		this.author = initialAuthor;
+		this.onSubmit = onSubmit;
 	}
 
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.addClass("annotation-review-modal");
-		contentEl.createEl("h3", { text: this.opts.title });
-
-		let textArea: TextAreaComponent | null = null;
-		if (this.opts.textLabel !== null) {
-			new Setting(contentEl).setName(this.opts.textLabel).addTextArea(t => {
-				textArea = t;
-				t.setPlaceholder(this.opts.placeholder ?? "")
-					.setValue(this.text)
-					.onChange(v => (this.text = v));
-				t.inputEl.addClass("annotation-review-modal-textarea");
-			});
-		}
+		contentEl.createEl("h3", { text: "Author for new annotations" });
 
 		new Setting(contentEl)
 			.setName("Author")
-			.setDesc("Optional. Leave blank for your own annotations.")
-			.addText(t => {
-				t.setPlaceholder("e.g. Claude")
+			.setDesc("Leave blank to write annotations without a label.")
+			.addText(text => {
+				text.setPlaceholder("e.g. Claude")
 					.setValue(this.author)
-					.onChange(v => (this.author = v));
-				if (this.opts.textLabel === null) {
-					window.setTimeout(() => t.inputEl.focus(), 0);
-				}
+					.onChange(value => (this.author = value));
+				text.inputEl.addEventListener("keydown", evt => {
+					if (evt.key === "Enter") {
+						evt.preventDefault();
+						this.submit();
+					}
+				});
+				window.setTimeout(() => text.inputEl.focus(), 0);
 			});
 
-		new Setting(contentEl).addButton(b =>
-			b
-				.setButtonText(this.opts.submitLabel)
+		new Setting(contentEl).addButton(button =>
+			button
+				.setButtonText("Save")
 				.setCta()
 				.onClick(() => this.submit())
 		);
-
-		if (textArea) {
-			window.setTimeout(() => textArea?.inputEl.focus(), 0);
-		}
-
-		this.scope.register(["Mod"], "Enter", () => {
-			this.submit();
-			return false;
-		});
 	}
 
 	private submit() {
-		const text = this.text.trim();
-		if (this.opts.textLabel !== null && !text) return;
 		this.close();
-		this.opts.onSubmit(text, this.author.trim());
+		this.onSubmit(this.author.trim());
 	}
 
 	onClose() {
@@ -87,9 +61,9 @@ export interface PickerItem {
 }
 
 /**
- * The type picker behind the single "choose type" command. A suggest modal
- * rather than a context menu, since a command has no click position to anchor
- * a menu to, and this stays keyboard and touch friendly.
+ * The type picker behind the single "choose type of annotation" command. A
+ * suggest modal rather than a context menu, since a command has no click
+ * position to anchor a menu to, and this stays keyboard and touch friendly.
  */
 export class AnnotationTypePicker extends FuzzySuggestModal<PickerItem> {
 	private items: PickerItem[];

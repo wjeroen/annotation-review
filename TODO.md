@@ -3,8 +3,8 @@
 ## Current Sprint
 
 ### Known gaps worth deciding on
-- [ ] A reason can be added but not removed. Editing it to empty is rejected, and clearing it would need to take the preceding comma with it, so it needs its own dismiss button like replies have
 - [ ] Every unlabeled reply shows a "No author" chip, which is a bit heavy in a list of replies. A quieter affordance might read better
+- [ ] A highlight-form insert nested inside another one is not detected. Accepted rather than fixed, since Obsidian does not render that case properly either. The percent mark form is the one to use for nesting
 
 ### Needs checking in Obsidian
 
@@ -47,6 +47,18 @@ Nothing below has been confirmed working in the app. Parsing and text rewriting 
 - [ ] Adding a reason to a `%%...%%` insert writes an `^[insert, reason]` footnote. Worth checking that reads well in practice, since the reason is invisible in the note itself
 
 ## Completed Recently
+- [x] Fix: text that merely mentions the syntax, such as a backticked `==` inside a sentence explaining it, swallowed the next real annotation's opening delimiter and shifted every pairing after it. Rejecting a pairing now consumes only its opening delimiter, whatever the reason for rejecting it (2026-08-24)
+- [x] Editor commands no longer open a dialog. Each writes the annotation straight into the note and leaves the caret where text is still needed (2026-08-24)
+- [x] The same actions on the editor right click menu, grouped under their own divider (2026-08-24)
+- [x] Command names lost the "Annotate:" prefix, and the picker is now "Choose type of annotation" (2026-08-24)
+- [x] New "Insert with a reason" command, the footnote form that was missing (2026-08-24)
+- [x] The default author is no longer set behind your back after using a command. Only the "Set default author" command changes it (2026-08-24)
+- [x] Expanded state for replies and for admonitions is remembered across notes, tracked separately (2026-08-24)
+- [x] A reason can be removed by clearing its field, taking the comma before it with it, or the whole footnote when that is all it carried (2026-08-24)
+- [x] The highlighted source text is editable from the sidebar too (2026-08-24)
+- [x] Clicking a card selects the whole annotation in the note rather than placing a caret (2026-08-24)
+- [x] The reason and reply fields close when submitted empty, including when left at just their prefilled brackets (2026-08-24)
+- [x] The replacement arrow is no longer dimmer than the comment text (2026-08-24)
 - [x] Fix: switching notes could show the previous note's annotations, and the other way round. Reading a note is asynchronous and several events ask for a scan at once, so an older read could land after a newer one and overwrite it. The guard added in 0.4.6 made it worse by starting a second scan whenever a first one was still in flight. Only the newest scan can publish now, and a scan that finishes to find the note has moved on rescans by itself (2026-08-23)
 - [x] Added `npm test`, covering the parsing and rewriting rules plus the note-switching races. Verified the race tests actually fail against the broken version, so they are worth something (2026-08-23)
 - [x] Fix: the panel jumped to the top constantly and swallowed clicks on author chips. It rebuilt itself on every rescan, including when clicking into the sidebar counted as switching panes, which destroyed the field the click had just opened. Refreshes are now skipped when nothing changed and while a field has focus, scroll position survives the rebuilds that do happen, and switching panes only refreshes on landing on a different note (2026-08-23)
