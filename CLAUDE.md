@@ -56,6 +56,10 @@ These are all real bugs that shipped once. The comments in the code explain the 
 
 **Two equals signs in ordinary prose are indistinguishable from a delimiter.** Text that merely mentions the syntax, including a backticked one inside a sentence explaining it, used to pair with the next real annotation's opening delimiter and shift every pairing after it for the rest of the file. Whenever a pairing is rejected, whether for spanning a blank line or for having a delimiter inside code, only the opening delimiter counts as consumed, so the other one gets a fresh chance to pair correctly. Rejecting a match must never consume both.
 
+**The `++` markers belong only to insertions without a footnote.** They exist to say a highlight is an insertion when nothing else does, so an insertion that gains a reason drops them and one that loses its reason gets them back. Percent mark inserts are different: their marks hide the text rather than label it, so they stay either way. Rewriting one into a highlight would reveal hidden text and would not survive clearing the reason again.
+
+**Selecting in the editor needs focus, and reading view has no editor.** A selection made while focus is still in the sidebar is not drawn, and in reading view the CodeMirror calls act on an offscreen instance and appear to do nothing. Scroll to the line there instead.
+
 **Percent marks do not render inside fenced blocks.** Inserts use `%%text%%` normally, `==++text++==` inside a fenced block, and the doubled `%%%%text%%%%` when nesting inside an existing insert, where the surrounding comment has to close and reopen. Get this wrong and the surrounding text escapes its comment and becomes visible prose.
 
 ## Testing

@@ -5,7 +5,7 @@ const built = await esbuild.build({
 	stdin: {
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
-			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
+			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval, computeSetInsertReason } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composeInsertWithReason } from "./src/compose";
 		`,
 		resolveDir: ".",
@@ -31,6 +31,7 @@ const {
 	computeAddReply,
 	computeSpanReplace,
 	computeRemoval,
+	computeSetInsertReason,
 	composeComment,
 	composeDelete,
 	composeReplace,
@@ -193,6 +194,31 @@ const nested = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", "n
 check("nesting keeps all three inserts",
 	detectAnnotations(nested, "t.md").map(a => [a.author, a.insertedText]),
 	[["C", "Before."], ["G", "Mine."], [null, "After."]]);
+
+
+console.log("\n=== An insert changes shape with its reason ===");
+function setReason(doc, reason) {
+	const ann = one(doc);
+	const r = computeSetInsertReason(doc, ann, reason);
+	return r.ok ? r.newContent : r.reason;
+}
+check("highlight form loses its ++ when given a reason",
+	setReason(`==++[C] Text.++==`, "why"), `==Text.==^[[C] insert, why]`);
+check("footnote form gets its ++ back when cleared",
+	setReason(`==Text.==^[[C] insert, why]`, ""), `==++[C] Text.++==`);
+check("round trip is stable",
+	setReason(setReason(`==++[C] Text.++==`, "why"), ""), `==++[C] Text.++==`);
+check("replies survive the rewrite",
+	setReason(`==++[C] Text.++==^[[A] hmm]`, "why"), `==Text.==^[[C] insert, why]^[[A] hmm]`);
+check("replies survive the rewrite back",
+	setReason(`==Text.==^[[C] insert, why]^[[A] hmm]`, ""), `==++[C] Text.++==^[[A] hmm]`);
+check("no author is fine", setReason(`==++Text.++==`, "why"), `==Text.==^[insert, why]`);
+// Percent marks hide the text, so they stay either way. Turning one into a
+// highlight would reveal hidden text and would not survive clearing again.
+check("percent form keeps its marks", setReason(`%%[C] Text.%%`, "why"), `%%[C] Text.%%^[insert, why]`);
+check("percent form clears back", setReason(`%%[C] Text.%%^[insert, why]`, ""), `%%[C] Text.%%`);
+check("nested percent form keeps its marks", setReason(`%%%%[C] Text.%%%%`, "why"), `%%%%[C] Text.%%%%^[insert, why]`);
+check("only insertions are rewritten this way", computeSetInsertReason(`==T.==^[[C] delete]`, one(`==T.==^[[C] delete]`), "why").ok, false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

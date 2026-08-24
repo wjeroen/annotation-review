@@ -1,6 +1,13 @@
 export type AnnotationType = "comment" | "delete" | "replace" | "insert";
 
 /**
+ * Which shape an insert is written in. The `++` markers only exist to say
+ * "this highlighted text is an insertion" when there is no footnote to carry
+ * the keyword, so they belong to the no-reason forms only.
+ */
+export type InsertForm = "percent" | "percent-nested" | "highlight" | "footnote";
+
+/**
  * A range inside an annotation's `fullMatch` string, never an absolute file
  * offset. Keeping spans relative to fullMatch means an edit stays correct even
  * when typing elsewhere in the note has shifted the annotation's position,
@@ -62,6 +69,10 @@ export interface Annotation {
 	reasonClearSpan?: TextSpan;
 	/** Set only when there is no reason yet, so one can still be added. */
 	reasonInsert?: InsertPoint;
+	/** Which shape an insert is written in, so it can be rewritten in another. */
+	insertForm?: InsertForm;
+	/** The reply footnotes verbatim, to carry across a rewrite untouched. */
+	repliesRaw: string;
 }
 
 export interface AdmonitionBlock {

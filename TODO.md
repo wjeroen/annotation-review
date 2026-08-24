@@ -8,45 +8,21 @@
 
 ### Needs checking in Obsidian
 
-Nothing below has been confirmed working in the app. Parsing and text rewriting are covered by `npm test`, so the risk is concentrated in the interface and in the editor commands. Roughly highest risk first.
+Everything else has been confirmed working in the app. These are the changes in the current beta.
 
-**Never used at all, built but never run in Obsidian**
-- [ ] Each editor command on a selection: comment, delete, replace, insert, insert (highlight form)
-- [ ] The type picker command, which asks which of the above you want
-- [ ] Set default author, and whether it then prefills the modals and new annotations
-- [ ] Insert inside an `ad-` block should produce `==++text++==`, not percent marks
-- [ ] Insert inside an existing `%%...%%` should produce the doubled form and leave three separate inserts, with none of the surrounding text becoming visible
-- [ ] The comment and replace modals write to an explicit range now, so check the original text is replaced rather than left behind alongside the annotation
-
-**Recently broken, fixed, not yet confirmed**
-- [ ] Switching notes shows the right note's annotations, both ways, including switching quickly
-- [ ] Clicking an author chip opens a field that stays open long enough to type in, on annotations and on replies
-- [ ] The list keeps its scroll position instead of jumping to the top
-- [ ] Clicking a card opens the note in the main area, never on top of the sidebar
-
-**New, never confirmed**
-- [ ] Reply field is prefilled with brackets, cursor inside them, and no doubled author label
-- [ ] Each reply's own dismiss button removes just that reply
-- [ ] Adding a reply expands the replies list
-- [ ] A reply sits beside its author on one line and moves below it when it needs two
-- [ ] The plus button appears only when there is no reason yet, and adding one works
-- [ ] Editing comment, reason, replacement, inserted text and reply text in place
-- [ ] The sidebar updates while typing, without waiting for Obsidian to save
-- [ ] Deleting an admonition leaves one blank line, not three
-
-**Cosmetic, unconfirmed**
-- [ ] Tabs span the full width with the underline splitting it in half
-- [ ] Approve, Dismiss and the filter buttons look shorter than a standard button
-- [ ] Replace layout reads well: original in orange, arrow on its own line, replacement left aligned under it
-- [ ] Admonitions tab still renders the Admonition plugin's own colours and icons, on desktop and mobile
+- [ ] Adding a reason to a `==++text++==` insert drops the `++`, and clearing it puts them back
+- [ ] A percent mark insert keeps its marks either way, gaining and losing only the footnote
+- [ ] Replies on an insert survive both rewrites
+- [ ] Clicking a card selects the whole annotation in the note
+- [ ] Clicking a card in reading view scrolls to the right line, since nothing can be selected there
 
 ## Future Ideas
 - [ ] Periodically review upstream `obsidian-sidebar-highlights` for relevant improvements to port over
 - [ ] Settings tab, if more options than the default author ever need configuring
-- [ ] Editing the highlighted source text itself from the sidebar (currently read only, only the annotation's own fields are editable)
-- [ ] Adding a reason to a `%%...%%` insert writes an `^[insert, reason]` footnote. Worth checking that reads well in practice, since the reason is invisible in the note itself
 
 ## Completed Recently
+- [x] An insertion now changes shape with its reason. The `++` markers only mark inserted text when no footnote says so, so adding a reason drops them and clearing it brings them back. Percent mark inserts keep their marks either way, since those hide the text rather than label it, and converting one would reveal hidden text and not survive a round trip (2026-08-24)
+- [x] Fix: clicking a card did not select the annotation. Selecting needs the editor focused afterwards, and reading view has no visible editor at all, so it now scrolls to the line there instead (2026-08-24)
 - [x] Fix: text that merely mentions the syntax, such as a backticked `==` inside a sentence explaining it, swallowed the next real annotation's opening delimiter and shifted every pairing after it. Rejecting a pairing now consumes only its opening delimiter, whatever the reason for rejecting it (2026-08-24)
 - [x] Editor commands no longer open a dialog. Each writes the annotation straight into the note and leaves the caret where text is still needed (2026-08-24)
 - [x] The same actions on the editor right click menu, grouped under their own divider (2026-08-24)

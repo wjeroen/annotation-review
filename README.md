@@ -8,8 +8,8 @@ An Obsidian plugin that finds text annotations in a note (comments, inserts, del
 - **Delete**: `==Text==^[[Author] delete]` or `==Text==^[[Author] delete, reason]`. Approve removes the text, dismiss restores it.
 - **Replace**: `==Text==^[[Author] → "New text."]`, optionally with a reason after the quotes. Approve swaps in the quoted replacement, dismiss restores the original.
 - **Insert**: `%%[Author] New text.%%`. Approve keeps the text, dismiss removes it entirely.
-- **Insert, highlight form**: `==++[Author] New text.++==`. Required inside fenced blocks, where percent marks don't render, and allowed anywhere else too if you prefer it.
-- **Insert with a reason**: `==New text.==^[[Author] insert, reason]`. No `++` needed when there's a footnote.
+- **Insert, highlight form**: `==++[Author] New text.++==`. Required inside fenced blocks, where percent marks do not render, and allowed anywhere else too if you prefer it. The `++` markers only exist to say the highlighted text is an insertion, so they belong to this form alone.
+- **Insert with a reason**: `==New text.==^[[Author] insert, reason]`. No `++` here, since the footnote already says the text is an insertion. Adding a reason to a `++` insert from the sidebar drops the markers for you, and clearing the reason puts them back. Percent mark inserts keep their own marks either way, because those hide the text rather than label it.
 
 The `[Author]` label is optional, annotations left by the vault owner usually omit it.
 
@@ -64,7 +64,7 @@ For an insertion the syntax is picked for you: `==++text++==` inside a fenced bl
 - **Replies**: the reply button opens a field above the buttons, where the reply itself will appear. The field is prefilled with an author bracket, since a reply's author is part of its own text, and the cursor lands inside the brackets when there's no default author to fill in. Each reply has its own dismiss button. Replies collapse to a count by default, with an expand/collapse-all toggle in the filter row once any annotation has one, and adding one expands them automatically. Whether replies are expanded is remembered across notes, separately from the admonition setting. A reply sits beside its author when it fits on one line, and moves below the author name when it needs more.
 - **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type. Each block is rendered live through Obsidian's own markdown pipeline, so if you have the Admonition plugin installed, it looks exactly like it does in your note, your custom colors, icons, and titles included. Without Admonition installed, it falls back to a plain rendered code block. A trash icon per block deletes that entire block in one action, also collapsing the blank line left behind so you don't end up with three blank lines where there should be one. An expand/collapse-all toggle sits in the filter row for reading full content instead of the clipped preview, and that choice is remembered across notes.
 - **Refresh button**: an icon-only button in the filter row forces a rescan of the active note if the list ever looks stale.
-- **Finding the text**: clicking a card opens the note and selects the whole annotation, so it is obvious which one the card refers to.
+- **Finding the text**: clicking a card opens the note and selects the whole annotation, so it is obvious which one the card refers to. In reading view nothing can be selected, so it scrolls to the line instead.
 
 ## Code block handling
 

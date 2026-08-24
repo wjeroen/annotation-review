@@ -351,6 +351,57 @@ export class AnnotationReviewView extends ItemView {
 		return el;
 	}
 
+	/**
+	 * An editable field whose save and clear are handled by the caller, for
+	 * cases where the change rewrites the annotation rather than replacing a
+	 * span of it.
+	 */
+	private renderEditableClearable(
+		container: Element,
+		cls: string,
+		text: string,
+		onSave: (newText: string) => void,
+		onClear: () => void
+	) {
+		const el = container.createEl("div", { cls: `${cls} annotation-review-editable` });
+		const showDisplay = () => {
+			el.empty();
+			el.setText(text);
+		};
+		showDisplay();
+		setTooltip(el, "Click to edit, clear to remove");
+
+		el.addEventListener("click", evt => {
+			evt.stopPropagation();
+			el.empty();
+			const input = el.createEl("textarea", { cls: "annotation-review-edit-input" });
+			input.value = text;
+			input.focus();
+			input.select();
+
+			let committed = false;
+			const commit = () => {
+				if (committed) return;
+				committed = true;
+				const newVal = input.value.trim();
+				input.blur();
+				if (!newVal) onClear();
+				else if (newVal !== text) onSave(newVal);
+				else showDisplay();
+			};
+			input.addEventListener("click", inner => inner.stopPropagation());
+			input.addEventListener("blur", commit);
+			input.addEventListener("keydown", inner => {
+				if (inner.key === "Enter" && !inner.shiftKey) {
+					inner.preventDefault();
+					commit();
+				} else if (inner.key === "Escape") {
+					showDisplay();
+				}
+			});
+		});
+	}
+
 	/** An author chip that turns into an inline editor on click. */
 	private renderAuthorBadge(container: Element, author: string | undefined, extraCls: string, onSave: (author: string) => void) {
 		const el = container.createEl("span", { cls: `annotation-review-author ${extraCls}` });
@@ -518,9 +569,20 @@ export class AnnotationReviewView extends ItemView {
 
 		if (annotation.type === "comment" && annotation.bodySpan) {
 			this.renderEditableText(body, "annotation-review-comment", annotation, annotation.bodySpan, annotation.commentText ?? "");
+		} else if (annotation.reasonSpan && annotation.type === "insert") {
+			// An insertion changes shape with its reason, since the ++ markers
+			// only belong to the form without a footnote, so clearing it goes
+			// through a rewrite rather than a span edit.
+			this.renderEditableClearable(
+				body,
+				"annotation-review-comment",
+				annotation.reason ?? "",
+				newText => this.plugin.setInsertReason(annotation, newText),
+				() => this.plugin.setInsertReason(annotation, "")
+			);
 		} else if (annotation.reasonSpan) {
 			// Clearing the field removes the reason, along with the comma that
-			// introduced it, or the whole footnote when that is all it carried.
+			// introduced it.
 			this.renderEditableText(
 				body,
 				"annotation-review-comment",
@@ -537,7 +599,10 @@ export class AnnotationReviewView extends ItemView {
 		const reasonInsert = annotation.reasonInsert;
 		const reasonForm = reasonInsert
 			? this.createInlineForm(card, "Reason...", text => {
-					this.plugin.replaceSpan(annotation, reasonInsert.at, reasonInsert.at, `${reasonInsert.prefix}${text}${reasonInsert.suffix}`);
+					// An insertion is rewritten rather than patched, since gaining
+					// a reason means losing its ++ markers.
+					if (annotation.type === "insert") this.plugin.setInsertReason(annotation, text);
+					else this.plugin.replaceSpan(annotation, reasonInsert.at, reasonInsert.at, `${reasonInsert.prefix}${text}${reasonInsert.suffix}`);
 				})
 			: null;
 

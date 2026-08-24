@@ -1,6 +1,6 @@
 import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
-import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
+import { computeAddReply, computeMutation, computeRemoval, computeSetInsertReason, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, InsertContext } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composeInsertWithReason, composeReplace } from "./src/compose";
@@ -200,6 +200,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.applyMutation(file, computeSpanReplace(content, annotation, start, end, replacement));
 	}
 
+	/** Sets or clears an insertion's reason, rewriting it into the matching form. */
+	async setInsertReason(annotation: Annotation, reason: string) {
+		const file = this.fileFor(annotation.filePath);
+		if (!file) return;
+		const content = await this.readContent(file);
+		await this.applyMutation(file, computeSetInsertReason(content, annotation, reason));
+	}
+
 	async deleteAdmonition(block: AdmonitionBlock) {
 		const file = this.fileFor(block.filePath);
 		if (!file) return;
@@ -220,12 +228,25 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
 		await leaf.openFile(file);
 		const view = leaf.view;
-		if (view instanceof MarkdownView) {
-			const from = view.editor.offsetToPos(start);
-			const to = view.editor.offsetToPos(end);
-			view.editor.setSelection(from, to);
-			view.editor.scrollIntoView({ from, to }, true);
+		if (!(view instanceof MarkdownView)) return;
+
+		const from = view.editor.offsetToPos(start);
+		const to = view.editor.offsetToPos(end);
+
+		// Reading view has no visible editor, so selecting in it would act on
+		// an offscreen instance and appear to do nothing. Nothing there can be
+		// selected, so scroll to the line instead, the same way Obsidian moves
+		// to an internal link.
+		if (view.getMode() === "preview") {
+			view.setEphemeralState({ line: from.line });
+			return;
 		}
+
+		view.editor.setSelection(from, to);
+		view.editor.scrollIntoView({ from, to }, true);
+		// Without focus the selection is not drawn, since the click left focus
+		// in the sidebar.
+		view.editor.focus();
 	}
 
 

@@ -1,4 +1,4 @@
-import { AdmonitionBlock, Annotation, AnnotationReply, ExcludedRange, InsertContext, InsertPoint, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationReply, ExcludedRange, InsertContext, InsertForm, InsertPoint, TextSpan } from "./types";
 
 interface FenceRange extends ExcludedRange {
 	isAdBlock: boolean;
@@ -357,6 +357,7 @@ function classifyHighlightMatch(
 		let reasonClearSpan: TextSpan | undefined;
 		let reasonInsert: InsertPoint | undefined;
 		let replies: AnnotationReply[];
+		let tailStart: number;
 
 		const reasonFootnote = match.footnotes[0] ? readInsertReasonFootnote(fullMatch, match.footnotes[0]) : null;
 		if (reasonFootnote) {
@@ -370,11 +371,11 @@ function classifyHighlightMatch(
 			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
 			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
 			replies = parseReplies(fullMatch, match.footnotes.slice(1));
+			tailStart = reasonFootnote.footnoteSpan.end;
 		} else {
 			replies = parseReplies(fullMatch, match.footnotes);
-			// A brand new reason becomes the first footnote, right after ++==,
-			// so it lands ahead of any existing replies.
 			reasonInsert = { at: match.highlightLen, prefix: "^[insert, ", suffix: "]" };
+			tailStart = match.highlightLen;
 		}
 
 		return {
@@ -385,6 +386,8 @@ function classifyHighlightMatch(
 			reason,
 			insertedText: fullMatch.slice(bodySpan.start, bodySpan.end),
 			replies,
+			repliesRaw: fullMatch.slice(tailStart),
+			insertForm: "highlight",
 			authorSpan,
 			authorInsertAt,
 			bodySpan,
@@ -402,6 +405,7 @@ function classifyHighlightMatch(
 	const segment = fullMatch.slice(segStart, first.end);
 	const contentEnd = trimmedSpan(fullMatch, segStart, first.end).end;
 	const replies = parseReplies(fullMatch, match.footnotes.slice(1));
+	const repliesRaw = fullMatch.slice(first.fullEnd);
 	const authorBits = {
 		author: parsed.author,
 		authorSpan: parsed.authorSpan,
@@ -430,6 +434,7 @@ function classifyHighlightMatch(
 			originalText: match.innerText,
 			replacement: arrowMatch[2],
 			replies,
+			repliesRaw,
 			originalSpan: match.innerSpan,
 			replacementSpan: { start: replacementStart, end: replacementStart + arrowMatch[2].length },
 			...reasonFields(keywordEnd, arrowMatch[4], arrowMatch[5])
@@ -444,6 +449,7 @@ function classifyHighlightMatch(
 			type: "delete",
 			originalText: match.innerText,
 			replies,
+			repliesRaw,
 			originalSpan: match.innerSpan,
 			...reasonFields(segStart + deleteMatch[1].length, deleteMatch[2], deleteMatch[3])
 		};
@@ -458,6 +464,8 @@ function classifyHighlightMatch(
 			originalText: "",
 			insertedText: match.innerText,
 			replies,
+			repliesRaw,
+			insertForm: "footnote",
 			bodySpan: match.innerSpan,
 			...reasonFields(segStart + insertMatch[1].length, insertMatch[2], insertMatch[3])
 		};
@@ -471,6 +479,7 @@ function classifyHighlightMatch(
 		originalText: match.innerText,
 		commentText: fullMatch.slice(bodySpan.start, bodySpan.end),
 		replies,
+		repliesRaw,
 		originalSpan: match.innerSpan,
 		bodySpan
 	};
@@ -508,6 +517,7 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 		let reasonClearSpan: TextSpan | undefined;
 		let reasonInsert: InsertPoint | undefined;
 		let replies: AnnotationReply[];
+		let tailStart: number;
 
 		const reasonFootnote = shifted[0] ? readInsertReasonFootnote(fullMatch, shifted[0]) : null;
 		if (reasonFootnote) {
@@ -521,9 +531,11 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
 			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
 			replies = parseReplies(fullMatch, shifted.slice(1));
+			tailStart = reasonFootnote.footnoteSpan.end;
 		} else {
 			replies = parseReplies(fullMatch, shifted);
 			reasonInsert = { at: commentLen, prefix: "^[insert, ", suffix: "]" };
+			tailStart = commentLen;
 		}
 
 		results.push({
@@ -540,6 +552,8 @@ function findNativeCommentMatches(content: string, filePath: string, excludedRan
 			insertedText: fullMatch.slice(bodySpan.start, bodySpan.end),
 			insideAdBlock: false,
 			replies,
+			repliesRaw: fullMatch.slice(tailStart),
+			insertForm: delimLen === 4 ? "percent-nested" : "percent",
 			authorSpan,
 			authorInsertAt,
 			bodySpan,
