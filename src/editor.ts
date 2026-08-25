@@ -108,10 +108,10 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
 		if (a.commentSpan) add(a.commentSpan, mark("arv-comment"));
 		for (const r of a.replies) {
-			// A footnote is drawn by Obsidian, brackets included. The blue goes
-			// on what is between them.
-			const inside = r.channel === "brace" ? r.textSpan : { start: r.fullSpan.start + 2, end: r.fullSpan.end - 1 };
-			add(inside, mark("arv-comment"));
+			// A footnote is drawn by Obsidian and already reads as a remark,
+			// and a genuine footnote must not turn blue, so only a brace
+			// comment gets the background.
+			if (r.channel === "brace") add(r.textSpan, mark("arv-comment"));
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
 		author(a, contentSpans);

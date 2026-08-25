@@ -14,7 +14,6 @@
 
 ### Rendering, known limits
 - [ ] Reading view leaves an annotation alone when its text carries inline formatting of its own, since Obsidian splits that across elements. Handling that means reassembling text across siblings
-- [ ] Reading view does not put the blue background on footnote bodies at the bottom of the page, only the author
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
 ### Needs checking in Obsidian
@@ -71,6 +70,7 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Fix: braced replacements still had Obsidian's strikethrough in live preview, since Obsidian sets it from a more specific selector. Footnote replies no longer get the blue background, so a genuine footnote is never touched; being a footnote already reads as a remark, and an author underline shows when there is one (2026-08-25)
 - [x] Reading view styled through a post processor with the same classes as live preview: brace syntax in text nodes, operator marks inside a highlight, braced replacements Obsidian rendered as strikethrough, and footnote labels at the bottom (2026-08-25)
 - [x] Rendering reworked after the first look: comments and replies on a blue background rather than blue text or underline, a commented highlight keeps its yellow, the author as a coloured line under the text or as a chip or not at all (a setting), no arrow between old and new text, percent marks hidden with fainter text, no strikethrough on a braced replacement, the theme's own red and green, a two-tone gutter for a replacement (2026-08-25)
 - [x] Live preview rendering: syntax hidden and text coloured like a diff, red for what goes, green for what arrives, blue for comments, with everything revealed while the caret is inside. Highlights keep their background, percent marks stay visible with fainter text, braces vanish, `~>` becomes an arrow. Brace replies show inline in blue with an author chip in front, footnote replies stay Obsidian footnotes with a blue underline and their label as a chip. Author chips after changes. A diff gutter in live preview and source mode. Three settings, one per part (2026-08-25)

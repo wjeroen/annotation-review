@@ -537,10 +537,12 @@
 }
 
 /* A replacement in braces is also, to Obsidian, a strikethrough. Only ours
-   loses the line; a genuine ~~strikethrough~~ keeps it. */
+   loses the line; a genuine ~~strikethrough~~ keeps it. Obsidian sets the
+   line from a more specific selector than a class pair, so this has to be
+   important to apply at all. */
 .cm-strikethrough.arv-del,
 .cm-strikethrough.arv-ins {
-	text-decoration-line: none;
+	text-decoration-line: none !important;
 }
 
 /* Comments and replies sit on a blue background, the way the CriticMarkup
@@ -552,10 +554,11 @@
 }
 
 /* The author is a line under the text in their colour, set inline per
-   author, with the name in a tooltip. The !important wins over the rule
-   above that removes the strikethrough line, since both set the same
-   property. */
-.arv-author {
+   author, with the name in a tooltip. Both this and the rule above are
+   important and equally specific, so this one wins by coming later, and an
+   authored braced replacement keeps its underline. */
+.arv-author,
+.cm-strikethrough.arv-author {
 	text-decoration-line: underline !important;
 	text-decoration-thickness: 2px;
 	text-underline-offset: 3px;

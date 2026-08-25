@@ -85,7 +85,7 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 In live preview the syntax is hidden and the text is coloured the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the colour, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
 
-Comments and replies sit on a blue background: a `{==commented span==}`, a `{>>reply<<}` with its markers hidden, and the inside of a `^[reply]`, which Obsidian draws as a footnote, brackets and all. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
+Comments and replies sit on a blue background: a `{==commented span==}` and a `{>>reply<<}` with its markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
 
 The author is shown one of three ways, chosen in settings: a line under the text in the author's colour, the same colour as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
