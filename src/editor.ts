@@ -9,10 +9,10 @@ import { AuthorStyle } from "./settings";
 /*
  * Drawing annotations in the editor.
  *
- * In live preview the syntax is hidden and the text is coloured the way a
+ * In live preview the syntax is hidden and the text is colored the way a
  * diff reads: red for what goes, green for what arrives, and a blue
- * background for comments and replies. The author is either a coloured line
- * under the text, in the same colour as their chip in the sidebar with the
+ * background for comments and replies. The author is either a colored line
+ * under the text, in the same color as their chip in the sidebar with the
  * name in a tooltip, or the name itself drawn as a chip, or nothing. The
  * moment the caret or the selection touches an annotation, every bit of its
  * syntax comes back, the way Obsidian reveals its own `==` and `**`, so there
@@ -94,7 +94,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			add({ start: s.start + at + who.author!.length, end: s.end }, hide);
 		};
 
-		// Colours stay on while revealed, only the hiding stops.
+		// Colors stay on while revealed, only the hiding stops.
 		if (a.originalSpan) {
 			// A commented highlight keeps Obsidian's own yellow, so a plain
 			// yellow highlight reads as a comment and nothing else does.
@@ -115,7 +115,9 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
 		author(a, contentSpans);
-		for (const r of a.replies) author(r, [r.textSpan]);
+		// A footnote reply's line runs over its square brackets, not the ^, so
+		// an empty signed reply still shows who left it.
+		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan]);
 
 		if (revealed) continue;
 
@@ -182,7 +184,7 @@ const MARKERS: Record<string, LineMarker> = {
 
 /**
  * A line down the left edge of every line an annotation touches, in the
- * colour of what happens there. A change outranks a comment when a line has
+ * color of what happens there. A change outranks a comment when a line has
  * both, since a comment can sit anywhere.
  */
 const diffGutter = gutter({

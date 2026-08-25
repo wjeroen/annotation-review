@@ -64,10 +64,14 @@ export function openReply(author: string, channel: MetaChannel): Composed {
  * Caret inside the reply, ready for the comment. The span itself carries no
  * author, since it was written by whoever wrote the note. With braces the
  * span is marked as `{==text==}`, CriticMarkup's own form, since bare braces
- * mean nothing. Percent marks cannot carry a span comment, since the span
- * would be hidden, so they are written as a highlight.
+ * mean nothing. Percent marks cannot comment on a span, since nobody would
+ * see it, so there the selected text itself becomes a hidden remark.
  */
 export function composeComment(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
+	if (wrapper === "percent") {
+		const head = "%%" + (author ? `[${author}] ` : "") + selected;
+		return { text: head + "%%", cursor: head.length };
+	}
 	const body = wrapper === "brace" ? `{==${selected}==}` : `==${selected}==`;
 	const reply = openReply(author, channel);
 	return { text: body + reply.text, cursor: body.length + reply.cursor };
@@ -114,11 +118,11 @@ export function composeInsert(selected: string, author: string, context: InsertC
 
 /**
  * A comment on a spot rather than a span, with the caret inside. CriticMarkup
- * has `{>>note<<}` for this, Obsidian has `%%note%%`, and the channel setting
- * says which style the note is written in.
+ * has `{>>note<<}` for this, Obsidian has `%%note%%`, and the comment wrapper
+ * says which: braces give the first, anything else the second.
  */
-export function composePointComment(author: string, channel: MetaChannel): Composed {
-	if (channel === "brace") return openReply(author, "brace");
+export function composePointComment(author: string, wrapper: Wrapper): Composed {
+	if (wrapper === "brace") return openReply(author, "brace");
 	const head = "%%" + (author ? `[${author}] ` : "");
 	return { text: head + "%%", cursor: head.length };
 }

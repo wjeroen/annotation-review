@@ -151,7 +151,7 @@
 }
 
 /* A line along the top says which wrapper the annotation uses in the note:
-   yellow for a highlight, grey for percent marks that hide the text, purple
+   yellow for a highlight, gray for percent marks that hide the text, purple
    for braces. */
 .annotation-review-annotation-card::before {
 	content: "";
@@ -253,7 +253,7 @@
 	word-break: break-word;
 }
 
-/* Diff colours: red for text that goes away, green for text that arrives,
+/* Diff colors: red for text that goes away, green for text that arrives,
    normal for text that stays. No strikethrough, it hurts reading anything
    longer than a phrase and the badge already says what happens. The theme's
    own red and green, the same variables the CriticMarkup plugin uses, so the
@@ -520,7 +520,7 @@
 	margin-bottom: 0;
 }
 
-/* In the editor: live preview colours and the diff gutter. The reds and
+/* In the editor: live preview colors and the diff gutter. The reds and
    greens are the theme's own, the same variables the CriticMarkup plugin
    uses. Text inside percent marks is fainter, since it is hidden text. */
 
@@ -553,7 +553,7 @@
 	border-radius: 2px;
 }
 
-/* The author is a line under the text in their colour, set inline per
+/* The author is a line under the text in their color, set inline per
    author, with the name in a tooltip. Both this and the rule above are
    important and equally specific, so this one wins by coming later, and an
    authored braced replacement keeps its underline. */

@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
 
-/** A coloured line under the text, the name as a chip, or nothing at all. */
+/** A colored line under the text, the name as a chip, or nothing at all. */
 export type AuthorStyle = "underline" | "chip" | "none";
 
 /**
@@ -27,21 +27,22 @@ export interface AnnotationReviewSettings {
 	/** Expanded state carries across notes, and is tracked per tab. */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
-	/** The wrapper the commands write, per operation. */
+	/**
+	 * The wrapper the commands write, per operation. For a comment, percent
+	 * marks mean the selected text becomes a hidden remark, since a span
+	 * nobody can see cannot be commented on.
+	 */
 	wrappers: Record<AnnotationType, Wrapper>;
 	/** Stands in for percent marks inside fenced blocks, where they do not render. */
 	fencedFallback: "brace" | "highlight";
-	/**
-	 * Where a new author, reason or reply goes when the annotation has no
-	 * entries yet. One that already has some keeps using what it has.
-	 */
+	/** How replies are written when an annotation has none yet. */
 	channel: MetaChannel;
 	filters: AnnotationFilters;
-	/** Hide the syntax and colour the text in live preview. */
+	/** Hide the syntax and color the text in live preview. */
 	renderInEditor: boolean;
 	/** How an author is shown in live preview and reading view. */
 	authorStyle: AuthorStyle;
-	/** A coloured line down the left edge of every annotated line, in live preview and source mode. */
+	/** A colored line down the left edge of every annotated line, in live preview and source mode. */
 	showGutter: boolean;
 }
 
@@ -60,9 +61,9 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
-	brace: "Braces, {text}",
-	highlight: "Highlight, ==text==",
-	percent: "Percent marks, %%text%%"
+	brace: "Braces",
+	highlight: "Highlight",
+	percent: "Percent marks"
 };
 
 const OPERATION_LABELS: Record<AnnotationType, string> = {
@@ -94,7 +95,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Author")
-			.setDesc("Written into every new annotation as its [Author] label. Leave blank for no label.")
+			.setDesc("Written into every new annotation and reply. Leave blank for none.")
 			.addText(text =>
 				text
 					.setPlaceholder("e.g. Claude")
@@ -107,41 +108,37 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Wrappers")
-			.setDesc("How the note shows the annotated text. Braces show it as it is, which is standard CriticMarkup. A highlight shows it highlighted. Percent marks hide it.")
+			.setDesc("How the annotated text shows in the note. Braces show it as it is, a highlight highlights it, percent marks hide it.")
 			.setHeading();
 
-		// A comment cannot hide its span, so percent marks are not on offer there.
-		const spanOnly = { brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight };
+		// The fallback only matters while some operation uses percent marks.
+		// It is greyed out rather than removed, so changing a wrapper does not
+		// rebuild the page and lose the scroll position.
+		let fenced: Setting | null = null;
+		const anyPercent = () => Object.values(settings.wrappers).includes("percent");
+
 		for (const type of Object.keys(OPERATION_LABELS) as AnnotationType[]) {
 			const setting = new Setting(containerEl).setName(OPERATION_LABELS[type]);
-			if (type === "comment") setting.setDesc("A comment on a spot rather than a span follows the Reasons and replies setting below.");
-			addDropdown(setting, type === "comment" ? spanOnly : WRAPPER_LABELS, settings.wrappers[type], async value => {
+			if (type === "comment") setting.setDesc("With percent marks, the selected text becomes a hidden remark.");
+			addDropdown(setting, WRAPPER_LABELS, settings.wrappers[type], async value => {
 				settings.wrappers[type] = value as Wrapper;
 				await this.plugin.saveSettings();
-				// The fallback setting only applies while percent marks are in use.
-				this.display();
+				fenced?.setDisabled(!anyPercent());
 			});
 		}
 
-		if (Object.values(settings.wrappers).includes("percent")) {
-			addDropdown(
-				new Setting(containerEl)
-					.setName("Inside fenced blocks")
-					.setDesc("Percent marks do not render inside a fenced block, admonitions included, so this stands in for them there."),
-				{ brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight },
-				settings.fencedFallback,
-				async value => {
-					settings.fencedFallback = value as "brace" | "highlight";
-					await this.plugin.saveSettings();
-				}
-			);
-		}
+		fenced = new Setting(containerEl)
+			.setName("Inside fenced blocks")
+			.setDesc("Percent marks do not render there, so this stands in for them.")
+			.setDisabled(!anyPercent());
+		addDropdown(fenced, { brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight }, settings.fencedFallback, async value => {
+			settings.fencedFallback = value as "brace" | "highlight";
+			await this.plugin.saveSettings();
+		});
 
 		addDropdown(
-			new Setting(containerEl)
-				.setName("Replies")
-				.setDesc("Where replies are written, the reason for a change being simply the first reply. An annotation that already has some keeps using whatever it has. A comment on a spot is written as {>>note<<} with the first, and as an Obsidian %%note%% with the second."),
-			{ brace: 'CriticMarkup comment, {>>{"author":"..."}@@text<<}', footnote: "Footnote, ^[[Author] text]" },
+			new Setting(containerEl).setName("Replies").setDesc("An annotation that already has replies keeps their style."),
+			{ footnote: "Footnote", brace: "CriticMarkup" },
 			settings.channel,
 			async value => {
 				settings.channel = value as MetaChannel;
@@ -163,16 +160,10 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 					})
 				);
 
-		toggle(
-			"Style annotations in live preview",
-			"Hide the syntax and colour the text: red for what goes, green for what arrives, a blue background for comments and replies. The syntax always comes back while the caret is inside an annotation.",
-			"renderInEditor"
-		);
+		toggle("Style annotations in live preview", "Hide the syntax and color the text. It comes back while the caret is inside an annotation.", "renderInEditor");
 		addDropdown(
-			new Setting(containerEl)
-				.setName("Authors in the editor")
-				.setDesc("How an author is shown in live preview and reading view. The colour is the same as their chip in the sidebar."),
-			{ underline: "A line under the text, in the author's colour, name in a tooltip", chip: "The name as a chip, before the text", none: "Not shown" },
+			new Setting(containerEl).setName("Authors in the editor").setDesc("In live preview and reading view."),
+			{ underline: "Colored underline", chip: "Chip", none: "Not shown" },
 			settings.authorStyle,
 			async value => {
 				settings.authorStyle = value as AuthorStyle;
@@ -180,6 +171,6 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				this.plugin.applyEditorSettings();
 			}
 		);
-		toggle("Show the diff gutter", "A coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured.", "showGutter");
+		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
 	}
 }

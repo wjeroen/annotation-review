@@ -2,27 +2,9 @@
 
 An Obsidian plugin that finds text annotations in a note, lists them in a sidebar, and rewrites the note when one is approved or dismissed. Distributed through BRAT rather than the community plugin store.
 
-## Codebase map
+## Where things are
 
-Read this before grepping. Each file owns one job, and most questions are answered by opening the right one.
-
-| File | Responsibility |
-| --- | --- |
-| `main.ts` | Plugin entry point. Event wiring, scanning the active note, reading and writing files, the editor commands, caret tracking. |
-| `src/detect.ts` | Parsing. Turns note text into `Annotation` and `AdmonitionBlock` objects, and records where every editable piece sits. The grammar is described at the top of the file. |
-| `src/compose.ts` | Writing. The syntax for each annotation type, used by the editor commands. |
-| `src/actions.ts` | Rewriting. Works out what text changes for an approve, dismiss, edit, reply, or removal. Pure functions, no Obsidian imports. |
-| `src/view.ts` | The sidebar. All rendering and interaction. |
-| `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
-| `src/reading.ts` | Reading view, as a markdown post processor over the rendered HTML. Same classes as live preview, but its own small parser, since there is no source text to decorate. |
-| `src/authors.ts` | The author colour, shared by the sidebar chips and the editor chips. |
-| `src/settings.ts` | The settings tab and the settings shape. |
-| `src/modals.ts` | The author prompt and the annotation type picker. |
-| `src/types.ts` | Shared types. Start here to understand the data model. |
-| `tests/` | Parsing and rewriting tests, plus note-switching behaviour. The two stubs stand in for Obsidian and CodeMirror. |
-| `skills/annotation-review/SKILL.md` | The syntax reference for whoever writes the annotations, human or AI. Maintained by the repo owner, from a master copy in their vault. Do not edit it here. |
-
-`detect.ts` and `compose.ts` are two halves of the same contract: one writes the syntax, the other reads it. Change one and the round-trip tests in `tests/detect.mjs` will tell you if they no longer agree.
+`ARCHITECTURE.md` has the codebase map, how the pieces fit, the reasoning behind the syntax, and how the rendering works. Read it before grepping. The one contract to keep in mind: `detect.ts` reads the syntax and `compose.ts` writes it, and the round-trip tests in `tests/detect.mjs` fail if they disagree. The skill in `skills/annotation-review/SKILL.md` is maintained outside this repo and copied in; do not edit it here.
 
 ## Commands
 
@@ -37,7 +19,7 @@ Run `npm test` before proposing a release. It is fast and needs no Obsidian.
 
 ## Releases
 
-Every change ships as a **pre-release** first, so nothing is labelled a real version until it has been used and found to work.
+Every change ships as a **pre-release** first, so nothing is labeled a real version until it has been used and found to work.
 
 - Bump the beta suffix for each change: `0.6.0-beta.1`, `0.6.0-beta.2`, and so on. No approval needed for these.
 - Promoting a version to stable (dropping the `-beta.N` suffix) **requires explicit approval from the maintainer.** Do not do it because a change looks finished or because the tests pass.
@@ -80,7 +62,7 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 
 **Selecting in the editor needs focus, and reading view has no editor.** A selection made while focus is still in the sidebar is not drawn, and in reading view the CodeMirror calls act on an offscreen instance and appear to do nothing. Scroll to the line there instead.
 
-**Hidden syntax must come back under the caret.** The editor decorations hide wrapper marks, authors and reply markers with `Decoration.replace`, and every one of those is skipped for an annotation the selection touches, so there is never an invisible character being edited. Colours stay on while revealed, only the hiding stops. The decorations live in a `StateField`, not a `ViewPlugin`, because only state-field decorations may hide text that affects line layout. Percent marks are kept visible on purpose, and a footnote reply is left to Obsidian's own footnote rendering with only its label swapped for a chip. Changing a rendering setting swaps the extensions in place and calls `workspace.updateOptions()`, since a registered extension array is reconfigured from, never replaced.
+**Hidden syntax must come back under the caret.** The editor decorations hide wrapper marks, authors and reply markers with `Decoration.replace`, and every one of those is skipped for an annotation the selection touches, so there is never an invisible character being edited. Colors stay on while revealed, only the hiding stops. The decorations live in a `StateField`, not a `ViewPlugin`, because only state-field decorations may hide text that affects line layout. Percent marks are kept visible on purpose, and a footnote reply is left to Obsidian's own footnote rendering with only its label swapped for a chip. Changing a rendering setting swaps the extensions in place and calls `workspace.updateOptions()`, since a registered extension array is reconfigured from, never replaced.
 
 **Reading view has already been rendered when we see it.** Obsidian has turned `==` into `<mark>`, `~~` into `<del>`, `^[...]` into a footnote and dropped `%%...%%` entirely, and split anything with inline formatting across elements. The post processor restyles only what sits whole inside one text node or one `<mark>` or `<del>`, and leaves the rest raw rather than half styled. Percent mark annotations are simply absent there, which matches "hidden until approved".
 
@@ -98,7 +80,7 @@ When adding a test for a bug, confirm it fails against the unfixed code first. A
 
 Part of finishing a change, not an afterthought:
 
-- `README.md` for anything user facing: syntax, commands, sidebar behaviour.
-- `TODO.md` for what is done, what is outstanding, and what still needs checking in Obsidian.
-- This file when the architecture or the workflow changes.
+- `README.md` for anything user facing: syntax, commands, sidebar behavior.
+- `TODO.md` for what is done and what is outstanding. Tasks only, one line each; explanations go in `ARCHITECTURE.md` or the README.
+- `ARCHITECTURE.md` when the structure or a design decision changes, this file when the workflow does.
 - Not the skill. That is owned outside the repo and copied in on request.

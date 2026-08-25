@@ -115,8 +115,6 @@ export default class AnnotationReviewPlugin extends Plugin {
 		}
 		// beta.6 had a switch for the author chips, now one of three styles.
 		if (saved.showAuthorsInEditor === false && saved.authorStyle === undefined) this.settings.authorStyle = "none";
-		// A comment cannot hide its span, so percent marks are no longer offered for it.
-		if (this.settings.wrappers.comment === "percent") this.settings.wrappers.comment = "highlight";
 	}
 
 	async saveSettings() {
@@ -497,7 +495,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel));
 			return;
 		}
-		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author, channel));
+		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author, this.settings.wrappers.comment));
 	}
 
 	private pickAnnotationType(editor: Editor) {

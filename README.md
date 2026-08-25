@@ -68,7 +68,7 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot | Inside the reply, ready to type |
+| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`, or with percent marks chosen, the selection as a hidden remark. Inside an annotation, a reply. With nothing selected, a comment on that spot | Inside the reply, ready to type |
 | Delete | `{--{"author":"Claude"}@@text--}` | At the end |
 | Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
 | Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
@@ -83,24 +83,24 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 ## In the editor
 
-In live preview the syntax is hidden and the text is coloured the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the colour, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
+In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
 
 Comments and replies sit on a blue background: a `{==commented span==}` and a `{>>reply<<}` with its markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
 
-The author is shown one of three ways, chosen in settings: a line under the text in the author's colour, the same colour as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
+The author is shown one of three ways, chosen in settings: a line under the text in the author's color, the same color as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
 The moment the caret or the selection touches an annotation, all of its syntax comes back, the way Obsidian reveals its own `==` and `**`. Nothing inside backticks or a code block is ever styled, admonitions excepted.
 
 Reading view is styled the same way, from the rendered HTML: brace syntax in the text, operator marks inside a highlight, and a `{~~replacement~~}` Obsidian rendered as a strikethrough. Percent marks are dropped by Obsidian in reading view, which is right for text that is hidden until approved. Footnote labels at the bottom of the page become the author. An annotation whose text carries its own inline formatting is left as it is rather than half styled.
 
-A gutter draws a coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured: red, green, both for a replacement, blue for a comment. The styling, the author display and the gutter are each a setting.
+A gutter draws a colored line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncolored: red, green, both for a replacement, blue for a comment. The styling, the author display and the gutter are each a setting.
 
 ## Sidebar features
 
-- **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, grey if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment; the rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text colour and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either; only an unsigned reply says No author.
+- **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, gray if unlabeled, distinct even for similar names.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment; the rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either; only an unsigned reply says No author.
 - **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and plain highlights and comments. Remembered across notes, unlike the author filter, which only means something within one note.
-- **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, grey for hidden percent marks, purple for braces.
+- **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, gray for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.
 - **Editing in place**: click any text on a card to edit it inline, including the annotated text itself, the reason or comment, the replacement, the inserted text, and a reply. Click an author chip to set, change, or clear the author, on the annotation itself or on any reply. Everything saves straight back to the note, spaces and line breaks included.
 - **Replies**: the reply button opens a field above the buttons, where the reply itself will appear. The field is prefilled with an author bracket, since a reply's author is part of its own text, and the cursor lands inside the brackets when there's no default author to fill in. A reply is written in the same channel as the entries already there, footnote or brace comment. Each reply has its own dismiss button. Replies collapse to a count by default, with an expand/collapse-all toggle in the filter row once any annotation has one, and adding one expands them automatically. Whether replies are expanded is remembered across notes, separately from the admonition setting. A reply sits beside its author when it fits on one line, and moves below the author name when it needs more.
@@ -113,10 +113,10 @@ A gutter draws a coloured line down the left edge of every annotated line, in li
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
 
 - **Author**: written inside every new annotation and at the start of every reply.
-- **Wrappers**: braces, highlight, or percent marks, chosen separately for deletions, replacements and insertions. Comments offer braces or highlight only, since a comment cannot hide the text it is about.
-- **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Only shown while some operation uses percent marks.
+- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions. For a comment, percent marks turn the selected text into a hidden remark, since a span nobody can see cannot be commented on.
+- **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors in the editor** (underline, chip, or none), **Show the diff gutter**: the three parts of the editor rendering, each its own setting. The first two apply to reading view as well.
-- **Replies**: CriticMarkup comment or footnote. An annotation that already has replies keeps using whatever it has, so a footnote chain stays a footnote chain even after switching. A comment on a spot follows the same choice: `{>>note<<}` with the first, an Obsidian `%%note%%` with the second.
+- **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style. A comment on a spot follows the comment wrapper instead: `{>>note<<}` with braces, an Obsidian `%%note%%` otherwise.
 
 ## Code block handling
 
@@ -138,8 +138,8 @@ npm run build
 npm test
 ```
 
-`npm test` covers the parsing and rewriting rules, plus the note-switching behaviour. The latter matters because scanning a note is asynchronous while several Obsidian events can ask for a scan at once, and an older read landing after a newer one used to leave the panel showing a different note's annotations.
+`npm test` covers the parsing and rewriting rules, plus the note-switching behavior. The latter matters because scanning a note is asynchronous while several Obsidian events can ask for a scan at once, and an older read landing after a newer one used to leave the panel showing a different note's annotations.
 
-Changes ship as pre-releases (`0.6.0-beta.1` and so on) so they can be tested through BRAT before being called a version. See `CLAUDE.md` for the architecture map and the gotchas worth knowing before changing the parser or the sidebar.
+Changes ship as pre-releases (`0.6.0-beta.1` and so on) so they can be tested through BRAT before being called a version. `ARCHITECTURE.md` has the codebase map and the reasoning behind the syntax, `CLAUDE.md` the gotchas worth knowing before changing the parser or the sidebar.
 
 `skills/annotation-review/SKILL.md` is the syntax reference written to be handed to an AI tool as a skill or system prompt, so its output is readable by the plugin.

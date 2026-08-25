@@ -247,7 +247,8 @@ function fill(composed, typed) {
 check("comment, CriticMarkup throughout", composeComment("Sel.", "Claude", "brace", "brace").text, `{==Sel.==}{>>${C}<<}`);
 check("and it reads back", shape(one(fill(composeComment("Sel.", "Claude", "brace", "brace"), "My note."))), ["comment", null, "Sel.", null, null, [["Claude", "My note."]]]);
 check("comment, highlight and footnote", shape(one(fill(composeComment("Sel.", "C", "highlight", "footnote"), "My note."))), ["comment", null, "Sel.", null, null, [["C", "My note."]]]);
-check("comment cannot hide its span, so percent marks become a highlight", composeComment("Sel.", "C", "percent", "footnote").text, `==Sel.==^[[C] ]`);
+check("comment with percent marks turns the selection into a hidden remark", composeComment("Sel.", "C", "percent", "footnote").text, `%%[C] Sel.%%`);
+check("and it reads back as a comment on a spot", shape(one(composeComment("Sel.", "C", "percent", "footnote").text)), ["comment", "C", "", null, null, []]);
 check("a comment opens a reply even without an author", shape(one(fill(composeComment("Sel.", "", "brace", "brace"), "note"))), ["comment", null, "Sel.", null, null, [[null, "note"]]]);
 check("delete writes the author inside, metadata in braces", composeDelete("Sel.", "Claude", "brace").text, `{--${C}Sel.--}`);
 check("delete, light form in a highlight", composeDelete("Sel.", "Claude", "highlight").text, `==--[Claude]@@Sel.--==`);
@@ -268,9 +269,9 @@ check("an open reply, brace", openReply("Claude", "brace"), { text: `{>>${C}<<}`
 check("an open reply, footnote", openReply("C", "footnote"), { text: "^[[C] ]", cursor: 6 });
 check("an open reply without an author", openReply("", "footnote"), { text: "^[]", cursor: 2 });
 check("a finished reply", replyEntry("Claude", "ok", "brace"), `{>>${C}ok<<}`);
-check("a comment on a spot, CriticMarkup", composePointComment("Claude", "brace"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
-check("a comment on a spot, Obsidian style", composePointComment("C", "footnote"), { text: "%%[C] %%", cursor: 6 });
-check("both read back as the same thing", [one(fill(composePointComment("C", "brace"), "hm")).commentText, one(fill(composePointComment("C", "footnote"), "hm")).commentText], ["hm", "hm"]);
+check("a comment on a spot, braces", composePointComment("Claude", "brace"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
+check("a comment on a spot, any other wrapper", composePointComment("C", "highlight"), { text: "%%[C] %%", cursor: 6 });
+check("both read back as the same thing", [one(fill(composePointComment("C", "brace"), "hm")).commentText, one(fill(composePointComment("C", "percent"), "hm")).commentText], ["hm", "hm"]);
 // A nested insert only makes sense written into a surrounding one, so check
 // that the whole thing still reads as three separate inserts afterwards.
 const surrounding = `%%++[C]@@Before. After.++%%`;

@@ -1,7 +1,7 @@
 /**
  * A stable hue per author name. Two hashes running in opposite directions get
  * mixed so that names sharing a prefix, like "Jeroen W" and "Jeroen B", land
- * far apart on the colour wheel instead of next to each other. Shared by the
+ * far apart on the color wheel instead of next to each other. Shared by the
  * sidebar chips and the underline drawn in the editor, so an author looks the
  * same in both.
  */
@@ -22,7 +22,7 @@ export function authorBackground(name: string): string {
 	return `hsla(${authorHue(name)}, 55%, 45%, 0.45)`;
 }
 
-/** The solid colour of the underline in the editor. */
+/** The solid color of the underline in the editor. */
 export function authorColor(name: string): string {
 	return `hsl(${authorHue(name)}, 55%, 50%)`;
 }

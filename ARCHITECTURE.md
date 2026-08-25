@@ -1,0 +1,54 @@
+# Architecture
+
+How the plugin is put together, and why the syntax is the way it is. `README.md` is the user guide, `CLAUDE.md` holds the working rules and the list of things that have bitten before, `TODO.md` is tasks only.
+
+## Codebase map
+
+| File | Responsibility |
+| --- | --- |
+| `main.ts` | Plugin entry point. Event wiring, scanning the active note, reading and writing files, the editor commands, caret tracking. |
+| `src/detect.ts` | Parsing. Turns note text into `Annotation` and `AdmonitionBlock` objects, and records where every editable piece sits. The grammar is described at the top of the file. |
+| `src/compose.ts` | Writing. The syntax for each annotation type, used by the editor commands. |
+| `src/actions.ts` | Rewriting. Works out what text changes for an approve, dismiss, edit, reply, or removal. Pure functions, no Obsidian imports. |
+| `src/view.ts` | The sidebar. All rendering and interaction. |
+| `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
+| `src/reading.ts` | Reading view, as a markdown post processor over the rendered HTML. Same classes as live preview, but its own small parser, since there is no source text to decorate. |
+| `src/authors.ts` | The author color, shared by the sidebar chips and the editor. |
+| `src/settings.ts` | The settings tab and the settings shape. |
+| `src/modals.ts` | The author prompt and the annotation type picker. |
+| `src/types.ts` | Shared types. Start here to understand the data model. |
+| `tests/` | Parsing and rewriting tests, plus note-switching behavior. The two stubs stand in for Obsidian and CodeMirror. |
+| `skills/annotation-review/SKILL.md` | The syntax reference for whoever writes the annotations, human or AI. Maintained by the repo owner from a master copy in their vault. |
+
+## How the pieces fit
+
+One parser, three consumers. `detect.ts` turns a note into a list of annotations with every editable span recorded relative to the annotation's own text. The sidebar lists them, the editor extension decorates them, and the reading view restyles them, and none of the three parses on its own. Anything the parser skips, such as code blocks, backticks and links, is skipped everywhere for free.
+
+`detect.ts` and `compose.ts` are two halves of one contract: one reads the syntax, the other writes it. The round-trip tests in `tests/detect.mjs` fail if they disagree.
+
+Spans are relative to an annotation's `fullMatch`, never absolute file offsets, because typing anywhere earlier in the note shifts everything after it. An edit relocates the annotation's text first and then applies the span to wherever it landed.
+
+Reading and writing go through the open editor when there is one, since Obsidian only flushes keystrokes to disk a second or two later, and going through the editor also keeps the plugin's edits in the undo history.
+
+## The syntax, and why
+
+The full grammar with every form per operation lives in the repo owner's test note, and the short version is in the README. The decisions that were not obvious, kept here because the reasoning still matters:
+
+- **The author lives inside the wrapper, terminated by `@@`.** Every entry after the wrapper is a reply, and there is no reason concept in the data: the sidebar shows the first reply prominently, that is all. A plain `[Author] ` label inside the operator marks was rejected because, once whitespace inside the markers is significant, the space after the label is ambiguous. `@@` is what removes the ambiguity, and it is also the separator the CriticMarkup plugin for Obsidian uses for its metadata.
+- **`{"author":"X"}@@` in braces, `[X]@@` elsewhere.** The first is that plugin's metadata format, so a note annotated in braces reads the same in both plugins. The second is lighter and lives only where that plugin never looks. Square brackets over `{Author}` because rendering and the graph were both checked and neither produces a phantom link.
+- **Braces take only `{~~old~>new~~}` for a replacement**, since other CriticMarkup tools reject anything else and braces exist for compatibility. Highlights and percent marks write `--old~>new++`, which reads better once the old half is red and the new half green, and also read `--old--++new++`.
+- **Whitespace inside the markers is significant.** `{++is ++}` inserts the word and its trailing space, which is the whole CriticMarkup idiom. Nothing between the operator marks may be trimmed, in the parser or in the sidebar's edit fields. Reply text is prose and is trimmed.
+- **Braces are the only wrapper that nests**, since their opening and closing marks differ. `==` and `%%` cannot nest, and percent marks chain by closing and reopening, operator included: `%%++A ++%%%%++X++%%%%++B++%%`.
+- **`%%note%%` with no operator is a comment on a spot**, the native twin of `{>>note<<}`, because hidden text cannot be a span anyone is commenting on. With an operator inside, percent marks are an ordinary wrapper again.
+- **A bare `==highlight==` or `%%note%%` is listed as a plain comment**, so nothing in a note goes unseen, and filtered out through a saved setting. The cost is that a stray `==` on the same line as a real annotation pairs with it, since there is no way left to tell an unintended pairing from a plain highlight. A blank line between them still breaks the pairing.
+- **A footnote inside a percent or highlight wrapper was tried** as a way to keep hidden annotations silent, and does not work: live preview breaks, reading view still lists the footnote, and the highlight equivalent swallows the rest of the line. Replies always sit outside the wrapper.
+- **Migration was never a goal.** The old keyword syntax was deleted from the parser rather than converted.
+- **Plain CriticMarkup is the default for a fresh install**, since that is the standard people arrive with. Everything is a setting.
+
+## Rendering
+
+Live preview is a CodeMirror `StateField` of decorations, recomputed when the document, the selection or the editing mode changes. Syntax is hidden with `Decoration.replace`, text is colored with `Decoration.mark`, and every hiding decoration is skipped for an annotation the selection touches, so there is never an invisible character under the caret. A `StateField` rather than a `ViewPlugin` because only state-field decorations may hide text that affects line layout. The gutter is a CodeMirror `gutter` reading the same parsed list, and it is the only thing drawn in source mode.
+
+Reading view is a markdown post processor over rendered HTML. Obsidian has already turned `==` into `<mark>`, `~~` into `<del>`, `^[...]` into a footnote and dropped `%%...%%` entirely, and split anything with inline formatting across elements. The post processor restyles only what sits whole inside one text node or one `<mark>` or `<del>`, and leaves the rest raw rather than half styled.
+
+The author is drawn as a colored underline, a chip, or nothing, chosen in settings and applied to both. The color comes from `authors.ts` and matches the sidebar chip. A chip in the editor is the author's own name styled in place, with the rest of the mark hidden, so it takes the size of whatever it sits in and shrinks inside a footnote.
