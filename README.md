@@ -83,11 +83,17 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 ## In the editor
 
-In live preview the syntax is hidden and the text is coloured the way a diff reads: red for what goes, green for what arrives, blue for comments. A highlight keeps its background under the colour, percent marks stay visible with fainter coloured text between them, and braces disappear. A replacement shows the old text, an arrow, then the new. A commented span is underlined in blue and a `{>>reply<<}` shows inline in blue with its author's chip in front; a `^[reply]` is left to Obsidian, which draws it as a footnote, with a blue underline and the `[Author]` label turned into a chip. An annotation's own author appears as a chip after its text.
+In live preview the syntax is hidden and the text is coloured the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the colour, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
+
+Comments and replies sit on a blue background: a `{==commented span==}`, a `{>>reply<<}` with its markers hidden, and the inside of a `^[reply]`, which Obsidian draws as a footnote, brackets and all. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
+
+The author is shown one of three ways, chosen in settings: a line under the text in the author's colour, the same colour as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
 The moment the caret or the selection touches an annotation, all of its syntax comes back, the way Obsidian reveals its own `==` and `**`. Nothing inside backticks or a code block is ever styled, admonitions excepted.
 
-A gutter draws a coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured. The styling, the author chips and the gutter are each a setting.
+Reading view is styled the same way, from the rendered HTML: brace syntax in the text, operator marks inside a highlight, and a `{~~replacement~~}` Obsidian rendered as a strikethrough. Percent marks are dropped by Obsidian in reading view, which is right for text that is hidden until approved. Footnote labels at the bottom of the page become the author. An annotation whose text carries its own inline formatting is left as it is rather than half styled.
+
+A gutter draws a coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured: red, green, both for a replacement, blue for a comment. The styling, the author display and the gutter are each a setting.
 
 ## Sidebar features
 
@@ -109,7 +115,7 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Author**: written inside every new annotation and at the start of every reply.
 - **Wrappers**: braces, highlight, or percent marks, chosen separately for deletions, replacements and insertions. Comments offer braces or highlight only, since a comment cannot hide the text it is about.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Only shown while some operation uses percent marks.
-- **Style annotations in live preview**, **Show authors in the editor**, **Show the diff gutter**: the three parts of the editor rendering, each on its own switch.
+- **Style annotations in live preview**, **Authors in the editor** (underline, chip, or none), **Show the diff gutter**: the three parts of the editor rendering, each its own setting. The first two apply to reading view as well.
 - **Replies**: CriticMarkup comment or footnote. An annotation that already has replies keeps using whatever it has, so a footnote chain stays a footnote chain even after switching. A comment on a spot follows the same choice: `{>>note<<}` with the first, an Obsidian `%%note%%` with the second.
 
 ## Code block handling

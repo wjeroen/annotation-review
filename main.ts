@@ -8,6 +8,7 @@ import { Composed, composeComment, composeDelete, composeInsert, composePointCom
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 import { editorExtensions } from "./src/editor";
+import { processReadingView } from "./src/reading";
 import type { Extension } from "@codemirror/state";
 
 /** How long to wait after the last keystroke before rescanning the note. */
@@ -56,6 +57,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 		this.editorExtensionSlot.push(...editorExtensions(this.settings));
 		this.registerEditorExtension(this.editorExtensionSlot);
+		this.registerMarkdownPostProcessor(el => processReadingView(el, this.settings));
 
 		this.addRibbonIcon("check-check", "Open Annotation Review", () => this.activateView());
 		this.addCommand({
@@ -96,7 +98,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper };
+		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper; showAuthorsInEditor?: boolean };
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 		// Nested objects, so a key added in a later version still gets its default.
 		this.settings.filters = { ...DEFAULT_SETTINGS.filters, ...(saved.filters ?? {}) };
@@ -111,6 +113,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.settings.channel = "footnote";
 			await this.saveSettings();
 		}
+		// beta.6 had a switch for the author chips, now one of three styles.
+		if (saved.showAuthorsInEditor === false && saved.authorStyle === undefined) this.settings.authorStyle = "none";
 		// A comment cannot hide its span, so percent marks are no longer offered for it.
 		if (this.settings.wrappers.comment === "percent") this.settings.wrappers.comment = "highlight";
 	}

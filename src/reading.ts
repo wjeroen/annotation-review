@@ -1,0 +1,235 @@
+import { authorColor, authorBackground } from "./authors";
+import { AuthorStyle } from "./settings";
+
+/*
+ * Styling annotations in reading view.
+ *
+ * Reading view is rendered HTML, so there is no document to decorate and no
+ * caret to reveal for. Obsidian has already turned `==...==` into <mark>,
+ * `~~...~~` into <del>, `^[...]` into a footnote, and dropped `%%...%%`
+ * altogether, which is right for text that is hidden until approved. What is
+ * left is literal brace syntax in text nodes, and operator marks inside
+ * <mark> and <del>. This walks the rendered block and restyles those, using
+ * the same classes as live preview so the two look the same.
+ *
+ * Only the simple cases are handled: an annotation whose text has no inline
+ * formatting of its own. One split across elements, `{++**bold**++}`, is
+ * left as it is rather than half-styled. Code blocks and inline code are
+ * never touched.
+ */
+
+export interface ReadingSettings {
+	renderInEditor: boolean;
+	authorStyle: AuthorStyle;
+}
+
+const META_PREFIX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
+const LABEL_PREFIX = /^\[([^\]]+)\]\s+/;
+
+function readAuthor(raw: string): string | undefined {
+	if (raw.startsWith("[")) return raw.slice(1, -1);
+	try {
+		const parsed = JSON.parse(raw) as Record<string, unknown>;
+		const value = parsed?.author ?? parsed?.a;
+		return typeof value === "string" && value ? value : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Splits an `@@` author prefix, or in prose a `[Author] ` label, off the front of `text`. */
+function splitAuthor(text: string, allowLabel: boolean): { author?: string; rest: string } {
+	const m = META_PREFIX.exec(text);
+	if (m) return { author: readAuthor(m[1]), rest: text.slice(m[0].length) };
+	if (allowLabel) {
+		const l = LABEL_PREFIX.exec(text);
+		if (l) return { author: l[1], rest: text.slice(l[0].length) };
+	}
+	return { rest: text };
+}
+
+/** A span of annotated text, styled for its operation and its author. */
+function piece(cls: string, text: string, author: string | undefined, style: AuthorStyle): HTMLElement {
+	const span = document.createElement("span");
+	span.className = cls;
+	span.textContent = text;
+	if (author && style === "underline") {
+		span.classList.add("arv-author");
+		span.style.textDecorationColor = authorColor(author);
+		span.title = author;
+	}
+	return span;
+}
+
+function chip(author: string): HTMLElement {
+	const el = document.createElement("span");
+	el.className = "arv-chip";
+	el.textContent = author;
+	el.style.backgroundColor = authorBackground(author);
+	return el;
+}
+
+/** The styled replacement for one annotation's inner text, markers included. */
+function render(inner: string, style: AuthorStyle, isProse: boolean): DocumentFragment | null {
+	const out = document.createDocumentFragment();
+	const withAuthor = (cls: string, text: string, author?: string) => {
+		if (author && style === "chip") out.appendChild(chip(author));
+		out.appendChild(piece(cls, text, author, style));
+	};
+	const n = inner.length;
+	const head = inner.slice(0, 2);
+	const tail = inner.slice(-2);
+	if (n >= 4 && head === "--" && tail === "--") {
+		const { author, rest } = splitAuthor(inner.slice(2, -2), false);
+		withAuthor("arv-del", rest, author);
+		return out;
+	}
+	if (n >= 4 && head === "++" && tail === "++") {
+		const { author, rest } = splitAuthor(inner.slice(2, -2), false);
+		withAuthor("arv-ins", rest, author);
+		return out;
+	}
+	const replaceForms: [string, string, RegExp][] = [
+		["~~", "~~", /~>/],
+		["--", "++", /~>|--\+\+/]
+	];
+	for (const [open, close, splitter] of replaceForms) {
+		if (n >= 4 && head === open && tail === close) {
+			const { author, rest } = splitAuthor(inner.slice(2, -2), false);
+			const m = splitter.exec(rest);
+			if (!m) continue;
+			const old = rest.slice(0, m.index);
+			const neu = rest.slice(m.index + m[0].length);
+			if (author && style === "chip") out.appendChild(chip(author));
+			out.appendChild(piece("arv-del", old, author, style));
+			out.appendChild(piece("arv-ins", neu, author, style));
+			return out;
+		}
+	}
+	if (isProse) {
+		const { author, rest } = splitAuthor(inner, true);
+		withAuthor("arv-comment", rest, author);
+		return out;
+	}
+	return null;
+}
+
+function insideCode(node: Node): boolean {
+	let el: Node | null = node;
+	while (el) {
+		if (el instanceof HTMLElement && (el.tagName === "CODE" || el.tagName === "PRE")) return true;
+		el = el.parentNode;
+	}
+	return false;
+}
+
+/** Drops a leading `{` from the text node before `el` and a trailing `}` from the one after, if both are there. */
+function stripBraces(el: Element): boolean {
+	const before = el.previousSibling;
+	const after = el.nextSibling;
+	if (!(before instanceof Text) || !(after instanceof Text)) return false;
+	if (!before.data.endsWith("{") || !after.data.startsWith("}")) return false;
+	before.data = before.data.slice(0, -1);
+	after.data = after.data.slice(1);
+	return true;
+}
+
+const BRACE_OP = /\{(--|\+\+)((?:\{[^}]*\}|\[[^\]]+\])@@)?([\s\S]*?)\1\}/g;
+const BRACE_COMMENT = /\{>>([\s\S]*?)<<\}/g;
+
+export function processReadingView(root: HTMLElement, settings: ReadingSettings) {
+	if (!settings.renderInEditor) return;
+	const style = settings.authorStyle;
+
+	// Highlights: the operator marks and author sit inside the <mark>.
+	for (const mark of Array.from(root.querySelectorAll("mark"))) {
+		if (insideCode(mark) || mark.children.length > 0) continue;
+		const text = mark.textContent ?? "";
+		if (stripBraces(mark)) {
+			// {==text==}: CriticMarkup's own comment span, blue rather than yellow.
+			mark.classList.add("arv-comment", "arv-brace-mark");
+			const { author, rest } = splitAuthor(text, false);
+			if (author) {
+				mark.textContent = rest;
+				if (style === "chip") mark.prepend(chip(author));
+				else if (style === "underline") {
+					mark.classList.add("arv-author");
+					mark.style.textDecorationColor = authorColor(author);
+					mark.title = author;
+				}
+			}
+			continue;
+		}
+		const styled = render(text, style, false);
+		if (styled) {
+			mark.textContent = "";
+			mark.appendChild(styled);
+		} else {
+			// A comment on a highlighted span, or a plain highlight: Obsidian's
+			// yellow stays. Only an author prefix, if any, is taken off.
+			const { author, rest } = splitAuthor(text, false);
+			if (author) {
+				mark.textContent = rest;
+				if (style === "chip") mark.prepend(chip(author));
+				else if (style === "underline") {
+					mark.classList.add("arv-author");
+					mark.style.textDecorationColor = authorColor(author);
+					mark.title = author;
+				}
+			}
+		}
+	}
+
+	// {~~old~>new~~}: Obsidian renders the tildes as a strikethrough.
+	for (const del of Array.from(root.querySelectorAll("del"))) {
+		if (insideCode(del) || del.children.length > 0) continue;
+		const text = del.textContent ?? "";
+		if (!text.includes("~>")) continue;
+		const styled = render(`~~${text}~~`, style, false);
+		if (!styled) continue;
+		const inBraces = stripBraces(del);
+		if (!inBraces && !(del.parentElement instanceof HTMLElement && del.parentElement.tagName === "MARK")) continue;
+		del.classList.add("arv-replace");
+		del.textContent = "";
+		del.appendChild(styled);
+	}
+
+	// Literal brace syntax in text: deletions, insertions and comments.
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const textNodes: Text[] = [];
+	for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+		if (node instanceof Text && !insideCode(node) && /\{(--|\+\+|>>)/.test(node.data)) textNodes.push(node);
+	}
+	for (const node of textNodes) {
+		const data = node.data;
+		const pattern = new RegExp(`${BRACE_OP.source}|${BRACE_COMMENT.source}`, "g");
+		const fragment = document.createDocumentFragment();
+		let last = 0;
+		let m: RegExpExecArray | null;
+		while ((m = pattern.exec(data)) !== null) {
+			fragment.appendChild(document.createTextNode(data.slice(last, m.index)));
+			const styled = m[1] !== undefined ? render(m[0].slice(1, -1), style, false) : render(m[4], style, true);
+			if (styled) fragment.appendChild(styled);
+			else fragment.appendChild(document.createTextNode(m[0]));
+			last = m.index + m[0].length;
+		}
+		if (last === 0) continue;
+		fragment.appendChild(document.createTextNode(data.slice(last)));
+		node.replaceWith(fragment);
+	}
+
+	// Footnote bodies at the bottom: the label at the start becomes the author.
+	for (const li of Array.from(root.querySelectorAll(".footnotes li, section.footnotes li"))) {
+		const first = li.querySelector("p") ?? li;
+		const node = first.firstChild;
+		if (!(node instanceof Text)) continue;
+		const { author, rest } = splitAuthor(node.data, true);
+		if (!author) continue;
+		node.data = rest;
+		if (style === "chip") first.prepend(chip(author));
+		else if (style === "underline") {
+			const span = piece("", rest, author, style);
+			node.replaceWith(span);
+		}
+	}
+}

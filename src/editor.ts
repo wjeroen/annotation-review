@@ -1,20 +1,24 @@
 import { EditorState, Extension, Range, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, GutterMarker, WidgetType, gutter } from "@codemirror/view";
+import { Decoration, DecorationSet, EditorView, GutterMarker, gutter } from "@codemirror/view";
 import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
-import { Annotation, TextSpan } from "./types";
-import { authorBackground } from "./authors";
+import { Annotation, Authored, TextSpan } from "./types";
+import { authorBackground, authorColor } from "./authors";
+import { AuthorStyle } from "./settings";
 
 /*
  * Drawing annotations in the editor.
  *
  * In live preview the syntax is hidden and the text is coloured the way a
- * diff reads: red for what goes, green for what arrives, blue for comments.
- * The moment the caret or the selection touches an annotation, every bit of
- * its syntax comes back, the way Obsidian reveals its own `==` and `**`, so
- * there is never a hidden character under the caret. Source mode leaves the
- * text alone and keeps only the gutter, a line down the left edge of every
- * changed line, so the edits can still be found there.
+ * diff reads: red for what goes, green for what arrives, and a blue
+ * background for comments and replies. The author is either a coloured line
+ * under the text, in the same colour as their chip in the sidebar with the
+ * name in a tooltip, or the name itself drawn as a chip, or nothing. The
+ * moment the caret or the selection touches an annotation, every bit of its
+ * syntax comes back, the way Obsidian reveals its own `==` and `**`, so there
+ * is never a hidden character under the caret. Source mode leaves the text
+ * alone and keeps only the gutter, a line down the left edge of every changed
+ * line, so the edits can still be found there.
  *
  * Nothing here parses on its own: the annotations come from the same parser
  * as the sidebar, which already skips code blocks, backticks and links, so
@@ -23,7 +27,7 @@ import { authorBackground } from "./authors";
 
 export interface EditorRenderSettings {
 	renderInEditor: boolean;
-	showAuthorsInEditor: boolean;
+	authorStyle: AuthorStyle;
 	showGutter: boolean;
 }
 
@@ -35,39 +39,16 @@ const annotationsField = StateField.define<Annotation[]>({
 
 const hide = Decoration.replace({});
 const mark = (cls: string) => Decoration.mark({ class: cls });
-
-class ChipWidget extends WidgetType {
-	constructor(readonly author: string) {
-		super();
-	}
-	eq(other: ChipWidget) {
-		return other.author === this.author;
-	}
-	toDOM() {
-		const el = document.createElement("span");
-		el.className = "arv-chip";
-		el.textContent = this.author;
-		el.style.backgroundColor = authorBackground(this.author);
-		return el;
-	}
-	ignoreEvent() {
-		return false;
-	}
-}
-
-class ArrowWidget extends WidgetType {
-	eq() {
-		return true;
-	}
-	toDOM() {
-		const el = document.createElement("span");
-		el.className = "arv-arrow";
-		el.textContent = "→";
-		return el;
-	}
-}
-
-const arrow = Decoration.replace({ widget: new ArrowWidget() });
+const authorLine = (author: string) =>
+	Decoration.mark({
+		class: "arv-author",
+		attributes: { style: `text-decoration-color: ${authorColor(author)}`, title: author }
+	});
+const authorChip = (author: string) =>
+	Decoration.mark({
+		class: "arv-chip",
+		attributes: { style: `background-color: ${authorBackground(author)}` }
+	});
 
 /**
  * The decorations for every annotation, given the current selection. Spans
@@ -83,84 +64,78 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		// An ordinary highlight or hidden note is left to Obsidian.
 		if (a.isPlain) continue;
 		const base = a.matchStart;
-		const abs = (s: TextSpan) => ({ from: base + s.start, to: base + s.end });
-		const add = (from: number, to: number, deco: Decoration) => {
-			if (to > from) ranges.push(deco.range(from, to));
+		const add = (span: TextSpan, deco: Decoration) => {
+			if (span.end > span.start) ranges.push(deco.range(base + span.start, base + span.end));
 		};
 		const revealed = selection.from <= a.matchEnd && selection.to >= a.matchStart;
 		const faint = a.wrapper === "percent" ? " arv-faint" : "";
 
+		/**
+		 * The author's mark, in whatever style is chosen. A chip is the name
+		 * itself, styled in place with the rest of the mark hidden, so it
+		 * sits where the syntax puts it and takes the size of its
+		 * surroundings, shrinking inside a footnote.
+		 */
+		const author = (who: Authored, textSpans: TextSpan[]) => {
+			if (!who.authorSpan) return;
+			if (settings.authorStyle === "underline" && who.author) {
+				for (const span of textSpans) add(span, authorLine(who.author));
+			}
+			if (revealed) return;
+			const s = who.authorSpan;
+			const raw = a.fullMatch.slice(s.start, s.end);
+			const at = who.author && settings.authorStyle === "chip" ? raw.indexOf(who.author) : -1;
+			if (at < 0) {
+				add(s, hide);
+				return;
+			}
+			add({ start: s.start, end: s.start + at }, hide);
+			add({ start: s.start + at, end: s.start + at + who.author!.length }, authorChip(who.author!));
+			add({ start: s.start + at + who.author!.length, end: s.end }, hide);
+		};
+
 		// Colours stay on while revealed, only the hiding stops.
 		if (a.originalSpan) {
-			const s = abs(a.originalSpan);
-			add(s.from, s.to, mark(a.type === "comment" ? "arv-span" : "arv-del" + faint));
-		}
-		if (a.bodySpan) {
-			const s = abs(a.bodySpan);
-			add(s.from, s.to, mark("arv-ins" + faint));
-		}
-		if (a.replacementSpan) {
-			const s = abs(a.replacementSpan);
-			add(s.from, s.to, mark("arv-ins" + faint));
-		}
-		if (a.commentSpan && a.wrapper !== "percent") {
-			const s = abs(a.commentSpan);
-			add(s.from, s.to, mark("arv-reply"));
-		}
-		for (const r of a.replies) {
-			const t = abs(r.textSpan);
-			if (r.channel === "brace") add(t.from, t.to, mark("arv-reply"));
-			else {
-				const f = abs(r.fullSpan);
-				add(f.from, f.to, mark("arv-footnote"));
+			// A commented highlight keeps Obsidian's own yellow, so a plain
+			// yellow highlight reads as a comment and nothing else does.
+			if (a.type === "comment") {
+				if (a.wrapper !== "highlight") add(a.originalSpan, mark("arv-comment"));
+			} else {
+				add(a.originalSpan, mark("arv-del" + faint));
 			}
 		}
+		if (a.bodySpan) add(a.bodySpan, mark("arv-ins" + faint));
+		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
+		if (a.commentSpan) add(a.commentSpan, mark("arv-comment"));
+		for (const r of a.replies) {
+			// A footnote is drawn by Obsidian, brackets included. The blue goes
+			// on what is between them.
+			const inside = r.channel === "brace" ? r.textSpan : { start: r.fullSpan.start + 2, end: r.fullSpan.end - 1 };
+			add(inside, mark("arv-comment"));
+		}
+		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
+		author(a, contentSpans);
+		for (const r of a.replies) author(r, [r.textSpan]);
 
 		if (revealed) continue;
 
-		// The wrapper. Everything that is not text is hidden, except the
-		// percent marks, which stay visible as they do without any plugin.
-		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
+		// The wrapper. Everything that is not text is hidden: the opening and
+		// closing marks, and the arrow of a replacement, so the old and new
+		// text sit right against each other.
 		if (contentSpans.length > 0) {
 			const contentStart = Math.min(...contentSpans.map(s => s.start));
 			const contentEnd = Math.max(...contentSpans.map(s => s.end));
-			const openEnd = a.authorSpan ? a.authorSpan.start : contentStart;
-			const keepOpen = a.wrapper === "percent" ? (a.fullMatch.startsWith("%%%%") ? 4 : 2) : 0;
-			add(base + keepOpen, base + openEnd, hide);
-			if (a.authorSpan) {
-				const s = abs(a.authorSpan);
-				add(s.from, s.to, hide);
-				// The author reads like a signature, after the text it applies to.
-				if (settings.showAuthorsInEditor && a.author) {
-					ranges.push(Decoration.widget({ widget: new ChipWidget(a.author), side: 1 }).range(base + contentEnd));
-				}
-			}
-			if (a.originalSpan && a.replacementSpan) {
-				add(base + a.originalSpan.end, base + a.replacementSpan.start, arrow);
-			}
-			const keepClose = a.wrapper === "percent" ? keepOpen : 0;
-			add(base + contentEnd, base + a.wrapperLength - keepClose, hide);
+			add({ start: 0, end: a.authorSpan ? a.authorSpan.start : contentStart }, hide);
+			if (a.originalSpan && a.replacementSpan) add({ start: a.originalSpan.end, end: a.replacementSpan.start }, hide);
+			add({ start: contentEnd, end: a.wrapperLength }, hide);
 		}
 
-		// Replies. A brace comment loses its markers and shows its author as a
-		// chip in front, the way a speaker is named. A footnote is left to
-		// Obsidian, which draws it as a footnote, and only its label becomes a
-		// chip.
+		// Replies. A brace comment loses its markers, a footnote keeps its
+		// brackets since Obsidian draws those.
 		for (const r of a.replies) {
-			const full = abs(r.fullSpan);
-			const text = abs(r.textSpan);
-			if (r.channel === "brace") {
-				add(full.from, r.authorSpan ? base + r.authorSpan.start : text.from, hide);
-				add(text.to, full.to, hide);
-			}
-			if (r.authorSpan) {
-				const s = abs(r.authorSpan);
-				if (settings.showAuthorsInEditor && r.author) {
-					ranges.push(Decoration.replace({ widget: new ChipWidget(r.author) }).range(s.from, s.to));
-				} else {
-					add(s.from, s.to, hide);
-				}
-			}
+			if (r.channel !== "brace") continue;
+			add({ start: r.fullSpan.start, end: r.authorSpan ? r.authorSpan.start : r.textSpan.start }, hide);
+			add({ start: r.textSpan.end, end: r.fullSpan.end }, hide);
 		}
 	}
 

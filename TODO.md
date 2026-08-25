@@ -12,13 +12,14 @@
 - [ ] Anything in square brackets at the start of an entry is read as the author, so `^[[1] see the appendix]` gets the author "1". Accepted when square brackets were chosen over `{Author}`
 - [ ] Clearing the only author or reason on an entry that has replies after it leaves an empty `^[]` behind, since removing the entry would turn the first reply into the reason. Rare, and it parses, but it is ugly
 
-### Rendering, still to do
-- [ ] Reading view through a post processor. Braces show as literal text there until then; highlights and footnotes are Obsidian's own; percent marks are stripped by Obsidian
+### Rendering, known limits
+- [ ] Reading view leaves an annotation alone when its text carries inline formatting of its own, since Obsidian splits that across elements. Handling that means reassembling text across siblings
+- [ ] Reading view does not put the blue background on footnote bodies at the bottom of the page, only the author
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
 ### Needs checking in Obsidian
 
-The checklist with fixtures is in the vault's Annotation Review Test note. The whole editor rendering in `0.6.0-beta.6` is untested until it has been looked at.
+The checklist with fixtures is in the vault's Annotation Review Test note. The editor and reading view rendering in `0.6.0-beta.7` is untested until it has been looked at.
 
 - [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
 - [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
@@ -70,6 +71,8 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Reading view styled through a post processor with the same classes as live preview: brace syntax in text nodes, operator marks inside a highlight, braced replacements Obsidian rendered as strikethrough, and footnote labels at the bottom (2026-08-25)
+- [x] Rendering reworked after the first look: comments and replies on a blue background rather than blue text or underline, a commented highlight keeps its yellow, the author as a coloured line under the text or as a chip or not at all (a setting), no arrow between old and new text, percent marks hidden with fainter text, no strikethrough on a braced replacement, the theme's own red and green, a two-tone gutter for a replacement (2026-08-25)
 - [x] Live preview rendering: syntax hidden and text coloured like a diff, red for what goes, green for what arrives, blue for comments, with everything revealed while the caret is inside. Highlights keep their background, percent marks stay visible with fainter text, braces vanish, `~>` becomes an arrow. Brace replies show inline in blue with an author chip in front, footnote replies stay Obsidian footnotes with a blue underline and their label as a chip. Author chips after changes. A diff gutter in live preview and source mode. Three settings, one per part (2026-08-25)
 - [x] No author chip on a card unless the annotation names one. Only unsigned replies say No author (2026-08-25)
 - [x] The author lives inside the wrapper now, `{--{"author":"Claude"}@@text--}` in braces (the CriticMarkup plugin's metadata, so that plugin agrees on every author) and `==--[Claude]@@text--==` elsewhere, terminated by `@@` so the text keeps every space. Every entry after the wrapper is a reply; there is no reason concept anymore, the first reply is shown prominently instead. An author-only footnote is an empty reply. Other metadata fields are kept and ignored (2026-08-25)

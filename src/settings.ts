@@ -2,6 +2,9 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
 
+/** A coloured line under the text, the name as a chip, or nothing at all. */
+export type AuthorStyle = "underline" | "chip" | "none";
+
 /**
  * What the Annotations tab shows. Each one is on by default, and they carry
  * across notes, unlike the author filter, which only means something within
@@ -36,8 +39,8 @@ export interface AnnotationReviewSettings {
 	filters: AnnotationFilters;
 	/** Hide the syntax and colour the text in live preview. */
 	renderInEditor: boolean;
-	/** Draw author chips in the editor, after a change and before a reply. */
-	showAuthorsInEditor: boolean;
+	/** How an author is shown in live preview and reading view. */
+	authorStyle: AuthorStyle;
 	/** A coloured line down the left edge of every annotated line, in live preview and source mode. */
 	showGutter: boolean;
 }
@@ -52,7 +55,7 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	channel: "brace",
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
 	renderInEditor: true,
-	showAuthorsInEditor: true,
+	authorStyle: "underline",
 	showGutter: true
 };
 
@@ -148,7 +151,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName("Editor").setHeading();
 
-		const toggle = (name: string, desc: string, key: "renderInEditor" | "showAuthorsInEditor" | "showGutter") =>
+		const toggle = (name: string, desc: string, key: "renderInEditor" | "showGutter") =>
 			new Setting(containerEl)
 				.setName(name)
 				.setDesc(desc)
@@ -162,10 +165,21 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		toggle(
 			"Style annotations in live preview",
-			"Hide the syntax and colour the text: red for what goes, green for what arrives, blue for comments. The syntax always comes back while the caret is inside an annotation.",
+			"Hide the syntax and colour the text: red for what goes, green for what arrives, a blue background for comments and replies. The syntax always comes back while the caret is inside an annotation.",
 			"renderInEditor"
 		);
-		toggle("Show authors in the editor", "A chip after each change and before each reply. Turn off on notes with a single author, where it is just repetition.", "showAuthorsInEditor");
+		addDropdown(
+			new Setting(containerEl)
+				.setName("Authors in the editor")
+				.setDesc("How an author is shown in live preview and reading view. The colour is the same as their chip in the sidebar."),
+			{ underline: "A line under the text, in the author's colour, name in a tooltip", chip: "The name as a chip, before the text", none: "Not shown" },
+			settings.authorStyle,
+			async value => {
+				settings.authorStyle = value as AuthorStyle;
+				await this.plugin.saveSettings();
+				this.plugin.applyEditorSettings();
+			}
+		);
 		toggle("Show the diff gutter", "A coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured.", "showGutter");
 	}
 }

@@ -11,6 +11,7 @@ export class Plugin {
 	addSettingTab() {}
 	registerEvent() {}
 	registerEditorExtension() {}
+	registerMarkdownPostProcessor() {}
 	async loadData() {
 		return {};
 	}

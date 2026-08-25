@@ -255,20 +255,17 @@
 
 /* Diff colours: red for text that goes away, green for text that arrives,
    normal for text that stays. No strikethrough, it hurts reading anything
-   longer than a phrase and the badge already says what happens. The colours
-   are mixed toward the text colour, since a whole paragraph in the theme's
-   full red or green is tiring to read. The plain declaration is the fallback
-   where color-mix is not supported. */
+   longer than a phrase and the badge already says what happens. The theme's
+   own red and green, the same variables the CriticMarkup plugin uses, so the
+   cards and the editor agree. */
 .annotation-type-delete .annotation-review-text,
 .annotation-type-replace .annotation-review-text {
 	color: var(--color-red, var(--text-error));
-	color: color-mix(in srgb, var(--color-red, var(--text-error)) 65%, var(--text-normal));
 }
 
 .annotation-review-insert-text,
 .annotation-review-replacement {
 	color: var(--color-green, var(--text-success));
-	color: color-mix(in srgb, var(--color-green, var(--text-success)) 65%, var(--text-normal));
 }
 
 .annotation-review-arrow {
@@ -523,61 +520,68 @@
 	margin-bottom: 0;
 }
 
-/* In the editor: live preview colours and the diff gutter. Same reds and
-   greens as the cards, softened toward the text colour. Text inside percent
-   marks is fainter, since it is hidden text. */
+/* In the editor: live preview colours and the diff gutter. The reds and
+   greens are the theme's own, the same variables the CriticMarkup plugin
+   uses. Text inside percent marks is fainter, since it is hidden text. */
 
 .arv-del {
 	color: var(--color-red, var(--text-error));
-	color: color-mix(in srgb, var(--color-red, var(--text-error)) 65%, var(--text-normal));
 }
 
 .arv-ins {
 	color: var(--color-green, var(--text-success));
-	color: color-mix(in srgb, var(--color-green, var(--text-success)) 65%, var(--text-normal));
 }
 
 .arv-faint {
 	opacity: 0.6;
 }
 
-/* A commented span is underlined in the comment colour, and a comment's own
-   text is in that colour, not dimmed, since dimming is what percent marks
-   already mean. */
-.arv-span {
-	text-decoration: underline;
-	text-decoration-color: var(--color-blue, var(--interactive-accent));
+/* A replacement in braces is also, to Obsidian, a strikethrough. Only ours
+   loses the line; a genuine ~~strikethrough~~ keeps it. */
+.cm-strikethrough.arv-del,
+.cm-strikethrough.arv-ins {
+	text-decoration-line: none;
+}
+
+/* Comments and replies sit on a blue background, the way the CriticMarkup
+   plugin's inline comments do. A commented highlight keeps its own yellow
+   instead, so a plain yellow highlight reads as a comment. */
+.arv-comment {
+	background-color: color-mix(in srgb, var(--color-blue, var(--interactive-accent)) 22%, transparent);
+	border-radius: 2px;
+}
+
+/* The author is a line under the text in their colour, set inline per
+   author, with the name in a tooltip. The !important wins over the rule
+   above that removes the strikethrough line, since both set the same
+   property. */
+.arv-author {
+	text-decoration-line: underline !important;
 	text-decoration-thickness: 2px;
-	text-underline-offset: 2px;
+	text-underline-offset: 3px;
+	text-decoration-skip-ink: none;
 }
 
-.arv-reply {
-	color: var(--color-blue, var(--interactive-accent));
-}
-
-/* A footnote is drawn by Obsidian. The underline says it is a reply. */
-.arv-footnote {
-	text-decoration: underline;
-	text-decoration-color: var(--color-blue, var(--interactive-accent));
-	text-underline-offset: 2px;
-}
-
-/* Sized relative to its surroundings, so a chip inside a footnote shrinks
-   with the footnote. */
+/* A chip is the author's name itself, styled in place, so it takes the size
+   of whatever it sits in and shrinks inside a footnote. */
 .arv-chip {
-	display: inline-block;
-	font-size: 0.8em;
-	line-height: 1.3;
-	padding: 0 5px;
-	margin: 0 2px;
+	padding: 0 4px;
+	margin-right: 2px;
 	border-radius: 4px;
+	font-size: 0.85em;
 	color: var(--text-normal);
-	vertical-align: baseline;
 }
 
-.arv-arrow {
-	color: var(--text-muted);
-	margin: 0 3px;
+/* Reading view uses the same classes. A brace comment span rendered by
+   Obsidian as a <mark> goes blue instead of yellow, and a replacement
+   rendered as a <del> loses its line. */
+mark.arv-comment {
+	background-color: color-mix(in srgb, var(--color-blue, var(--interactive-accent)) 22%, transparent);
+	color: inherit;
+}
+
+del.arv-replace {
+	text-decoration: none;
 }
 
 .arv-diff-gutter {
@@ -603,8 +607,9 @@
 	background-color: var(--color-green, var(--text-success));
 }
 
+/* A replacement is both, so the line is both. */
 .arv-gutter-replace {
-	background-color: var(--color-orange, var(--text-warning));
+	background: linear-gradient(to bottom, var(--color-red, var(--text-error)) 50%, var(--color-green, var(--text-success)) 50%);
 }
 
 .arv-gutter-comment {
