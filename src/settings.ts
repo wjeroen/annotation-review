@@ -2,6 +2,22 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { Wrapper } from "./types";
 
+/**
+ * What the Annotations tab shows. Each one is on by default, and they carry
+ * across notes, unlike the author filter, which only means something within
+ * one note.
+ */
+export interface AnnotationFilters {
+	comment: boolean;
+	delete: boolean;
+	insert: boolean;
+	replace: boolean;
+	/** Annotations with no author label. */
+	noAuthor: boolean;
+	/** Ordinary highlights and hidden comments with nothing attached. */
+	plain: boolean;
+}
+
 export interface AnnotationReviewSettings {
 	/** Prefilled author label for new annotations. Blank means no label. */
 	defaultAuthor: string;
@@ -12,6 +28,7 @@ export interface AnnotationReviewSettings {
 	wrapper: Wrapper;
 	/** Wrapper for insertions, outside fenced blocks where percent marks do not render. */
 	insertWrapper: Wrapper;
+	filters: AnnotationFilters;
 }
 
 export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
@@ -19,7 +36,8 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	repliesExpanded: false,
 	admonitionsExpanded: false,
 	wrapper: "highlight",
-	insertWrapper: "percent"
+	insertWrapper: "percent",
+	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true }
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
@@ -63,7 +81,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		addWrapperDropdown(
 			new Setting(containerEl)
 				.setName("Wrapper for comments, deletions and replacements")
-				.setDesc("How the note shows the annotated text. A highlight shows it highlighted, braces show it as it is, percent marks hide it."),
+				.setDesc("How the note shows the annotated text. A highlight shows it highlighted, braces show it as it is, percent marks hide it. Percent marks do not render inside a fenced block, so a highlight is used there instead."),
 			this.plugin.settings.wrapper,
 			async value => {
 				this.plugin.settings.wrapper = value;
@@ -74,7 +92,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		addWrapperDropdown(
 			new Setting(containerEl)
 				.setName("Wrapper for insertions")
-				.setDesc("Percent marks hide the inserted text until it is approved. Inside a fenced block they do not render, so a highlight is used there whatever this says."),
+				.setDesc("Percent marks hide the inserted text until it is approved. They do not render inside a fenced block, so a highlight is used there instead. Highlights and braces work everywhere."),
 			this.plugin.settings.insertWrapper,
 			async value => {
 				this.plugin.settings.insertWrapper = value;

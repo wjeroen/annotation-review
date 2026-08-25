@@ -72,7 +72,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = (await this.loadData()) ?? {};
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+		// Nested, so a filter added in a later version still gets its default.
+		this.settings.filters = { ...DEFAULT_SETTINGS.filters, ...(saved.filters ?? {}) };
 	}
 
 	async saveSettings() {
@@ -298,28 +301,27 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 */
 	private annotationActions(): { id: string; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
 		const author = () => this.settings.defaultAuthor;
-		const wrapper = () => this.settings.wrapper;
 		return [
 			{
 				id: "comment",
 				label: "Comment",
 				icon: "message-square",
 				description: "Leave a remark on the selected text",
-				run: editor => this.annotate(editor, sel => composeComment(sel, author(), wrapper()))
+				run: editor => this.annotate(editor, sel => composeComment(sel, author(), this.wrapperAt(editor)))
 			},
 			{
 				id: "delete",
 				label: "Delete",
 				icon: "strikethrough",
 				description: "Propose removing the selected text",
-				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), wrapper()))
+				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperAt(editor)))
 			},
 			{
 				id: "replace",
 				label: "Replace",
 				icon: "replace",
 				description: "Propose new wording for the selected text",
-				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), wrapper()))
+				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperAt(editor)))
 			},
 			{
 				id: "insert",
@@ -381,6 +383,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 				}
 			})
 		);
+	}
+
+	/**
+	 * The chosen wrapper, unless that is percent marks inside a fenced block,
+	 * where they do not render. Highlights and braces work everywhere, so
+	 * those choices hold inside admonitions too.
+	 */
+	private wrapperAt(editor: Editor): Wrapper {
+		const chosen = this.settings.wrapper;
+		if (chosen !== "percent") return chosen;
+		const context = getInsertContext(editor.getValue(), editor.posToOffset(editor.getCursor("from")));
+		return context.kind === "fenced" ? "highlight" : chosen;
 	}
 
 	/** The selected text with its range, which stays valid even if focus moves. */

@@ -1,6 +1,7 @@
 import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, InsertPoint, TextSpan } from "./types";
+import { AnnotationFilters } from "./settings";
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
 
@@ -244,6 +245,39 @@ export class AnnotationReviewView extends ItemView {
 				}
 			});
 
+			// What kinds of annotation to show. Remembered across notes, unlike
+			// the author filter, which only means something within one note.
+			const filters = this.plugin.settings.filters;
+			const anyOff = Object.values(filters).some(v => !v);
+			const filterBtn = filterRow.createEl("button", {
+				cls: `clickable-icon annotation-review-filter-toggle ${anyOff ? "is-active" : ""}`
+			});
+			setIcon(filterBtn, "list-filter");
+			setTooltip(filterBtn, "Filter");
+			filterBtn.addEventListener("click", () => {
+				const menu = new Menu();
+				const toggle = (title: string, key: keyof AnnotationFilters) =>
+					menu.addItem(item =>
+						item
+							.setTitle(title)
+							.setChecked(filters[key])
+							.onClick(() => {
+								filters[key] = !filters[key];
+								void this.plugin.saveSettings();
+								this.render();
+							})
+					);
+				toggle("Comments", "comment");
+				toggle("Deletions", "delete");
+				toggle("Insertions", "insert");
+				toggle("Replacements", "replace");
+				menu.addSeparator();
+				toggle("No author", "noAuthor");
+				toggle("Plain highlights and comments", "plain");
+				const rect = filterBtn.getBoundingClientRect();
+				menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+			});
+
 			if (hasReplies) {
 				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
 				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
@@ -299,7 +333,11 @@ export class AnnotationReviewView extends ItemView {
 
 	private renderAnnotationsList(container: Element) {
 		const annotations = this.plugin.annotations;
+		const filters = this.plugin.settings.filters;
 		const filtered = annotations.filter(a => {
+			if (!filters[a.type]) return false;
+			if (!a.author && !filters.noAuthor) return false;
+			if (a.isPlain && !filters.plain) return false;
 			if (this.selectedAuthor === ALL_VALUE) return true;
 			if (this.selectedAuthor === NO_AUTHOR) return !a.author;
 			return a.author === this.selectedAuthor;
@@ -309,7 +347,7 @@ export class AnnotationReviewView extends ItemView {
 		if (filtered.length === 0) {
 			list.createEl("div", {
 				cls: "annotation-review-empty",
-				text: annotations.length === 0 ? "No annotations found in this note." : "No annotations match this filter."
+				text: annotations.length === 0 ? "No annotations found in this note." : "No annotations match these filters."
 			});
 			return;
 		}
@@ -553,14 +591,8 @@ export class AnnotationReviewView extends ItemView {
 		card.dataset.id = annotation.id;
 		if (annotation.id === this.plugin.activeAnnotationId) card.addClass("is-active");
 
-		const header = card.createEl("div", { cls: "annotation-review-header" });
-		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		// With a reason to sit next to, the author goes there instead.
-		if (!annotation.reasonSpan) {
-			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
-		}
-		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
-
+		// Top to bottom: the text the annotation is about, then who and what
+		// with the line number at the far end, then the reason on its own line.
 		const body = card.createEl("div", { cls: "annotation-review-body" });
 		if (annotation.type === "insert" && annotation.bodySpan) {
 			this.renderEditableText(
@@ -591,19 +623,15 @@ export class AnnotationReviewView extends ItemView {
 			);
 		}
 
+		const header = card.createEl("div", { cls: "annotation-review-header" });
+		this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
+		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
+		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
+
 		if (annotation.reasonSpan) {
-			const reasonSpan = annotation.reasonSpan;
-			this.renderAuthoredLine(
-				body,
-				"annotation-review-note",
-				annotation.author,
-				a => this.saveAuthor(annotation, annotation, a),
-				row =>
-					this.renderEditableText(row, "annotation-review-note-text", annotation, reasonSpan, annotation.reason ?? annotation.commentText ?? "", {
-						inline: true,
-						clearSpan: annotation.reasonClearSpan
-					})
-			);
+			this.renderEditableText(card, "annotation-review-note", annotation, annotation.reasonSpan, annotation.reason ?? annotation.commentText ?? "", {
+				clearSpan: annotation.reasonClearSpan
+			});
 		}
 
 		// Each form sits where its result will end up: a reason under the body

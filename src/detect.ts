@@ -424,6 +424,7 @@ function buildAnnotation(
 		fullMatch,
 		wrapper,
 		isPoint,
+		isPlain: body.type === "comment" && entries.length === 0 && !isPoint,
 		originalText: slice(body.originalSpan) ?? "",
 		insertedText: slice(body.bodySpan),
 		replacement: slice(body.replacementSpan),
@@ -519,19 +520,16 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 			retry();
 			continue;
 		}
+		// An ordinary highlight with nothing attached counts too, as a plain
+		// comment, so the sidebar can list it or filter it out.
 		const body = classifyInner(m[1], 2);
 		const built = buildAnnotation(content, filePath, fullStart, highlightEnd, body, "highlight", false, isInsideAdBlock(fullStart));
-		// An ordinary highlight with nothing attached is just a highlight.
-		if (body.type === "comment" && built.entries.length === 0) {
-			retry();
-			continue;
-		}
 		publish(built);
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}
 
-	// Percent marks. A plain Obsidian comment with nothing attached is left
-	// alone, and since that pairing is a real comment it is consumed whole.
+	// Percent marks. An ordinary hidden comment with nothing attached counts
+	// as a plain comment, the same as a bare highlight.
 	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
 	while ((m = percentRegex.exec(content)) !== null) {
 		const fullStart = m.index;
@@ -544,7 +542,6 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 		}
 		const body = classifyInner(doubled ? m[1] : m[2], delim);
 		const built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false);
-		if (body.type === "comment" && built.entries.length === 0) continue;
 		publish(built);
 		percentRegex.lastIndex = built.annotation.matchEnd;
 	}

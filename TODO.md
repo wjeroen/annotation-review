@@ -14,10 +14,12 @@
 
 ### Needs checking in Obsidian
 
-The changes in `0.6.0-beta.1`. The checklist with fixtures is in the vault's Annotation Review Test note.
+The changes in `0.6.0-beta.2` and `beta.1`. The checklist with fixtures is in the vault's Annotation Review Test note.
 
+- [ ] Card layout: text, then author chip and type badge with the line number at the far end, then the reason on its own line in grey
+- [ ] The filter button and its menu, and that the choices survive switching notes and restarting
+- [ ] Plain highlights and hidden comments listed as comments with no author, hidden by the filter
 - [ ] The coloured line along the top of each card: yellow highlight, grey percent marks, purple braces
-- [ ] Author chip at the start of the reason, not italic, moving onto its own line when the reason wraps
 - [ ] The card under the caret gets an accent border and scrolls into view, and clears when the caret leaves
 - [ ] Approving `{++is ++}` keeps the space
 - [ ] The settings tab, and the commands honouring the wrapper choices
@@ -58,6 +60,8 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Plain highlights and hidden comments, ones with nothing attached, are listed as comments with no author rather than ignored, so nothing in a note goes unseen. A filter button between the author menu and the expand toggle turns each type, No author, and plain ones on or off, and those choices are saved. The author filter is not, since it only means something within one note (2026-08-25)
+- [x] Cards read top to bottom: the text, then the author chip and type badge with the line number at the far end, then the reason or comment on its own line, always below and always muted (2026-08-25)
 - [x] The parser reads the CriticMarkup based grammar and nothing else: three wrappers, four operations, footnotes or brace comments for author, reason and replies, point comments, brace nesting, whitespace kept exactly as written. The old keyword syntax is gone (2026-08-25)
 - [x] The commands write the new grammar, with the wrapper per operation chosen in a new settings tab. Insertions fall back to a highlight in fenced blocks and to the close and reopen form inside an existing percent mark insertion, operator included (2026-08-25)
 - [x] Author chip sits at the start of the reason or comment text, not italic, and moves onto its own line when the text wraps, the way replies already did. It stays in the header when there is no reason (2026-08-25)

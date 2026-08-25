@@ -184,7 +184,11 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	margin-bottom: 4px;
+	margin-top: 4px;
+}
+
+.annotation-review-filter-toggle.is-active {
+	color: var(--interactive-accent);
 }
 
 .annotation-review-badge {
@@ -274,26 +278,11 @@
 	word-break: break-word;
 }
 
-/* The reason, or a comment's text, reads like a reply: the author chip first,
-   then the text, which drops below the chip when it needs more than a line. */
+/* The reason, or a comment's text, on its own line under the author and type,
+   muted so it never reads as the annotated text. */
 .annotation-review-note {
-	position: relative;
 	margin-top: 4px;
 	color: var(--text-muted);
-}
-
-.annotation-review-note-author {
-	display: inline-block;
-	font-size: 0.85em;
-}
-
-.annotation-review-note.is-stacked .annotation-review-note-author {
-	display: block;
-	margin-bottom: 2px;
-	width: fit-content;
-}
-
-.annotation-review-note-text {
 	white-space: pre-wrap;
 	word-break: break-word;
 }

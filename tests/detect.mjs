@@ -69,8 +69,12 @@ for (const w of [
 check("comment, brace highlight on its own", shape(one(`{==This is a test==}`)), ["comment", null, "This is a test", null, null, null]);
 check("comment, highlight with a footnote", shape(one(`==This is a test==^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
 check("comment, percent with a footnote", shape(one(`%%This is a test%%^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
-check("an ordinary highlight is not an annotation", all(`==plain==`).length, 0);
-check("an ordinary Obsidian comment is not an annotation", all(`%%hidden%%`).length, 0);
+check("a plain highlight is a comment with nothing attached", [one(`==plain==`).type, one(`==plain==`).isPlain], ["comment", true]);
+check("so is a plain hidden comment", [one(`%%hidden%%`).type, one(`%%hidden%%`).isPlain], ["comment", true]);
+check("and a brace highlight", one(`{==plain==}`).isPlain, true);
+check("an attached entry makes it not plain", one(`==x==^[note]`).isPlain, false);
+check("a point comment is not plain either", one(`A{>>x<<}`).isPlain, false);
+check("a plain highlight before a real annotation", all(`==plain== and ==--real--==^[c]`).map(a => a.originalText), ["plain", "real"]);
 check("tildes without an arrow are just strikethrough", shape(one(`==~~gone~~==^[note]`)), ["comment", null, "~~gone~~", null, null, "note"]);
 check("wrapper is recorded", all(`{--a--} ==--b--==^[x] %%--c--%%^[x]`).map(a => a.wrapper), ["brace", "highlight", "percent"]);
 

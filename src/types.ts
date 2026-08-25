@@ -56,6 +56,12 @@ export interface Annotation {
 	wrapper: Wrapper;
 	/** A bare `{>>...<<}` with nothing in front of it: a remark on a spot rather than a span. */
 	isPoint: boolean;
+	/**
+	 * An ordinary highlight or hidden comment with nothing attached. Listed as
+	 * a comment so nothing in the note goes unseen, and filterable, since a
+	 * note can be full of highlights that have nothing to do with review.
+	 */
+	isPlain: boolean;
 	/** The annotated text for a comment or deletion, the old text for a replacement, empty for an insertion. */
 	originalText: string;
 	commentText?: string;
