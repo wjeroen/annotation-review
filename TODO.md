@@ -23,6 +23,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] A slider color picker on mobile, hue, saturation and lightness with a swatch and a hex field, in place of the system color input there. Desktop keeps the native picker (2026-08-25)
 - [x] On mobile, tapping a card scrolls the note to the annotation without selecting it or moving the caret, so the keyboard stays down. Closing the drawer as well was tried in beta.6 and dropped (2026-08-25)
 - [x] The sidebar's edit box and reply field size themselves to their text and grow while typing, so a long annotation is edited in a box that shows all of it (2026-08-25)
 - [x] Settings that sync brings in are reloaded and redrawn on arrival, through Obsidian's external settings change hook, rather than at the next restart (2026-08-25)

@@ -1,8 +1,8 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
-import type { ColorComponent } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
 import { AuthorColors, defaultColorHex } from "./authors";
+import { MobileColorPicker } from "./colorpicker";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
 export type AuthorStyle = "underline" | "chip" | "none";
@@ -205,38 +205,39 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		const draw = () => {
 			list.empty();
 			for (const row of rows) {
-				let picker: ColorComponent | null = null;
-				new Setting(list)
-					.addText(text =>
-						text
-							.setPlaceholder("Author")
-							.setValue(row.name)
-							.onChange(async value => {
-								row.name = value.trim();
-								if (!row.touched && row.name) {
-									row.color = defaultColorHex(row.name);
-									picker?.setValue(row.color);
-								}
-								await save();
-							})
-					)
-					.addColorPicker(component => {
-						picker = component.setValue(row.color).onChange(async value => {
-							row.color = value;
-							row.touched = true;
+				let picker: { setValue(hex: string): unknown } | null = null;
+				const pick = async (value: string) => {
+					row.color = value;
+					row.touched = true;
+					await save();
+				};
+				const setting = new Setting(list).addText(text =>
+					text
+						.setPlaceholder("Author")
+						.setValue(row.name)
+						.onChange(async value => {
+							row.name = value.trim();
+							if (!row.touched && row.name) {
+								row.color = defaultColorHex(row.name);
+								picker?.setValue(row.color);
+							}
 							await save();
-						});
-					})
-					.addExtraButton(button =>
-						button
-							.setIcon("trash")
-							.setTooltip("Remove")
-							.onClick(async () => {
-								rows.splice(rows.indexOf(row), 1);
-								draw();
-								await save();
-							})
-					);
+						})
+				);
+				// The native picker is a good dialog on desktop and a poor one
+				// on mobile, so mobile gets the plugin's own sliders.
+				if (Platform.isMobile) picker = new MobileColorPicker(setting.controlEl, list, row.color, pick);
+				else setting.addColorPicker(component => (picker = component.setValue(row.color).onChange(pick)));
+				setting.addExtraButton(button =>
+					button
+						.setIcon("trash")
+						.setTooltip("Remove")
+						.onClick(async () => {
+							rows.splice(rows.indexOf(row), 1);
+							draw();
+							await save();
+						})
+				);
 			}
 		};
 		draw();

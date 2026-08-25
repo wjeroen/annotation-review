@@ -14,6 +14,7 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 | `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
 | `src/reading.ts` | Reading view, as a markdown post processor over the rendered HTML. Same classes as live preview, but its own small parser, since there is no source text to decorate. |
 | `src/authors.ts` | The author color, shared by the sidebar chips and the editor. A color chosen in settings wins over the computed one. |
+| `src/colorpicker.ts` | The slider picker used on mobile, where the system color input is poor. Desktop keeps the native one. |
 | `src/settings.ts` | The settings tab and the settings shape. |
 | `src/modals.ts` | The author prompt and the annotation type picker. |
 | `src/types.ts` | Shared types. Start here to understand the data model. |

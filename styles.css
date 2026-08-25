@@ -650,3 +650,53 @@ del.arv-replace {
 	display: block;
 	color: var(--text-muted);
 }
+
+/* The slider color picker used on mobile. A swatch in the settings row opens
+   a panel under it with three gradient tracks and a hex field. */
+
+.arv-color-swatch {
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+}
+
+.arv-color-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 6px 0 14px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.arv-color-panel.is-hidden {
+	display: none;
+}
+
+.arv-color-slider {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 100%;
+	height: 18px;
+	margin: 0;
+	border-radius: 9px;
+	border: 1px solid var(--background-modifier-border);
+}
+
+.arv-color-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	border: 2px solid var(--text-normal);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.arv-color-hex {
+	width: 7em;
+	font-family: var(--font-monospace);
+}

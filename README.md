@@ -119,7 +119,7 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors on changes**, **Authors on comments**, **Show the diff gutter**: the parts of the editor rendering, each its own setting. Authors are shown as a colored underline, a chip, or not at all, chosen separately for changes (deletions, insertions, replacements and comments on a spot) and for comments on a span and replies, since a line under text that is already red or green gets busy while it stays compact under a comment. All but the gutter apply to reading view as well.
 - **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
-- **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search.
+- **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search. On a phone or tablet the picker is the plugin's own, three sliders for hue, saturation and lightness with a hex field, since the system one there is poor.
 
 Everything above follows the vault through sync, and is picked up the moment it arrives, no restart needed. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.
 

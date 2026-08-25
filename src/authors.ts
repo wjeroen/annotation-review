@@ -47,7 +47,23 @@ function hexToRgb(hex: string): [number, number, number] {
 	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function hslToHex(h: number, s: number, l: number): string {
+/** Hue, saturation and lightness of a hex color, for the slider picker. */
+export function hexToHsl(hex: string): [number, number, number] {
+	const [r, g, b] = hexToRgb(hex).map(v => v / 255);
+	const max = Math.max(r, g, b);
+	const min = Math.min(r, g, b);
+	const l = (max + min) / 2;
+	if (max === min) return [0, 0, Math.round(l * 100)];
+	const d = max - min;
+	const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+	let h: number;
+	if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+	else if (max === g) h = ((b - r) / d + 2) * 60;
+	else h = ((r - g) / d + 4) * 60;
+	return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+export function hslToHex(h: number, s: number, l: number): string {
 	const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
 	const f = (n: number) => {
 		const k = (n + h / 30) % 12;
