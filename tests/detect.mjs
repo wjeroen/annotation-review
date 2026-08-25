@@ -6,7 +6,7 @@ const built = await esbuild.build({
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
 			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
-			export { composeComment, composeDelete, composeReplace, composeInsert, composeInsertWithReason } from "./src/compose";
+			export { composeComment, composeDelete, composeReplace, composeInsert, openEntry } from "./src/compose";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -35,7 +35,7 @@ const {
 	composeDelete,
 	composeReplace,
 	composeInsert,
-	composeInsertWithReason
+	openEntry
 } = mod.exports;
 
 let pass = 0, fail = 0;
@@ -229,32 +229,47 @@ console.log("\n=== What the editor commands write is read back correctly ===");
 function fill(composed, typed) {
 	return composed.text.slice(0, composed.cursor) + typed + composed.text.slice(composed.cursor);
 }
-check("comment, highlight", shape(one(fill(composeComment("Sel.", "C", "highlight"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
-check("comment, braces", shape(one(fill(composeComment("Sel.", "C", "brace"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
-check("comment, percent", shape(one(fill(composeComment("Sel.", "C", "percent"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
-check("comment without an author", shape(one(fill(composeComment("Sel.", "", "highlight"), "note"))), ["comment", null, "Sel.", null, null, "note"]);
-check("delete writes", composeDelete("Sel.", "C", "highlight").text, `==--Sel.--==^[[C] ]`);
-check("delete reads back", shape(one(composeDelete("Sel.", "C", "highlight").text)), ["delete", "C", "Sel.", null, null, null]);
-check("a reason typed at the caret", one(fill(composeDelete("Sel.", "C", "brace"), "why")).reason, "why");
-check("replace writes", composeReplace("Sel.", "C", "highlight").text, `==--Sel.~>++==^[[C]]`);
-check("replace reads back", shape(one(fill(composeReplace("Sel.", "C", "highlight"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
-check("replace, braces", shape(one(fill(composeReplace("Sel.", "C", "brace"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
-check("replace without an author", shape(one(fill(composeReplace("Sel.", "", "highlight"), "New."))), ["replace", null, "Sel.", null, "New.", null]);
-check("insert, percent by default", composeInsert("Sel.", "C", PLAIN, "percent").text, `%%++Sel.++%%^[[C]]`);
-check("insert reads back", shape(one(composeInsert("Sel.", "C", PLAIN, "percent").text)), ["insert", "C", "", "Sel.", null, null]);
-check("insert falls back to a highlight in a fence", composeInsert("Sel.", "C", { kind: "fenced" }, "percent").text, `==++Sel.++==^[[C]]`);
-check("insert with braces chosen", composeInsert("Sel.", "C", PLAIN, "brace").text, `{++Sel.++}^[[C]]`);
-check("braces stay braces in a fence", composeInsert("Sel.", "C", { kind: "fenced" }, "brace").text, `{++Sel.++}^[[C]]`);
-check("insert with a reason", one(fill(composeInsertWithReason("Sel.", "C", PLAIN, "percent"), "context")).reason, "context");
+const FENCED = { kind: "fenced" };
+check("comment, CriticMarkup throughout", composeComment("Sel.", "C", "brace", "brace").text, `{==Sel.==}{>>[C] <<}`);
+check("and it reads back", shape(one(fill(composeComment("Sel.", "C", "brace", "brace"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment, highlight and footnote", shape(one(fill(composeComment("Sel.", "C", "highlight", "footnote"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment, percent marks", shape(one(fill(composeComment("Sel.", "C", "percent", "footnote"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("a comment opens an entry even without an author", shape(one(fill(composeComment("Sel.", "", "brace", "brace"), "note"))), ["comment", null, "Sel.", null, null, "note"]);
+check("delete writes nothing after the wrapper without an author", composeDelete("Sel.", "", "brace", "brace").text, `{--Sel.--}`);
+check("delete names the author when there is one", composeDelete("Sel.", "C", "brace", "brace").text, `{--Sel.--}{>>[C]<<}`);
+check("delete, highlight and footnote", composeDelete("Sel.", "C", "highlight", "footnote").text, `==--Sel.--==^[[C]]`);
+check("delete reads back", shape(one(composeDelete("Sel.", "C", "brace", "brace").text)), ["delete", "C", "Sel.", null, null, null]);
+check("replace writes", composeReplace("Sel.", "C", "brace", "brace").text, `{--Sel.~>++}{>>[C]<<}`);
+check("replace reads back", shape(one(fill(composeReplace("Sel.", "C", "brace", "brace"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
+check("replace, highlight and footnote", shape(one(fill(composeReplace("Sel.", "C", "highlight", "footnote"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
+check("replace without an author", shape(one(fill(composeReplace("Sel.", "", "highlight", "footnote"), "New."))), ["replace", null, "Sel.", null, "New.", null]);
+check("insert, braces", composeInsert("Sel.", "C", PLAIN, "brace", "brace", "brace").text, `{++Sel.++}{>>[C]<<}`);
+check("insert, percent marks and a footnote", composeInsert("Sel.", "C", PLAIN, "percent", "highlight", "footnote").text, `%%++Sel.++%%^[[C]]`);
+check("insert reads back", shape(one(composeInsert("Sel.", "C", PLAIN, "percent", "highlight", "footnote").text)), ["insert", "C", "", "Sel.", null, null]);
+check("percent marks fall back in a fence, to braces", composeInsert("Sel.", "C", FENCED, "percent", "brace", "footnote").text, `{++Sel.++}^[[C]]`);
+check("or to a highlight", composeInsert("Sel.", "C", FENCED, "percent", "highlight", "footnote").text, `==++Sel.++==^[[C]]`);
+check("braces stay braces in a fence", composeInsert("Sel.", "C", FENCED, "brace", "highlight", "footnote").text, `{++Sel.++}^[[C]]`);
+check("highlights stay highlights in a fence", composeInsert("Sel.", "C", FENCED, "highlight", "brace", "footnote").text, `==++Sel.++==^[[C]]`);
+check("an open entry for a reason", openEntry("C", "brace"), { text: "{>>[C] <<}", cursor: 7 });
+check("an open footnote without an author", openEntry("", "footnote"), { text: "^[]", cursor: 2 });
 // A nested insert only makes sense written into a surrounding one, so check
 // that the whole thing still reads as three separate inserts afterwards.
 const surrounding = `%%++Before. After.++%%^[[C]]`;
 const splitPoint = surrounding.indexOf("After.");
 const context = getInsertContext(surrounding, splitPoint);
-const combined = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", context, "percent").text + surrounding.slice(splitPoint);
+const combined = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", context, "percent", "highlight", "footnote").text + surrounding.slice(splitPoint);
 check("nesting keeps all three inserts", all(combined).map(a => [a.author ?? null, a.insertedText]), [[null, "Before. "], ["G", "Mine."], ["C", "After."]]);
-const nestedReason = surrounding.slice(0, splitPoint) + fill(composeInsertWithReason("Mine.", "G", context, "percent"), "why") + surrounding.slice(splitPoint);
-check("nesting with a reason", all(nestedReason).map(a => a.reason ?? null), [null, "why", null]);
+
+console.log("\n=== The channel option decides how a first entry is written ===");
+const bare = `{--T--}`;
+const asBrace = detectAnnotations(bare, "t.md", { channel: "brace" })[0];
+const ins = (ann, p, text) => computeSpanReplace(bare, ann, p.at, p.at, `${p.prefix}${text}${p.suffix}`).newContent;
+check("a reason goes in a brace comment", ins(asBrace, asBrace.reasonInsert, "why"), `{--T--}{>>why<<}`);
+check("so does an author", ins(asBrace, asBrace.authorInsert, "C"), `{--T--}{>>[C]<<}`);
+check("and a reply", computeAddReply(bare, asBrace, "[A] ok").newContent, `{--T--}{>>[A] ok<<}`);
+check("footnotes without the option", ins(one(bare), one(bare).reasonInsert, "why"), `{--T--}^[why]`);
+const chained = `{--T--}^[[C] why]`;
+check("an existing chain is followed whatever the option says", computeAddReply(chained, detectAnnotations(chained, "t.md", { channel: "brace" })[0], "[A] ok").newContent, `{--T--}^[[C] why]^[[A] ok]`);
 
 console.log("\n=== Deleting an admonition tidies the blank lines ===");
 const block = "```ad-c\nNote.\n```";

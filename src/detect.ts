@@ -222,13 +222,14 @@ interface FirstEntry {
  * how to add, change or remove it, since the sidebar edits them in place.
  * Without an entry at all, both get a whole new footnote.
  */
-function parseFirst(fullMatch: string, entry: MetaEntry | undefined, wrapperEnd: number, hasReplies: boolean): FirstEntry {
+function parseFirst(fullMatch: string, entry: MetaEntry | undefined, wrapperEnd: number, hasReplies: boolean, channel: MetaChannel): FirstEntry {
 	if (!entry) {
+		const [open, close] = channel === "brace" ? ["{>>", "<<}"] : ["^[", "]"];
 		return {
 			text: "",
-			authorInsert: { at: wrapperEnd, prefix: "^[[", suffix: "]]" },
-			reasonInsert: { at: wrapperEnd, prefix: "^[", suffix: "]" },
-			nextChannel: "footnote"
+			authorInsert: { at: wrapperEnd, prefix: `${open}[`, suffix: `]${close}` },
+			reasonInsert: { at: wrapperEnd, prefix: open, suffix: close },
+			nextChannel: channel
 		};
 	}
 	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd);
@@ -398,7 +399,8 @@ function buildAnnotation(
 	body: Body,
 	wrapper: Wrapper,
 	isPoint: boolean,
-	insideAdBlock: boolean
+	insideAdBlock: boolean,
+	channel: MetaChannel
 ): Built {
 	const entries = extractMeta(content, wrapperEnd);
 	const matchEnd = entries.length ? entries[entries.length - 1].fullEnd : wrapperEnd;
@@ -411,7 +413,7 @@ function buildAnnotation(
 		fullEnd: e.fullEnd - fullStart
 	}));
 	const replies = relative.slice(1).map(e => parseReply(fullMatch, e));
-	const first = parseFirst(fullMatch, relative[0], wrapperEnd - fullStart, replies.length > 0);
+	const first = parseFirst(fullMatch, relative[0], wrapperEnd - fullStart, replies.length > 0, channel);
 	const slice = (span?: TextSpan) => (span ? fullMatch.slice(span.start, span.end) : undefined);
 
 	const annotation: Annotation = {
@@ -448,7 +450,13 @@ function buildAnnotation(
 	return { annotation, entries };
 }
 
-export function detectAnnotations(content: string, filePath: string): Annotation[] {
+export interface DetectOptions {
+	/** Where a first entry goes when an annotation has none. Footnotes unless told otherwise. */
+	channel?: MetaChannel;
+}
+
+export function detectAnnotations(content: string, filePath: string, options: DetectOptions = {}): Annotation[] {
+	const channel = options.channel ?? "footnote";
 	const fenceRanges = getFenceRanges(content);
 	const inlineCode = collectRanges(content, INLINE_CODE_REGEX);
 	const links = collectRanges(content, MARKDOWN_LINK_REGEX);
@@ -493,7 +501,7 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 			braceEqOpen.add(start);
 			braceEqClose.add(scan.closeStart);
 		}
-		publish(buildAnnotation(content, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start)));
+		publish(buildAnnotation(content, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start), channel));
 	}
 
 	// Highlights. Whenever a pairing is rejected only the opening delimiter
@@ -523,7 +531,7 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 		// An ordinary highlight with nothing attached counts too, as a plain
 		// comment, so the sidebar can list it or filter it out.
 		const body = classifyInner(m[1], 2);
-		const built = buildAnnotation(content, filePath, fullStart, highlightEnd, body, "highlight", false, isInsideAdBlock(fullStart));
+		const built = buildAnnotation(content, filePath, fullStart, highlightEnd, body, "highlight", false, isInsideAdBlock(fullStart), channel);
 		publish(built);
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}
@@ -541,7 +549,7 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 			continue;
 		}
 		const body = classifyInner(doubled ? m[1] : m[2], delim);
-		const built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false);
+		const built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false, channel);
 		publish(built);
 		percentRegex.lastIndex = built.annotation.matchEnd;
 	}
@@ -552,7 +560,7 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 	while ((m = pointRegex.exec(content)) !== null) {
 		const start = m.index;
 		if (rangeAt(start, consumed) || rangeAt(start, pointExcluded)) continue;
-		const built = buildAnnotation(content, filePath, start, start, { type: "comment" }, "brace", true, isInsideAdBlock(start));
+		const built = buildAnnotation(content, filePath, start, start, { type: "comment" }, "brace", true, isInsideAdBlock(start), channel);
 		if (built.entries.length === 0) continue;
 		publish(built);
 		pointRegex.lastIndex = built.annotation.matchEnd;

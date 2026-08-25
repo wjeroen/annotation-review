@@ -16,7 +16,12 @@
 
 The changes in `0.6.0-beta.2` and `beta.1`. The checklist with fixtures is in the vault's Annotation Review Test note.
 
-- [ ] Card layout: text, then author chip and type badge with the line number at the far end, then the reason on its own line in grey
+- [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
+- [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
+- [ ] Delete, Replace and Insert write nothing after the wrapper when no author is set. Comment still opens an entry
+- [ ] The Add reason command and right click item, on an annotation with no entry, with an author-only entry, and with a reason already there
+- [ ] Deleted and replaced text in red without strikethrough, inserted and replacement text in green
+- [ ] Card layout: text, then type badge and author chip with the line number at the far end, then the reason on its own line in grey
 - [ ] The filter button and its menu, and that the choices survive switching notes and restarting
 - [ ] Plain highlights and hidden comments listed as comments with no author, hidden by the filter
 - [ ] The coloured line along the top of each card: yellow highlight, grey percent marks, purple braces
@@ -60,6 +65,9 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Defaults are plain CriticMarkup now, braces everywhere and `{>>...<<}` for entries, since that is the standard people arrive with. Wrappers are chosen per operation, a fallback for fenced blocks appears whenever percent marks are in use, and the channel for reasons and replies is a setting. Settings saved by the first two betas carry over as they were (2026-08-25)
+- [x] Delete, Replace and Insert no longer open an empty entry. They name the author when one is set and otherwise stop at the wrapper. A reason is added with the new Add reason command, also on the right click menu whenever the caret is inside an annotation, which replaces the "Insert with a reason" and "Insert (highlight form)" commands (2026-08-25)
+- [x] Diff colours on cards: deleted and replaced text in red, no strikethrough, inserted and replacement text in green. Type badge before the author chip, since the type is what varies from card to card and the louder chip should lead (2026-08-25)
 - [x] Plain highlights and hidden comments, ones with nothing attached, are listed as comments with no author rather than ignored, so nothing in a note goes unseen. A filter button between the author menu and the expand toggle turns each type, No author, and plain ones on or off, and those choices are saved. The author filter is not, since it only means something within one note (2026-08-25)
 - [x] Cards read top to bottom: the text, then the author chip and type badge with the line number at the far end, then the reason or comment on its own line, always below and always muted (2026-08-25)
 - [x] The parser reads the CriticMarkup based grammar and nothing else: three wrappers, four operations, footnotes or brace comments for author, reason and replies, point comments, brace nesting, whitespace kept exactly as written. The old keyword syntax is gone (2026-08-25)

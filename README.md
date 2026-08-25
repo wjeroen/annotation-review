@@ -51,27 +51,28 @@ A few rules that follow from this:
 
 Select the text you want to annotate, then either right click it or run a command. None of the commands are bound to a hotkey by default, bind whichever you use most in Settings, Hotkeys.
 
-Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or reason immediately and carry on.
+Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or replacement immediately and carry on. Out of the box everything is written as plain CriticMarkup, which is what the table shows.
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | `==text==^[[Author] ]` | Inside the footnote, ready for the comment |
-| Delete | `==--text--==^[[Author] ]` | Inside the footnote, ready for an optional reason |
-| Replace | `==--text~>++==^[[Author]]` | After the arrow, ready for the replacement |
-| Insert | `%%++text++%%^[[Author]]` | At the end, since the selection is already the inserted text |
-| Insert (highlight form) | `==++text++==^[[Author]]` | Same, always with a highlight |
-| Insert with a reason | `%%++text++%%^[[Author] ]` | Inside the footnote, ready for the reason |
-| Choose type of annotation | Asks which of the above, then behaves the same | |
+| Comment | `{==text==}{>>[Author] <<}` | Inside the entry, ready for the comment |
+| Delete | `{--text--}{>>[Author]<<}` | At the end |
+| Replace | `{--text~>++}{>>[Author]<<}` | After the arrow, ready for the replacement |
+| Insert | `{++text++}{>>[Author]<<}` | At the end, since the selection is already the inserted text |
+| Add reason | Opens an entry on the annotation under the caret, or puts the caret into the one it already has | Inside the entry, ready for the reason |
+| Choose type of annotation | Asks which of the first four, then behaves the same | |
 | Set default author | Sets the `[Author]` label used for new annotations | |
 
-The same actions appear in the editor right click menu when text is selected, grouped together under their own divider.
+Only Comment opens an entry for typing, since its text is the point of it. Delete, Replace and Insert name the author when one is set and otherwise write nothing after the wrapper, so a reason is something you add on purpose, with Add reason, rather than an empty slot every annotation carries.
 
-Which wrapper the commands write is a setting: highlights for comments, deletions and replacements, percent marks for insertions, by default. Insertions fall back to a highlight inside a fenced block, and to the close-and-reopen form inside an existing percent mark annotation.
+The right click menu shows the four creating actions when text is selected and Add reason when the caret is inside an annotation, grouped under their own divider.
+
+Which wrapper each operation writes is a setting, per operation. Percent marks do not render inside fenced blocks, so a fallback wrapper stands in for them there, and inside an existing percent mark annotation the insert command writes the close-and-reopen form.
 
 ## Sidebar features
 
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, grey if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the author chip and type badge with the line number at the far end, then the reason or comment on its own line in grey.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the reason or comment on its own line in grey. Text that goes away is red and text that arrives is green, the way a diff reads, with no strikethrough.
 - **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and plain highlights and comments. Remembered across notes, unlike the author filter, which only means something within one note.
 - **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, grey for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.
@@ -84,9 +85,12 @@ Which wrapper the commands write is a setting: highlights for comments, deletion
 
 ## Settings
 
+The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
+
 - **Author**: the `[Author]` label written into new annotations.
-- **Wrapper for comments, deletions and replacements**: highlight, braces, or percent marks.
-- **Wrapper for insertions**: the same choice, used outside fenced blocks.
+- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions.
+- **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Only shown while some operation uses percent marks.
+- **Reasons and replies**: CriticMarkup comment or footnote, for the author, reason and replies. An annotation that already has entries keeps using whatever it has, so a footnote chain stays a footnote chain even after switching.
 
 ## Code block handling
 

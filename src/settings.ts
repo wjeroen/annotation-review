@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { Wrapper } from "./types";
+import { AnnotationType, MetaChannel, Wrapper } from "./types";
 
 /**
  * What the Annotations tab shows. Each one is on by default, and they carry
@@ -24,32 +24,46 @@ export interface AnnotationReviewSettings {
 	/** Expanded state carries across notes, and is tracked per tab. */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
-	/** Wrapper the commands use for comments, deletions and replacements. */
-	wrapper: Wrapper;
-	/** Wrapper for insertions, outside fenced blocks where percent marks do not render. */
-	insertWrapper: Wrapper;
+	/** The wrapper the commands write, per operation. */
+	wrappers: Record<AnnotationType, Wrapper>;
+	/** Stands in for percent marks inside fenced blocks, where they do not render. */
+	fencedFallback: "brace" | "highlight";
+	/**
+	 * Where a new author, reason or reply goes when the annotation has no
+	 * entries yet. One that already has some keeps using what it has.
+	 */
+	channel: MetaChannel;
 	filters: AnnotationFilters;
 }
 
+/** Plain CriticMarkup out of the box, since that is the standard. */
 export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	defaultAuthor: "",
 	repliesExpanded: false,
 	admonitionsExpanded: false,
-	wrapper: "highlight",
-	insertWrapper: "percent",
+	wrappers: { comment: "brace", delete: "brace", replace: "brace", insert: "brace" },
+	fencedFallback: "brace",
+	channel: "brace",
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true }
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
-	highlight: "Highlight, ==text==",
 	brace: "Braces, {text}",
+	highlight: "Highlight, ==text==",
 	percent: "Percent marks, %%text%%"
 };
 
-function addWrapperDropdown(setting: Setting, value: Wrapper, onChange: (value: Wrapper) => Promise<void>) {
+const OPERATION_LABELS: Record<AnnotationType, string> = {
+	comment: "Comments",
+	delete: "Deletions",
+	replace: "Replacements",
+	insert: "Insertions"
+};
+
+function addDropdown<T extends string>(setting: Setting, options: Record<T, string>, value: T, onChange: (value: T) => Promise<void>) {
 	setting.addDropdown(dropdown => {
-		for (const key of Object.keys(WRAPPER_LABELS) as Wrapper[]) dropdown.addOption(key, WRAPPER_LABELS[key]);
-		dropdown.setValue(value).onChange(v => onChange(v as Wrapper));
+		for (const key of Object.keys(options) as T[]) dropdown.addOption(key, options[key]);
+		dropdown.setValue(value).onChange(v => onChange(v as T));
 	});
 }
 
@@ -63,6 +77,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 	display() {
 		const { containerEl } = this;
+		const settings = this.plugin.settings;
 		containerEl.empty();
 
 		new Setting(containerEl)
@@ -71,31 +86,49 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			.addText(text =>
 				text
 					.setPlaceholder("e.g. Claude")
-					.setValue(this.plugin.settings.defaultAuthor)
+					.setValue(settings.defaultAuthor)
 					.onChange(async value => {
-						this.plugin.settings.defaultAuthor = value.trim();
+						settings.defaultAuthor = value.trim();
 						await this.plugin.saveSettings();
 					})
 			);
 
-		addWrapperDropdown(
-			new Setting(containerEl)
-				.setName("Wrapper for comments, deletions and replacements")
-				.setDesc("How the note shows the annotated text. A highlight shows it highlighted, braces show it as it is, percent marks hide it. Percent marks do not render inside a fenced block, so a highlight is used there instead."),
-			this.plugin.settings.wrapper,
-			async value => {
-				this.plugin.settings.wrapper = value;
-				await this.plugin.saveSettings();
-			}
-		);
+		new Setting(containerEl)
+			.setName("Wrappers")
+			.setDesc("How the note shows the annotated text. Braces show it as it is, which is standard CriticMarkup. A highlight shows it highlighted. Percent marks hide it.")
+			.setHeading();
 
-		addWrapperDropdown(
+		for (const type of Object.keys(OPERATION_LABELS) as AnnotationType[]) {
+			addDropdown(new Setting(containerEl).setName(OPERATION_LABELS[type]), WRAPPER_LABELS, settings.wrappers[type], async value => {
+				settings.wrappers[type] = value;
+				await this.plugin.saveSettings();
+				// The fallback setting only applies while percent marks are in use.
+				this.display();
+			});
+		}
+
+		if (Object.values(settings.wrappers).includes("percent")) {
+			addDropdown(
+				new Setting(containerEl)
+					.setName("Inside fenced blocks")
+					.setDesc("Percent marks do not render inside a fenced block, admonitions included, so this stands in for them there."),
+				{ brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight },
+				settings.fencedFallback,
+				async value => {
+					settings.fencedFallback = value;
+					await this.plugin.saveSettings();
+				}
+			);
+		}
+
+		addDropdown(
 			new Setting(containerEl)
-				.setName("Wrapper for insertions")
-				.setDesc("Percent marks hide the inserted text until it is approved. They do not render inside a fenced block, so a highlight is used there instead. Highlights and braces work everywhere."),
-			this.plugin.settings.insertWrapper,
+				.setName("Reasons and replies")
+				.setDesc("Where the author, reason and replies are written. An annotation that already has some keeps using whatever it has."),
+			{ brace: "CriticMarkup comment, {>>text<<}", footnote: "Footnote, ^[text]" },
+			settings.channel,
 			async value => {
-				this.plugin.settings.insertWrapper = value;
+				settings.channel = value;
 				await this.plugin.saveSettings();
 			}
 		);

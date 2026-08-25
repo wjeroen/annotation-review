@@ -253,14 +253,12 @@
 	word-break: break-word;
 }
 
-.annotation-type-delete .annotation-review-text {
-	text-decoration: line-through;
-	color: var(--text-muted);
-}
-
-/* The text being replaced is tinted to match its own type badge. */
+/* Diff colours: red for text that goes away, green for text that arrives,
+   normal for text that stays. No strikethrough, it hurts reading anything
+   longer than a phrase and the badge already says what happens. */
+.annotation-type-delete .annotation-review-text,
 .annotation-type-replace .annotation-review-text {
-	color: var(--color-orange, var(--text-warning));
+	color: var(--color-red, var(--text-error));
 }
 
 .annotation-review-insert-text {

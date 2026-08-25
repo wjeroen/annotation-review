@@ -2,9 +2,9 @@ import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceL
 import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
-import { AdmonitionBlock, Annotation, InsertContext, Wrapper } from "./src/types";
+import { AdmonitionBlock, Annotation, AnnotationType, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
-import { Composed, composeComment, composeDelete, composeInsert, composeInsertWithReason, composeReplace } from "./src/compose";
+import { Composed, composeComment, composeDelete, composeInsert, composeReplace } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 
@@ -14,6 +14,16 @@ const RESCAN_DELAY_MS = 400;
 /** Obsidian's editor keeps its CodeMirror view on `cm`. Undocumented, so treated as optional. */
 interface EditorWithCm extends Editor {
 	cm?: EditorView;
+}
+
+/** The annotation around `offset`, the innermost one when braces are nested. */
+function innermostAt(annotations: Annotation[], offset: number): Annotation | undefined {
+	let best: Annotation | undefined;
+	for (const a of annotations) {
+		if (offset < a.matchStart || offset > a.matchEnd) continue;
+		if (!best || a.matchEnd - a.matchStart < best.matchEnd - best.matchStart) best = a;
+	}
+	return best;
 }
 
 export default class AnnotationReviewPlugin extends Plugin {
@@ -72,10 +82,21 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const saved = (await this.loadData()) ?? {};
+		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper };
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
-		// Nested, so a filter added in a later version still gets its default.
+		// Nested objects, so a key added in a later version still gets its default.
 		this.settings.filters = { ...DEFAULT_SETTINGS.filters, ...(saved.filters ?? {}) };
+		this.settings.wrappers = { ...DEFAULT_SETTINGS.wrappers, ...(saved.wrappers ?? {}) };
+		// The first 0.6.0 betas had one wrapper for three operations and one for
+		// insertions, and only wrote footnotes. Carry that over rather than
+		// silently switching someone to CriticMarkup.
+		if (!saved.wrappers && (saved.wrapper || saved.insertWrapper)) {
+			const w = saved.wrapper ?? "highlight";
+			this.settings.wrappers = { comment: w, delete: w, replace: w, insert: saved.insertWrapper ?? "percent" };
+			this.settings.fencedFallback = "highlight";
+			this.settings.channel = "footnote";
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {
@@ -140,6 +161,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return file;
 	}
 
+	private detect(content: string, filePath: string): Annotation[] {
+		return detectAnnotations(content, filePath, { channel: this.settings.channel });
+	}
+
 	/**
 	 * Rescans whichever note is on screen.
 	 *
@@ -164,12 +189,12 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const content = await this.readContent(file);
 		if (token !== this.scanToken) return;
 
-		this.annotations = detectAnnotations(content, file.path);
+		this.annotations = this.detect(content, file.path);
 		this.admonitions = detectAdmonitionBlocks(content, file.path);
 		this.scannedPath = file.path;
 		// Offsets are fresh now, so work out the active card again before drawing.
 		const editor = this.getEditorFor(file.path);
-		this.activeAnnotationId = editor ? (this.annotationAt(editor.posToOffset(editor.getCursor()))?.id ?? null) : null;
+		this.activeAnnotationId = editor ? (innermostAt(this.annotations, editor.posToOffset(editor.getCursor()))?.id ?? null) : null;
 		this.refreshView();
 
 		// The note on screen changed while this one was being read, so nothing
@@ -183,16 +208,6 @@ export default class AnnotationReviewPlugin extends Plugin {
 			const view = leaf.view;
 			if (view instanceof AnnotationReviewView) view.refreshFromData();
 		}
-	}
-
-	/** The annotation around `offset`, the innermost one when braces are nested. */
-	private annotationAt(offset: number): Annotation | undefined {
-		let best: Annotation | undefined;
-		for (const a of this.annotations) {
-			if (offset < a.matchStart || offset > a.matchEnd) continue;
-			if (!best || a.matchEnd - a.matchStart < best.matchEnd - best.matchStart) best = a;
-		}
-		return best;
 	}
 
 	/** The note an editor belongs to, found through the view that owns it. */
@@ -212,7 +227,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 	/** Marks the card whose annotation the caret sits in, and scrolls it into view. */
 	private syncCursor(cm: EditorView, offset: number) {
 		if (this.pathForEditorView(cm) !== this.scannedPath) return;
-		const id = this.annotationAt(offset)?.id ?? null;
+		const id = innermostAt(this.annotations, offset)?.id ?? null;
 		if (id === this.activeAnnotationId) return;
 		this.activeAnnotationId = id;
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
@@ -299,50 +314,37 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 * straight into the note and leaves the caret where text is still needed,
 	 * so none of them opens a dialog first.
 	 */
-	private annotationActions(): { id: string; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
+	private annotationActions(): { id: AnnotationType; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
 		const author = () => this.settings.defaultAuthor;
+		const channel = () => this.settings.channel;
 		return [
 			{
 				id: "comment",
 				label: "Comment",
 				icon: "message-square",
 				description: "Leave a remark on the selected text",
-				run: editor => this.annotate(editor, sel => composeComment(sel, author(), this.wrapperAt(editor)))
+				run: editor => this.annotate(editor, sel => composeComment(sel, author(), this.wrapperFor("comment", editor), channel()))
 			},
 			{
 				id: "delete",
 				label: "Delete",
 				icon: "strikethrough",
 				description: "Propose removing the selected text",
-				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperAt(editor)))
+				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperFor("delete", editor), channel()))
 			},
 			{
 				id: "replace",
 				label: "Replace",
 				icon: "replace",
 				description: "Propose new wording for the selected text",
-				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperAt(editor)))
+				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperFor("replace", editor), channel()))
 			},
 			{
 				id: "insert",
 				label: "Insert",
 				icon: "text-cursor-input",
 				description: "Mark the selected text as newly inserted",
-				run: editor => this.annotateInsert(editor, false)
-			},
-			{
-				id: "insert-highlight",
-				label: "Insert (highlight form)",
-				icon: "highlighter",
-				description: "Always uses the ==++text++== form",
-				run: editor => this.annotateInsert(editor, false, { kind: "fenced" }, "highlight")
-			},
-			{
-				id: "insert-reason",
-				label: "Insert with a reason",
-				icon: "list-plus",
-				description: "Leaves a footnote open for the reason",
-				run: editor => this.annotateInsert(editor, true)
+				run: editor => this.annotateInsert(editor)
 			}
 		];
 	}
@@ -356,6 +358,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 			});
 		}
 		this.addCommand({
+			id: "annotate-reason",
+			name: "Add reason",
+			editorCallback: editor => this.addReasonAtCaret(editor)
+		});
+		this.addCommand({
 			id: "annotate-pick",
 			name: "Choose type of annotation",
 			editorCallback: editor => this.pickAnnotationType(editor)
@@ -368,17 +375,28 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 		// The same actions on the editor's right click menu. setSection groups
 		// them together so Obsidian draws a divider around them, since the API
-		// has no submenus.
+		// has no submenus. Creating needs a selection, adding a reason only
+		// needs the caret inside an annotation.
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
-				if (!editor.getSelection()) return;
-				for (const action of this.annotationActions()) {
+				if (editor.getSelection()) {
+					for (const action of this.annotationActions()) {
+						menu.addItem(item =>
+							item
+								.setSection("annotation-review")
+								.setTitle(action.label)
+								.setIcon(action.icon)
+								.onClick(() => action.run(editor))
+						);
+					}
+				}
+				if (this.annotationAtCaret(editor)) {
 					menu.addItem(item =>
 						item
 							.setSection("annotation-review")
-							.setTitle(action.label)
-							.setIcon(action.icon)
-							.onClick(() => action.run(editor))
+							.setTitle("Add reason")
+							.setIcon("list-plus")
+							.onClick(() => this.addReasonAtCaret(editor))
 					);
 				}
 			})
@@ -386,15 +404,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	/**
-	 * The chosen wrapper, unless that is percent marks inside a fenced block,
-	 * where they do not render. Highlights and braces work everywhere, so
-	 * those choices hold inside admonitions too.
+	 * The chosen wrapper for an operation, unless that is percent marks inside
+	 * a fenced block, where they do not render and the fallback stands in.
+	 * Highlights and braces work everywhere, so those choices hold inside
+	 * admonitions too.
 	 */
-	private wrapperAt(editor: Editor): Wrapper {
-		const chosen = this.settings.wrapper;
+	private wrapperFor(type: AnnotationType, editor: Editor): Wrapper {
+		const chosen = this.settings.wrappers[type];
 		if (chosen !== "percent") return chosen;
 		const context = getInsertContext(editor.getValue(), editor.posToOffset(editor.getCursor("from")));
-		return context.kind === "fenced" ? "highlight" : chosen;
+		return context.kind === "fenced" ? this.settings.fencedFallback : chosen;
 	}
 
 	/** The selected text with its range, which stays valid even if focus moves. */
@@ -418,15 +437,45 @@ export default class AnnotationReviewPlugin extends Plugin {
 		editor.focus();
 	}
 
-	private annotateInsert(editor: Editor, withReason: boolean, forcedContext?: InsertContext, forcedWrapper?: Wrapper) {
+	private annotateInsert(editor: Editor) {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
-		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
-		const wrapper = forcedWrapper ?? this.settings.insertWrapper;
-		const author = this.settings.defaultAuthor;
-		this.annotate(editor, sel =>
-			withReason ? composeInsertWithReason(sel, author, context, wrapper) : composeInsert(sel, author, context, wrapper)
-		);
+		const context = getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
+		const { wrappers, fencedFallback, channel, defaultAuthor } = this.settings;
+		this.annotate(editor, sel => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, channel));
+	}
+
+	/** The annotation the caret is in, parsed fresh since the list may be stale mid-edit. */
+	private annotationAtCaret(editor: Editor): Annotation | undefined {
+		const path = this.app.workspace.getActiveFile()?.path ?? "";
+		return innermostAt(this.detect(editor.getValue(), path), editor.posToOffset(editor.getCursor()));
+	}
+
+	/**
+	 * Opens a reason on the annotation under the caret. With no entry yet a
+	 * new one is written in the chosen channel, with the author label when
+	 * there is one. With an entry that lacks a reason the caret goes into it.
+	 * With a reason already there the caret goes to its end.
+	 */
+	private addReasonAtCaret(editor: Editor) {
+		const target = this.annotationAtCaret(editor);
+		if (!target) {
+			new Notice("Annotation Review: put the caret inside an annotation first.");
+			return;
+		}
+		if (target.reasonSpan) {
+			editor.setCursor(editor.offsetToPos(target.matchStart + target.reasonSpan.end));
+			editor.focus();
+			return;
+		}
+		const point = target.reasonInsert;
+		if (!point) return;
+		const label = !target.author && this.settings.defaultAuthor ? `[${this.settings.defaultAuthor}] ` : "";
+		const at = target.matchStart + point.at;
+		const pos = editor.offsetToPos(at);
+		editor.replaceRange(point.prefix + label + point.suffix, pos, pos);
+		editor.setCursor(editor.offsetToPos(at + point.prefix.length + label.length));
+		editor.focus();
 	}
 
 	private pickAnnotationType(editor: Editor) {

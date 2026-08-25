@@ -623,9 +623,11 @@ export class AnnotationReviewView extends ItemView {
 			);
 		}
 
+		// The type leads: it is what varies from card to card, and the louder
+		// of the two chips. Same order as the syntax, operator then author.
 		const header = card.createEl("div", { cls: "annotation-review-header" });
-		this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
+		this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 
 		if (annotation.reasonSpan) {
