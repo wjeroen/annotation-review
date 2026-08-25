@@ -522,7 +522,9 @@
 
 /* In the editor: live preview colors and the diff gutter. The reds and
    greens are the theme's own, the same variables the CriticMarkup plugin
-   uses. Text inside percent marks is fainter, since it is hidden text. */
+   uses. Inside percent marks they are mixed toward the faint grey Obsidian
+   gives hidden text, so they sit at the same strength as the text around
+   them. Not opacity: that stacked on Obsidian's grey and was unreadable. */
 
 .arv-del {
 	color: var(--color-red, var(--text-error));
@@ -532,8 +534,12 @@
 	color: var(--color-green, var(--text-success));
 }
 
-.arv-faint {
-	opacity: 0.6;
+.arv-faint.arv-del {
+	color: color-mix(in srgb, var(--color-red, var(--text-error)) 60%, var(--text-faint));
+}
+
+.arv-faint.arv-ins {
+	color: color-mix(in srgb, var(--color-green, var(--text-success)) 60%, var(--text-faint));
 }
 
 /* A replacement in braces is also, to Obsidian, a strikethrough. Only ours

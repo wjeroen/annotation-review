@@ -85,7 +85,7 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 ## In the editor
 
-In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `~~replacement~~` is also a strikethrough to Obsidian. Ours loses the line, a genuine `~~strikethrough~~` keeps it.
+In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks staying Obsidian's faint grey and its red and green toned down to match. A plain `{==highlight==}` or `%%hidden note%%` with nothing attached is drawn the same way, so it never looks different from one with a reply. A replacement shows the old text in red and the new text in green right against each other. A `~~replacement~~` is also a strikethrough to Obsidian. Ours loses the line, a genuine `~~strikethrough~~` keeps it.
 
 Comments and replies sit on a blue background: a `{>>comment<<}` on a spot and a `{>>reply<<}`, with their markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. The span a comment is about gets no color of its own: a `==highlight==` and a `{==braced span==}` keep Obsidian's yellow, and a hidden `%%span%%` is already fainter. So a plain yellow highlight reads as a comment and nothing else does.
 

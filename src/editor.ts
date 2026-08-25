@@ -61,13 +61,16 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 	const ranges: Range<Decoration>[] = [];
 
 	for (const a of annotations) {
-		// An ordinary highlight or hidden note is left to Obsidian.
-		if (a.isPlain) continue;
+		// A plain highlight or hidden note with nothing attached is drawn the
+		// same way as one with a reply, so its braces or percent marks
+		// disappear too and it never looks different for lacking a reply.
 		const base = a.matchStart;
 		const add = (span: TextSpan, deco: Decoration) => {
 			if (span.end > span.start) ranges.push(deco.range(base + span.start, base + span.end));
 		};
 		const revealed = selection.from <= a.matchEnd && selection.to >= a.matchStart;
+		// Red and green inside percent marks are toned down to the grey
+		// Obsidian gives hidden text. Never opacity: that stacks on the grey.
 		const faint = a.wrapper === "percent" ? " arv-faint" : "";
 
 		/**
@@ -95,14 +98,11 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		};
 
 		// Colors stay on while revealed, only the hiding stops.
-		if (a.originalSpan) {
-			// The span a comment is about gets no color of its own. Obsidian's
-			// yellow already marks it in a highlight and in braces, where blue
-			// on top came out green, and a percent mark's fainter text already
-			// shows what was selected. Only the comment itself goes blue.
-			if (a.type !== "comment") add(a.originalSpan, mark("arv-del" + faint));
-			else if (faint) add(a.originalSpan, mark(faint.trim()));
-		}
+		// The span a comment is about gets no color of its own. Obsidian's
+		// yellow already marks it in a highlight and in braces, where blue on
+		// top came out green, and percent marks are already drawn in
+		// Obsidian's faint grey. Only the comment itself goes blue.
+		if (a.originalSpan && a.type !== "comment") add(a.originalSpan, mark("arv-del" + faint));
 		if (a.bodySpan) add(a.bodySpan, mark("arv-ins" + faint));
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
 		if (a.commentSpan) add(a.commentSpan, mark("arv-comment"));
@@ -191,7 +191,7 @@ const diffGutter = gutter({
 	lineMarker(view, line) {
 		let kind: string | null = null;
 		for (const a of view.state.field(annotationsField)) {
-			if (a.isPlain || a.matchEnd < line.from || a.matchStart > line.to) continue;
+			if (a.matchEnd < line.from || a.matchStart > line.to) continue;
 			if (kind === null || (kind === "comment" && a.type !== "comment")) kind = a.type;
 		}
 		return kind ? MARKERS[kind] : null;
