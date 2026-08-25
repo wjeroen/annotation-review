@@ -226,7 +226,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				);
 				// The native picker is a good dialog on desktop and a poor one
 				// on mobile, so mobile gets the plugin's own sliders.
-				if (Platform.isMobile) picker = new MobileColorPicker(setting.controlEl, list, row.color, pick);
+				if (Platform.isMobile) picker = new MobileColorPicker(this.app, setting.controlEl, () => row.name, row.color, pick);
 				else setting.addColorPicker(component => (picker = component.setValue(row.color).onChange(pick)));
 				setting.addExtraButton(button =>
 					button

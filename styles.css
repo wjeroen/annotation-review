@@ -651,52 +651,74 @@ del.arv-replace {
 	color: var(--text-muted);
 }
 
-/* The slider color picker used on mobile. A swatch in the settings row opens
-   a panel under it with three gradient tracks and a hex field. */
+/* The color picker used on mobile. A swatch in the settings row opens a
+   modal with a preview chip, three gradient sliders and a hex field. The
+   widths are forced, since Obsidian's mobile styling clamps range inputs. */
 
 .arv-color-swatch {
-	width: 32px;
-	height: 32px;
+	width: 64px;
+	height: 36px;
 	padding: 0;
-	border-radius: 6px;
+	border-radius: 8px;
 	border: 1px solid var(--background-modifier-border);
 	box-shadow: none;
 }
 
-.arv-color-panel {
+.arv-color-modal .modal-content {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
-	padding: 6px 0 14px;
-	border-bottom: 1px solid var(--background-modifier-border);
+	gap: 20px;
 }
 
-.arv-color-panel.is-hidden {
-	display: none;
+.arv-color-preview {
+	display: flex;
+	justify-content: center;
+	padding: 4px 0;
 }
 
-.arv-color-slider {
+.arv-color-preview-chip {
+	font-size: 1.3em;
+	padding: 4px 14px;
+	margin: 0;
+}
+
+.arv-color-row {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.arv-color-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+.arv-color-modal input.arv-color-slider {
 	-webkit-appearance: none;
 	appearance: none;
 	width: 100%;
-	height: 18px;
+	max-width: none;
+	height: 28px;
 	margin: 0;
-	border-radius: 9px;
+	padding: 0;
+	border-radius: 14px;
 	border: 1px solid var(--background-modifier-border);
 }
 
-.arv-color-slider::-webkit-slider-thumb {
+.arv-color-modal input.arv-color-slider::-webkit-slider-thumb {
 	-webkit-appearance: none;
 	appearance: none;
-	width: 26px;
-	height: 26px;
+	width: 34px;
+	height: 34px;
 	border-radius: 50%;
 	background: var(--background-primary);
 	border: 2px solid var(--text-normal);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.arv-color-hex {
-	width: 7em;
+.arv-color-modal input.arv-color-hex {
+	width: 100%;
+	max-width: none;
 	font-family: var(--font-monospace);
+	font-size: 1.1em;
 }

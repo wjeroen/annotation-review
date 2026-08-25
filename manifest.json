@@ -1,7 +1,7 @@
 {
 	"id": "annotation-review",
 	"name": "Annotation Review",
-	"version": "0.6.2-beta.8",
+	"version": "0.6.2-beta.9",
 	"minAppVersion": "1.4.0",
 	"description": "Review, approve, and dismiss text annotations (comments, inserts, deletes, replaces) in a note, including inside ad-* admonition blocks.",
 	"author": "",
