@@ -4,13 +4,10 @@
 
 ### Before 0.6.0 goes stable
 - [ ] **Update the skill to the new grammar.** The vault copy of `markdown-annotations.md` still describes the old keyword syntax, which the parser no longer reads. Jeroen updates it first, then it gets copied into `skills/annotation-review/SKILL.md` minus the personal preferences section. The stable release waits for this.
-- [ ] Decide what to do about braces in reading view. They show as literal braces without a CriticMarkup plugin. Try one, or style them from this plugin.
 
-### Known gaps worth deciding on
-- [ ] Every unlabeled reply shows a "No author" chip, which is a bit heavy in a list of replies. A quieter affordance might read better
+### Known gaps, accepted
 - [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
-- [ ] Anything in square brackets at the start of an entry is read as the author, so `^[[1] see the appendix]` gets the author "1". Accepted when square brackets were chosen over `{Author}`
-- [ ] Clearing the only author or reason on an entry that has replies after it leaves an empty `^[]` behind, since removing the entry would turn the first reply into the reason. Rare, and it parses, but it is ugly
+- [ ] Anything in square brackets followed by a space at the start of a reply is read as the author, so `^[[1] see the appendix]` gets the author "1"
 
 ### Rendering, known limits
 - [ ] Reading view leaves an annotation alone when its text carries inline formatting of its own, since Obsidian splits that across elements. Handling that means reassembling text across siblings
@@ -18,56 +15,28 @@
 
 ### Needs checking in Obsidian
 
-The checklist with fixtures is in the vault's Annotation Review Test note. The editor and reading view rendering in `0.6.0-beta.7` is untested until it has been looked at.
-
-- [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
-- [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
-- [ ] A hidden `%%note%%` shows as a comment card with no text row, just the badge, author chip and line number, then the note in grey
-- [ ] Delete, Replace and Insert write nothing after the wrapper when no author is set. Comment still opens an entry
-- [ ] Comment by context: wraps a selection outside any annotation, adds the reason with the caret or selection inside one, adds a reply once there is a reason, and leaves a `{>>...<<}` or `%%...%%` on the spot with nothing selected. The right click item is named for what it will do
-- [ ] Deleted and replaced text in red without strikethrough, inserted and replacement text in green
-- [ ] Card layout: text, then type badge and author chip with the line number at the far end, then the reason on its own line in grey
-- [ ] The filter button and its menu, and that the choices survive switching notes and restarting
-- [ ] Plain highlights and hidden comments listed as comments with no author, hidden by the filter
-- [ ] The coloured line along the top of each card: yellow highlight, grey percent marks, purple braces
-- [ ] The card under the caret gets an accent border and scrolls into view, and clears when the caret leaves
-- [ ] Approving `{++is ++}` keeps the space
-- [ ] The settings tab, and the commands honouring the wrapper choices
-- [ ] Insert command inside an existing percent mark insertion writes the close and reopen form
-- [ ] Replies follow the channel of the last entry, footnote or brace comment
-- [ ] Point comments show as comment cards and dismiss cleanly
+The checklist with fixtures lives in the vault's Annotation Review Test note rather than here, since it changes with every beta. The editor and reading view rendering is untested until it has been looked at.
 
 ## Future Ideas
 
 ### Agreed for a next version
 
 - [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
-- [ ] **A setting for the metadata channel**, footnote or brace comment, for people who want fully portable CriticMarkup. Today the commands always write footnotes and only replies follow an existing brace comment.
-- [ ] **Style brace annotations in the editor**, so `{--text--}` reads as a deletion without a separate CriticMarkup plugin.
+- [ ] **Timestamps**, as `[Author][T1755000000]@@` and `[T1755000000]` on its own. A `T` followed by digits is always a timestamp, never an author. The CriticMarkup plugin's `time` field maps to the same thing. Read it, show it on cards, sort replies by it. Decided in format, not built.
+- [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
-### Rethinking the syntax: done in 0.6.0
+### The syntax, as it ended up
 
-Kept because the reasoning is still useful. The full proposal, with an exhaustive example list per annotation type, lives in the Future ideas section of the vault's Annotation Review Test note.
+The full grammar, with every form per operation, lives in the Future ideas section of the vault's Annotation Review Test note, and the short version is in the README. The decisions that were not obvious, kept here because the reasoning still matters:
 
-The grammar is three independent choices instead of one English keyword in a footnote:
-
-```
-<wrapper> <op> content <op> </wrapper> <entry>*
-```
-
-The wrapper picks visibility (`{...}` literal, `==...==` highlighted, `%%...%%` hidden), the operator picks the operation (`--` delete, `++` insert, `~>` substitute, none means comment), and each entry, a footnote or a `{>>...<<}`, carries only `[Author]` and free prose. This settled the comma separator, the quoted replacement and the arrow at once, because none of them survive. It also matches an existing standard rather than being one more private dialect.
-
-Decisions taken along the way:
-
-- Author labels stay in the entries, never inside the operator markers. Once whitespace inside the markers is significant, `{++[Claude] is ++}` cannot say whether the space after the label belongs to the inserted text.
-- Whitespace inside the markers is significant. `{++is ++}` carries its own trailing space.
-- Square brackets for the author. Rendering and the graph were both checked, neither produces a phantom link.
-- Brace comments are a second metadata channel, read exactly like footnotes. The commands write footnotes by default.
-- The footnote no longer decides an annotation's type, so the rule that a self-contained insert's first footnote is a reply disappeared. First entry is author and reason, every later one is a reply, no exceptions.
+- The author lives inside the wrapper, terminated by `@@`. Every entry after the wrapper is a reply, and there is no reason concept: the first reply is shown prominently, that is all. A plain `[Author] ` label inside operator marks was rejected because, once whitespace inside the markers is significant, the space after the label is ambiguous. `@@` is what removes the ambiguity, and it is also the CriticMarkup plugin's own separator.
+- `{"author":"X"}@@` in braces so that plugin agrees on every author, `[X]@@` elsewhere. Square brackets over `{Author}` because rendering and the graph were both checked and neither produces a phantom link.
+- Braces take only `{~~old~>new~~}`, since the CriticMarkup plugin rejects anything else. Highlights and percent marks write `--old~>new++` and also read `--old--++new++`.
 - Braces are the only wrapper that nests. `==` and `%%` cannot, and percent marks chain by closing and reopening instead.
+- `%%note%%` with no operator is a comment on a spot, the native twin of `{>>note<<}`, because hidden text cannot be a span anyone is commenting on.
 - A footnote inside a percent wrapper was tried as a way to keep hidden annotations silent, and does not work: live preview breaks, reader view still lists the footnote, and the highlight equivalent swallows the rest of the line.
-- Migration was not a goal. The old forms were deleted from the parser rather than converted.
-- Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
+- Migration was never a goal. The old forms were deleted from the parser rather than converted.
+- Plain CriticMarkup is the default for a fresh install, since that is the standard people arrive with. Everything is a setting.
 
 ## Completed Recently
 - [x] Fix: braced replacements still had Obsidian's strikethrough in live preview, since Obsidian sets it from a more specific selector. Footnote replies no longer get the blue background, so a genuine footnote is never touched; being a footnote already reads as a remark, and an author underline shows when there is one (2026-08-25)
