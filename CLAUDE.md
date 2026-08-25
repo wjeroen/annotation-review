@@ -54,7 +54,7 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 
 **Entries attach by adjacency, and a brace comment is two things.** `{>>...<<}` directly after a wrapper is a reply to that annotation. The same thing after a space, or after plain text, is a comment on that spot. The scanners claim the attached ones first and whatever is left becomes a point comment. Reordering the scans breaks this.
 
-**Braces take CriticMarkup's forms only.** A replacement in braces is `{~~old~>new~~}` and nothing else, because that is what the CriticMarkup plugin reads, and braces exist for compatibility with it. Highlights and percent marks also take `--old~>new++`, the default there, and `--old--++new++`.
+**One replacement form, `~~old~>new~~`, in every wrapper.** The arrow and fused variants were dropped once the rendering removed Obsidian's strikethrough from replacements, so do not add forms other CriticMarkup tools reject. `>>note<<` is an operator too, a comment on a spot, and a wrapper with no operator is always a comment on its span.
 
 **Only braces nest.** Their opening and closing marks differ, so depth can be counted. `==` and `%%` cannot nest at all, and the way to insert inside a percent mark insertion is to close and reopen it, operator included: `%%++A ++%%%%++X++%%%%++B++%%`. The insert command does this through `getInsertContext`, which also reports which operator the surrounding annotation uses so the halves stay well formed. Get this wrong and the surrounding text escapes its comment and becomes visible prose.
 

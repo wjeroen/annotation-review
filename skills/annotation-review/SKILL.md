@@ -4,123 +4,172 @@ description: Always read this skill when leaving comments and suggestions on som
 ---
 # How it works
 
-Every annotation appears in a sidebar through an Obsidian plugin called Annotation Review. Each one is either dismissed or approved. Regular comments can only be dismissed.
+Every annotation appears in a sidebar through an Obsidian plugin called Annotation Review. Each operation is either dismissed or approved. Comments can only be dismissed.
 
-Dismissing always returns the text to how it was before the annotation: dismissing a comment/deletion/replacement leaves the original text in place without highlights or footnotes, dismissing an insertion removes the inserted text, footnote, and percentage symbols or highlights.
+Dismissing always returns the text to how it was before the annotation: dismissing a comment, deletion or replacement leaves the original text in place without any markup, dismissing an insertion removes the inserted text. In every case the markup, the author and the replies disappear with it.
 
-Approving a replacement swaps the highlighted text for the proposed text after the arrow and between the quotation marks and removes the highlight and footnote. Approving a deletion removes the highlighted text along with its highlight and footnote. Approving an insertion keeps the inserted text while removing the author label, footnote, and percentage symbols or highlight.
+Approving a replacement swaps the old text for the new text. Approving a deletion removes the text. Approving an insertion keeps the inserted text. In every case the markup, the author and the replies disappear with it.
+
+The syntax is CriticMarkup, extended in two ways: the same markers can be wrapped in Obsidian highlights or comment marks instead of braces, and every annotation can carry an author and replies.
+
+### The grammar
+
+An annotation is a wrapper, an operator, an optional author, and any number of replies:
+
+```
+<wrapper> <operator> <author>@@? text <operator> </wrapper> <reply>*
+```
+
+- The wrapper decides how the note shows the text: `{...}` shows it as it is, which is plain CriticMarkup, `==...==` highlights it, `%%...%%` hides it until approved.
+- The operator decides the operation: `--text--` deletes, `++text++` inserts, `~~old~>new~~` replaces, `>>note<<` is a comment on that spot. No operator means a comment on the text inside the wrapper.
+- The author goes right after the opening operator marks, ended by `@@`. Inside braces write `{"author":"Claude"}@@`, so other CriticMarkup tools read it too. Inside highlights and percent marks write `[Claude]@@`. Everything after `@@` is the text, spaces included.
+- Replies are footnotes `^[...]` or CriticMarkup comments `{>>...<<}` placed directly after the wrapper, with no space in between. Sign a footnote with `[Claude]` followed by a space at its start, and a CriticMarkup comment with `{"author":"Claude"}@@`.
+
+An annotation is authored by the author inside its wrapper, or by nobody. Every entry after the wrapper is a reply, whoever wrote it, and the reason for a change is simply its first reply. An author-only reply such as `^[[Claude]]` is an empty reply by Claude and nothing more.
+
+Before you start, ask the user which wrapper they want and whether you should label yourself. Without an answer, use plain CriticMarkup, braces with `{>>...<<}` replies, since that is what other CriticMarkup tools read, and label yourself.
 
 # Annotation examples
 
+Each group shows the same thing in all three wrappers.
+
 ## Comments
 
-By Claude: 
-==This sentence has a comment attached.==^[[Claude] This could be phrased more directly.]
+A comment on a span is a wrapper around the text with no operator inside. What you want to say goes in a signed reply after it. The wrapper itself carries no author, because the text inside it is the user's, not yours.
 
-By ChatGPT: 
-==This other sentence also has a comment.==^[[ChatGPT] Consider adding a source here.]
+No author, nothing said. The same as an ordinary highlight or hidden text:
+{==This is a test==}
+==This is a test==
+%%This is a test%%
 
-No author, so a grey chip: 
-==A third sentence, commented without an author label.==^[Just a note to self.]
+With the comment as a signed reply:
+{==This is a test==}{>>{"author":"Claude"}@@What is it a test of?<<}
+==This is a test==^[[ChatGPT] What is it a test of?]
+%%This is a test%%^[[Gemini] What is it a test of?]
+
+Unsigned:
+{==This is a test==}{>>What is it a test of?<<}
+==This is a test==^[What is it a test of?]
+
+A comment on a spot rather than a span uses the `>>` operator, the author goes inside like any other operation:
+This is a test.{>>{"author":"Claude"}@@Consider a transition here.<<}
+This is a test.==>>[ChatGPT]@@Consider a transition here.<<==
+This is a test.%%>>[Gemini]@@Consider a transition here.<<%%
+
+An unsigned comment on a spot:
+This is a test.{>>Consider a transition here.<<}
+This is a test.==>>Consider a transition here.<<==
+This is a test.%%>>Consider a transition here.<<%%
 
 ## Delete text
 
-Without a reason: 
-The weather today is nice and sunny ==and also quite pleasant==^[[Gemini] delete] outside.
+No author, no reply:
+This is {--is --}a test.
+This is ==--is --==a test.
+This is %%--is --%%a test.
 
-With a reason: 
-This paragraph has a redundant clause that repeats itself==, which is a repetitive statement that says the same twice==^[[Alex M] delete, Redundant with the first half of the sentence.].
+With author:
+This is {--{"author":"Claude"}@@is --}a test.
+This is ==--[ChatGPT]@@is --==a test.
+This is %%--[Gemini]@@is --%%a test.
+
+With author and a reply giving the reason:
+This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
+This is ==--[ChatGPT]@@is --==^[[ChatGPT] The word is repeated.]a test.
+This is %%--[Gemini]@@is --%%^[[Gemini] The word is repeated.]a test.
+
+No author, signed reply. Nothing says who did the operation:
+This is {--is --}{>>{"author":"Joe"}@@The word is repeated.<<}a test.
+This is ==--is --==^[[Joe] The word is repeated.]a test.
 
 ## Replace text
 
-Without a reason: 
-==Tekst frum teh usr.==^[[Claude] → "Text from the user."]
+Known in CriticMarkup as substitutions. The old text, the arrow, then the new text, in every wrapper.
 
-With a reason: 
-==The quick brown fox jumped over.==^[[Joe] → "The fox jumped over.", Trimmed unnecessary adjectives.]
+No author, no reply:
+This {~~isn't~>is~~} a test.
+This ==~~isn't~>is~~== a test.
+This %%~~isn't~>is~~%% a test.
 
-Quotes around the replacement text are essential.
+With author:
+This {~~{"author":"Claude"}@@isn't~>is~~} a test.
+This ==~~[ChatGPT]@@isn't~>is~~== a test.
+This %%~~[Gemini]@@isn't~>is~~%% a test.
 
-The replacement itself cannot contain a double quote, since the first one closes it. Use single quotes inside, or rephrase around it.
-
-The arrow has to be the single character →, not a hyphen and a greater than sign typed as two characters.
+With author and a reply:
+This {~~{"author":"Claude"}@@isn't~>is~~}{>>{"author":"Claude"}@@Wrong, this is in fact a test.<<} a test.
+This ==~~[ChatGPT]@@isn't~>is~~==^[[ChatGPT] Wrong, this is in fact a test.] a test.
 
 ## Insert text
 
-### With percentage symbols
+Known in CriticMarkup as additions. Percent marks hide the insertion until it is approved, and an insertion can span several paragraphs.
 
-Using percentage symbols for insertions allows you to insert multiple paragraphs without the annotation breaking.
+No author, no reply:
+This {++is ++}a test.
+This ==++is ++==a test.
+This %%++is ++%%a test.
 
-Plain, by Claude: 
-Here is a sentence. %%[Claude] Here is an inserted sentence.%% And the paragraph continues.
+With author:
+This {++{"author":"Claude"}@@is ++}a test.
+This ==++[ChatGPT]@@is ++==a test.
+This %%++[Gemini]@@is ++%%a test.
 
-With a reason, by Alex: 
-Here is a sentence. %%[Alex] Here is an inserted sentence.%%^[insert, I really wanted to add a second sentence.] And the paragraph continues.
+With author and a reply:
+This {++{"author":"Claude"}@@is ++}{>>{"author":"Claude"}@@The word was missing.<<}a test.
+This ==++[ChatGPT]@@is ++==^[[ChatGPT] The word was missing.]a test.
+This %%++[Gemini]@@is ++%%^[[Gemini] The word was missing.]a test.
 
-No author label: 
-Another sentence. %%This one has no author label.%% More text follows.
+Braces nest, so an insertion inside an insertion works there:
+{++{"author":"Claude"}@@I went to my grandma's house. {++{"author":"ChatGPT"}@@She has been living there for over 5 decades.++} She's been thinking of moving out.++}
 
-When inserting text in a section that's already marked with percentage symbols (nested), insert using `%%%%[Author] text%%%%` because with just two percentage symbols on each side you will break the original text in two comments leaving your text as regular text instead of a suggested insertion. Only percentage symbols nest like this. A highlight insertion inside another highlight insertion is not picked up, and Obsidian does not render it nicely either.
-
-Nested, by ChatGPT inside one from Claude, which is what the doubled form is for: 
-%%[Claude] I went to my grandma's house.%%%%[ChatGPT] She has been living there for over 5 decades.%%%%[Claude] She's been thinking of moving out.%%
-
-### With highlights
-
-Self-contained form, by Claude:
-==++[Claude] This line was inserted directly.++==
-
-Footnote form with a reason, by Gemini, no plus signs needed:
-==This line was inserted with a stated reason.==^[[Gemini] insert, Matches the tone of the rest of the form]
-
-Drop the plus signs as soon as an insertion carries a footnote. They exist only to mark text as inserted when nothing else says so, so the footnote form replaces them rather than joining them.
-
-Percentage symbols aren't allowed in admonitions, since they hide the text in live preview mode. Use the highlight variant instead:
-
-```ad-info
-Subject: %%Greeting%% 
-
-==++[Claude] Hello, this is inserted text.++==
-
-==And this one has a reason!==^[[Claude] insert, Because I want to.]
-```
-
-Outside of admonitions and when no reason needs to be given, percentage symbols are preferred for inserts. 
+Highlights and percent marks cannot nest. To insert inside text that is already inside percent marks, close and reopen them, operator included. This reads as three insertions in a row:
+%%++I went to my grandma's house.++%%%%++[ChatGPT]@@ She has been living there for over 5 decades.++%%%%++ She's been thinking of moving out.++%%
 
 ## Replies
 
-You can add replies, for example:
+Replies follow one another with no space in between, and there can be any number of them:
 
-The old plan was ==to launch in Q1==^[[Claude] delete, timeline slipped]^[[Alex] Q1 still works if we cut scope]^[[Claude] fair, restoring the reasoning below] and that's final. 
+The old plan was ==--[Claude]@@to launch in Q1--==^[[Claude] Timeline slipped.]^[[Alex] Q1 still works if we cut scope.]^[[Claude] Fair, restoring the reasoning below.] and that's final.
 
-The first footnote decides the type and drives approve and dismiss. Every footnote after it is a reply, and they have to follow one another with no space in between. Approving or dismissing takes the replies with it, since they belong to the annotation rather than standing on their own. So a whole exchange disappears along with the decision it was about.
+Plain CriticMarkup:
+{--{"author":"Gemini"}@@Drop this.--}{>>{"author":"Gemini"}@@It repeats the intro.<<}{>>{"author":"Joe"}@@Agreed.<<}
 
-Self-contained highlight inserts, ones without a reason, can also have replies. There, the first footnote is already a reply: ==++[ChatGPT] Inserted text.++==^[[Joe] Reply]
+Approving or dismissing takes the replies with it, since they belong to the annotation rather than standing on their own. Replies always sit outside the wrapper: a footnote inside a percent or highlight wrapper breaks rendering.
 
-## General comments and admonitions
+## Admonitions and fenced blocks
 
-The plugin has a sidebar that displays all the annotations. It also has a second tab that displays admonitions. Admonitions are fenced blocks starting with `ad-`. With the admonition plugin, users can create their own types of admonitions per author. This is a great way to leave general comments in a document not specific to a single line or paragraph, for example: 
+The plugin has a sidebar that displays all the annotations. It also has a second tab that displays admonitions. Admonitions are fenced blocks starting with `ad-`. With the Admonition plugin, users can create their own types of admonitions per author. This is a great way to leave general comments in a document not specific to a single line or paragraph, for example this general comment by Gemini:
 
-```ad-author
+```ad-gemini
 General comments.
 ```
 
-[Author] labels aren't needed, since using `ad-author` will let the admonition plugin display the author's name nicely. 
+`[Author]` or `{"author":"Author"}@@` labels aren't needed, since using `ad-author` will let the admonition plugin display the author's name nicely.
 
-Admonitions are the only type of fenced blocks that display annotations, because those are the ones that render as real markdown through the Admonition plugin. But you can't insert using percentage symbols in them, meaning you will have to use highlight annotations for inserts. 
+Admonitions are the only fenced blocks the plugin scans for annotations, because they render as real markdown through the Admonition plugin. Braces and highlights work inside them. Percent marks do not render there, so use one of the other two inside an admonition:
 
-An annotation inside any other fenced block, a python one for instance, is ignored completely by the plugin.
+```ad-info
+Subject: Greeting
+
+This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
+This ==++[ChatGPT]@@is ++==a test.
+==Hello, this is a comment.==^[[Alex M] On text inside an admonition.]
+```
+
+An annotation inside any other fenced block, a python one for instance, is ignored completely by the plugin, and so is anything between backticks.
 
 ## Formatting remarks
 
-A footnote ends at its first closing square bracket, so a comment cannot contain one. Anything you write after it spills out into the document as visible text. Use parentheses instead, or rephrase.
+Whitespace inside the operator marks is kept exactly as written: `{++is ++}` inserts the word and the space after it, `{--is --}` deletes both. Take that into account so nothing is left with a dangling space, comma or connector, and flag it when it is.
 
-The [Author] label goes at the very start of the footnote, or immediately inside the markers for the percentage and plus forms. Empty brackets are not a label, so write no brackets at all rather than an empty pair.
+The author must end with `@@`. `{++[Claude] is ++}` without it inserts the literal text "[Claude] is ".
 
-Highlight only the exact span being edited or commented on, nothing wider. Take into account remaining spaces or punctuation when highlighting text and flag when a deletion/insertion/replacement leaves a dangling space, comma, or connector nearby.
+Annotate only the exact span being changed or commented on, nothing wider.
 
-Highlighted text can't start or end with a space. `==This works.==`, `== this doesn't.==`, `==and neither does this. ==`. The plugin accepts it, but Obsidian won't display it well.
+A footnote ends at its first closing square bracket, so a reply in a footnote cannot contain one. Use parentheses, or a `{>>...<<}` reply instead.
 
-When writing about this syntax rather than using it, put the examples in backticks or a code block that isn't an admonition. Two bare equals signs in running prose read as a delimiter and pair up with the next real annotation, which quietly changes what that annotation covers.
+Highlighted text cannot start or end with a space in Obsidian. The operator marks take care of that: `==++is ++==` is fine, since the space sits inside the marks.
 
-A highlight cannot cross a blank line, so a comment, deletion or replacement has to stay inside one paragraph. They also can't cross multiple bullet points. To act on several paragraphs or bullet points at once, annotate each one separately. This is also why multi paragraph insertions need percentage symbols.
+A highlight cannot cross a blank line, so a highlighted annotation has to stay inside one paragraph. Braces and percent marks can cross one, which is the only way to insert or delete a paragraph break: `{++` on one line, a blank line, `++}` on the next.
+
+When writing about this syntax rather than using it, put the examples in backticks or a code block that is not an admonition. Two bare equals signs in running prose read as a delimiter.

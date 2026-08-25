@@ -2,9 +2,6 @@
 
 ## Current Sprint
 
-### Before 0.6.0 goes stable
-- [ ] **Update the skill to the new grammar.** The vault copy of `markdown-annotations.md` still describes the old keyword syntax, which the parser no longer reads. Jeroen updates it first, then it gets copied into `skills/annotation-review/SKILL.md` minus the personal preferences section. The stable release waits for this.
-
 ### Known gaps, accepted
 - [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
 - [ ] Anything in square brackets followed by a space at the start of a reply is read as the author, so `^[[1] see the appendix]` gets the author "1"
@@ -15,7 +12,7 @@
 
 ### Needs checking in Obsidian
 
-The checklist with fixtures lives in the vault's Annotation Review Test note rather than here, since it changes with every beta. The editor and reading view rendering is untested until it has been looked at.
+The checklist with fixtures lives in the vault's Annotation Review Test note rather than here, since it changes with every release. 0.6.0 went stable with part of the editor and reading view rendering still unchecked; whatever fails there is a bug fix on the stable line.
 
 ## Future Ideas
 
