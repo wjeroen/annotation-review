@@ -27,7 +27,8 @@ import { AuthorStyle } from "./settings";
 
 export interface EditorRenderSettings {
 	renderInEditor: boolean;
-	authorStyle: AuthorStyle;
+	changeAuthorStyle: AuthorStyle;
+	commentAuthorStyle: AuthorStyle;
 	showGutter: boolean;
 	authorColors: AuthorColors;
 }
@@ -80,15 +81,15 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		 * sits where the syntax puts it and takes the size of its
 		 * surroundings, shrinking inside a footnote.
 		 */
-		const author = (who: Authored, textSpans: TextSpan[]) => {
+		const author = (who: Authored, textSpans: TextSpan[], style: AuthorStyle) => {
 			if (!who.authorSpan) return;
-			if (settings.authorStyle === "underline" && who.author) {
+			if (style === "underline" && who.author) {
 				for (const span of textSpans) add(span, authorLine(who.author, settings.authorColors));
 			}
 			if (revealed) return;
 			const s = who.authorSpan;
 			const raw = a.fullMatch.slice(s.start, s.end);
-			const at = who.author && settings.authorStyle === "chip" ? raw.indexOf(who.author) : -1;
+			const at = who.author && style === "chip" ? raw.indexOf(who.author) : -1;
 			if (at < 0) {
 				add(s, hide);
 				return;
@@ -116,10 +117,11 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			if (r.channel === "brace") add(r.textSpan, mark("arv-comment"));
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
-		author(a, contentSpans);
+		// A comment on a spot sits among the operators, so it follows them.
+		author(a, contentSpans, a.type === "comment" && !a.isPoint ? settings.commentAuthorStyle : settings.changeAuthorStyle);
 		// A footnote reply's line runs over its square brackets, not the ^, so
 		// an empty signed reply still shows who left it.
-		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan]);
+		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan], settings.commentAuthorStyle);
 
 		if (revealed) continue;
 

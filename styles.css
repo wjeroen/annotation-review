@@ -557,8 +557,10 @@
    parent, so the parent is what has to lose it, found through :has(). */
 .cm-strikethrough:has(.arv-del),
 .cm-strikethrough:has(.arv-ins),
+.cm-strikethrough:has(.arv-chip),
 .cm-strikethrough.arv-del,
-.cm-strikethrough.arv-ins {
+.cm-strikethrough.arv-ins,
+.cm-strikethrough.arv-chip {
 	text-decoration-line: none !important;
 }
 

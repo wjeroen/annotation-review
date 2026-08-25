@@ -103,7 +103,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper; showAuthorsInEditor?: boolean };
+		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper; showAuthorsInEditor?: boolean; authorStyle?: "underline" | "chip" | "none" };
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 		// Keys from older versions are dropped here, so they leave data.json on the next save.
 		for (const key of Object.keys(this.settings)) if (!(key in DEFAULT_SETTINGS)) delete (this.settings as unknown as Record<string, unknown>)[key];
@@ -129,8 +129,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.settings.channel = "footnote";
 			await this.saveSettings();
 		}
-		// beta.6 had a switch for the author chips, now one of three styles.
-		if (saved.showAuthorsInEditor === false && saved.authorStyle === undefined) this.settings.authorStyle = "none";
+		// 0.6.2 split the author style into one for changes and one for
+		// comments. Before that, beta.6 had a switch for the author chips.
+		const single = saved.authorStyle ?? (saved.showAuthorsInEditor === false ? "none" : undefined);
+		if (single !== undefined) {
+			if (saved.changeAuthorStyle === undefined) this.settings.changeAuthorStyle = single;
+			if (saved.commentAuthorStyle === undefined) this.settings.commentAuthorStyle = single;
+		}
 	}
 
 	/** Writes the settings that follow the vault to every device. Sidebar state is left out, see saveLocalState. */

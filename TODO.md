@@ -23,6 +23,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The author style is two settings, one for changes and one for comments on a span and replies, a comment on a spot counting as a change. Chips inside a `~~replacement~~` no longer inherit Obsidian's strikethrough (2026-08-25)
 - [x] Author colors in settings: a row per author with a color picker, winning over the computed color in the sidebar, live preview and reading view. A new row's picker follows the name until touched (2026-08-25)
 - [x] Fix: settings did not survive sync between devices. Every expand toggle and filter click rewrote data.json from memory, so the last device to click overwrote the other's settings. That state is per device now, and keys left over from old versions are dropped from data.json (2026-08-25)
 - [x] A `%%>>comment<<%%` keeps its text in Obsidian's hidden-text grey and only its blue background is toned down, to the same strength as the red and green inside percent marks. Lifting the text as well made it far brighter than the text around it (2026-08-25)

@@ -42,8 +42,16 @@ export interface AnnotationReviewSettings {
 	filters: AnnotationFilters;
 	/** Hide the syntax and color the text in live preview. */
 	renderInEditor: boolean;
-	/** How an author is shown in live preview and reading view. */
-	authorStyle: AuthorStyle;
+	/**
+	 * How an author is shown in live preview and reading view, on changes
+	 * and on comments separately. A comment on a spot counts as a change:
+	 * it sits among the operators, so its author is shown like theirs.
+	 * Comments on a span and replies are the other group. A line under text
+	 * that is already red or green gets busy, while it stays compact under a
+	 * comment, hence the two defaults.
+	 */
+	changeAuthorStyle: AuthorStyle;
+	commentAuthorStyle: AuthorStyle;
 	/** A colored line down the left edge of every annotated line, in live preview and source mode. */
 	showGutter: boolean;
 	/** Colors chosen per author, winning over the one computed from the name. */
@@ -60,7 +68,8 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	channel: "brace",
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
 	renderInEditor: true,
-	authorStyle: "underline",
+	changeAuthorStyle: "chip",
+	commentAuthorStyle: "underline",
 	showGutter: true,
 	authorColors: {}
 };
@@ -165,16 +174,14 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				);
 
 		toggle("Style annotations in live preview", "Hide the syntax and color the text. It comes back while the caret is inside an annotation.", "renderInEditor");
-		addDropdown(
-			new Setting(containerEl).setName("Authors in the editor").setDesc("In live preview and reading view."),
-			{ underline: "Colored underline", chip: "Chip", none: "Not shown" },
-			settings.authorStyle,
-			async value => {
-				settings.authorStyle = value as AuthorStyle;
+		const authorStyle = (name: string, desc: string, key: "changeAuthorStyle" | "commentAuthorStyle") =>
+			addDropdown(new Setting(containerEl).setName(name).setDesc(desc), { underline: "Colored underline", chip: "Chip", none: "Not shown" }, settings[key], async value => {
+				settings[key] = value as AuthorStyle;
 				await this.plugin.saveSettings();
 				this.plugin.applyEditorSettings();
-			}
-		);
+			});
+		authorStyle("Authors on changes", "Deletions, insertions, replacements and comments on a spot, in live preview and reading view.", "changeAuthorStyle");
+		authorStyle("Authors on comments", "Comments on a span, and replies.", "commentAuthorStyle");
 		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
 
 		new Setting(containerEl)

@@ -20,12 +20,15 @@ import { AuthorStyle } from "./settings";
 
 export interface ReadingSettings {
 	renderInEditor: boolean;
-	authorStyle: AuthorStyle;
+	changeAuthorStyle: AuthorStyle;
+	commentAuthorStyle: AuthorStyle;
 	authorColors: AuthorColors;
 }
 
-/** The chosen colors, set for the duration of one processReadingView call, which is synchronous. */
+/** The chosen colors and styles, set for the duration of one processReadingView call, which is synchronous. */
 let colors: AuthorColors = {};
+let changeStyle: AuthorStyle = "chip";
+let commentStyle: AuthorStyle = "underline";
 
 const META_PREFIX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
 const LABEL_PREFIX = /^\[([^\]]+)\]\s+/;
@@ -73,24 +76,29 @@ function chip(author: string): HTMLElement {
 	return el;
 }
 
-/** The styled replacement for one annotation's inner text, markers included. */
-function render(inner: string, style: AuthorStyle, isProse: boolean): DocumentFragment | null {
+/**
+ * The styled replacement for one annotation's inner text, markers included.
+ * A prose entry is a `{>>...<<}` in running text, which is a reply when it
+ * is attached to something and a comment on a spot otherwise.
+ */
+function render(inner: string, isProse: boolean, attached = false): DocumentFragment | null {
 	const out = document.createDocumentFragment();
-	const withAuthor = (cls: string, text: string, author?: string) => {
-		if (author && style === "chip") out.appendChild(chip(author));
-		out.appendChild(piece(cls, text, author, style));
+	const style = changeStyle;
+	const withAuthor = (cls: string, text: string, author: string | undefined, s: AuthorStyle) => {
+		if (author && s === "chip") out.appendChild(chip(author));
+		out.appendChild(piece(cls, text, author, s));
 	};
 	const n = inner.length;
 	const head = inner.slice(0, 2);
 	const tail = inner.slice(-2);
 	if (n >= 4 && head === "--" && tail === "--") {
 		const { author, rest } = splitAuthor(inner.slice(2, -2), false);
-		withAuthor("arv-del", rest, author);
+		withAuthor("arv-del", rest, author, style);
 		return out;
 	}
 	if (n >= 4 && head === "++" && tail === "++") {
 		const { author, rest } = splitAuthor(inner.slice(2, -2), false);
-		withAuthor("arv-ins", rest, author);
+		withAuthor("arv-ins", rest, author, style);
 		return out;
 	}
 	if (n >= 4 && head === "~~" && tail === "~~") {
@@ -105,7 +113,7 @@ function render(inner: string, style: AuthorStyle, isProse: boolean): DocumentFr
 	}
 	if (isProse || (n >= 4 && head === ">>" && tail === "<<")) {
 		const { author, rest } = splitAuthor(isProse ? inner : inner.slice(2, -2), true);
-		withAuthor("arv-comment", rest, author);
+		withAuthor("arv-comment", rest, author, isProse && attached ? commentStyle : style);
 		return out;
 	}
 	return null;
@@ -136,8 +144,9 @@ const BRACE_COMMENT = /\{>>([\s\S]*?)<<\}/g;
 
 export function processReadingView(root: HTMLElement, settings: ReadingSettings) {
 	if (!settings.renderInEditor) return;
-	const style = settings.authorStyle;
 	colors = settings.authorColors;
+	changeStyle = settings.changeAuthorStyle;
+	commentStyle = settings.commentAuthorStyle;
 
 	// Highlights: the operator marks and author sit inside the <mark>.
 	for (const mark of Array.from(root.querySelectorAll("mark"))) {
@@ -149,8 +158,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			const { author, rest } = splitAuthor(text, false);
 			if (author) {
 				mark.textContent = rest;
-				if (style === "chip") mark.prepend(chip(author));
-				else if (style === "underline") {
+				if (commentStyle === "chip") mark.prepend(chip(author));
+				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
 					mark.style.textDecorationColor = authorColor(author, colors);
 					mark.title = author;
@@ -158,7 +167,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			}
 			continue;
 		}
-		const styled = render(text, style, false);
+		const styled = render(text, false);
 		if (styled) {
 			mark.textContent = "";
 			mark.appendChild(styled);
@@ -168,8 +177,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			const { author, rest } = splitAuthor(text, false);
 			if (author) {
 				mark.textContent = rest;
-				if (style === "chip") mark.prepend(chip(author));
-				else if (style === "underline") {
+				if (commentStyle === "chip") mark.prepend(chip(author));
+				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
 					mark.style.textDecorationColor = authorColor(author, colors);
 					mark.title = author;
@@ -183,7 +192,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		if (insideCode(del) || del.children.length > 0) continue;
 		const text = del.textContent ?? "";
 		if (!text.includes("~>")) continue;
-		const styled = render(`~~${text}~~`, style, false);
+		const styled = render(`~~${text}~~`, false);
 		if (!styled) continue;
 		const inBraces = stripBraces(del);
 		if (!inBraces && !(del.parentElement instanceof HTMLElement && del.parentElement.tagName === "MARK")) continue;
@@ -206,7 +215,9 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		let m: RegExpExecArray | null;
 		while ((m = pattern.exec(data)) !== null) {
 			fragment.appendChild(document.createTextNode(data.slice(last, m.index)));
-			const styled = m[1] !== undefined ? render(m[0].slice(1, -1), style, false) : render(m[4], style, true);
+			// Attached means right after a wrapper: a closing brace, or an element such as a <mark> or <del> this text node follows.
+			const attached = m.index === 0 ? node.previousSibling !== null : data[m.index - 1] === "}";
+			const styled = m[1] !== undefined ? render(m[0].slice(1, -1), false) : render(m[4], true, attached);
 			if (styled) fragment.appendChild(styled);
 			else fragment.appendChild(document.createTextNode(m[0]));
 			last = m.index + m[0].length;
@@ -224,9 +235,9 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		const { author, rest } = splitAuthor(node.data, true);
 		if (!author) continue;
 		node.data = rest;
-		if (style === "chip") first.prepend(chip(author));
-		else if (style === "underline") {
-			const span = piece("", rest, author, style);
+		if (commentStyle === "chip") first.prepend(chip(author));
+		else if (commentStyle === "underline") {
+			const span = piece("", rest, author, commentStyle);
 			node.replaceWith(span);
 		}
 	}
