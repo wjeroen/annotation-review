@@ -673,6 +673,8 @@ del.arv-replace {
 .arv-color-preview {
 	display: flex;
 	justify-content: center;
+	align-items: center;
+	gap: 14px;
 	padding: 4px 0;
 }
 
@@ -680,6 +682,13 @@ del.arv-replace {
 	font-size: 1.3em;
 	padding: 4px 14px;
 	margin: 0;
+}
+
+.arv-color-preview-square {
+	width: 38px;
+	height: 38px;
+	border-radius: 8px;
+	border: 1px solid var(--background-modifier-border);
 }
 
 .arv-color-row {
@@ -693,27 +702,43 @@ del.arv-replace {
 	color: var(--text-muted);
 }
 
+/* The input is a transparent box tall enough for the thumb. The track and
+   thumb are its pseudo elements, fed the gradient and the current color
+   through variables set inline. The thumb is centered on the track by the
+   usual recipe, a top margin of half the difference in height. */
 .arv-color-modal input.arv-color-slider {
 	-webkit-appearance: none;
 	appearance: none;
+	display: block;
 	width: 100%;
 	max-width: none;
-	height: 28px;
+	height: 32px;
 	margin: 0;
 	padding: 0;
-	border-radius: 14px;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+}
+
+.arv-color-modal input.arv-color-slider::-webkit-slider-runnable-track {
+	box-sizing: border-box;
+	height: 24px;
+	border-radius: 12px;
+	background: var(--arv-track);
 	border: 1px solid var(--background-modifier-border);
 }
 
 .arv-color-modal input.arv-color-slider::-webkit-slider-thumb {
 	-webkit-appearance: none;
 	appearance: none;
-	width: 34px;
-	height: 34px;
+	box-sizing: border-box;
+	width: 30px;
+	height: 30px;
+	margin-top: -4px;
 	border-radius: 50%;
-	background: var(--background-primary);
-	border: 2px solid var(--text-normal);
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+	background: var(--arv-thumb);
+	border: 3px solid white;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .arv-color-modal input.arv-color-hex {

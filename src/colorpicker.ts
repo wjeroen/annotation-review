@@ -58,8 +58,11 @@ class ColorModal extends Modal {
 		const { contentEl } = this;
 		let [h, s, l] = hexToHsl(this.hex);
 
+		// The chip is how the color will look in use, at the chip's own
+		// opacity, and the square is the color itself.
 		const preview = contentEl.createDiv({ cls: "arv-color-preview" });
 		const chip = preview.createSpan({ cls: "arv-chip arv-color-preview-chip", text: this.name || "Author" });
+		const square = preview.createDiv({ cls: "arv-color-preview-square" });
 
 		const sliders = {} as Record<"h" | "s" | "l", HTMLInputElement>;
 		const slider = (key: "h" | "s" | "l", label: string, max: number) => {
@@ -97,18 +100,27 @@ class ColorModal extends Modal {
 		const buttons = contentEl.createDiv({ cls: "modal-button-container" });
 		buttons.createEl("button", { cls: "mod-cta", text: "Done" }).addEventListener("click", () => this.close());
 
-		// Each track shows what moving that slider would give.
+		// Each track shows what moving that slider would give, and every thumb
+		// shows the current color. Both go through CSS variables, since the
+		// track and thumb are pseudo elements and inline styles cannot reach them.
 		const update = () => {
 			this.hex = hslToHex(h, s, l);
 			chip.style.backgroundColor = authorBackground(this.name, { [this.name]: this.hex });
+			square.style.backgroundColor = this.hex;
 			hexInput.value = this.hex;
 			sliders.h.value = String(h);
 			sliders.s.value = String(s);
 			sliders.l.value = String(l);
 			const hues = Array.from({ length: 13 }, (_, i) => `hsl(${i * 30}, ${s}%, ${l}%)`).join(", ");
-			sliders.h.style.background = `linear-gradient(to right, ${hues})`;
-			sliders.s.style.background = `linear-gradient(to right, hsl(${h}, 0%, ${l}%), hsl(${h}, 100%, ${l}%))`;
-			sliders.l.style.background = `linear-gradient(to right, hsl(${h}, ${s}%, 0%), hsl(${h}, ${s}%, 50%), hsl(${h}, ${s}%, 100%))`;
+			const tracks = {
+				h: `linear-gradient(to right, ${hues})`,
+				s: `linear-gradient(to right, hsl(${h}, 0%, ${l}%), hsl(${h}, 100%, ${l}%))`,
+				l: `linear-gradient(to right, hsl(${h}, ${s}%, 0%), hsl(${h}, ${s}%, 50%), hsl(${h}, ${s}%, 100%))`
+			};
+			for (const key of ["h", "s", "l"] as const) {
+				sliders[key].style.setProperty("--arv-track", tracks[key]);
+				sliders[key].style.setProperty("--arv-thumb", this.hex);
+			}
 		};
 		update();
 	}
