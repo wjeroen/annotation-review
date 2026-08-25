@@ -34,6 +34,12 @@ export interface AnnotationReviewSettings {
 	 */
 	channel: MetaChannel;
 	filters: AnnotationFilters;
+	/** Hide the syntax and colour the text in live preview. */
+	renderInEditor: boolean;
+	/** Draw author chips in the editor, after a change and before a reply. */
+	showAuthorsInEditor: boolean;
+	/** A coloured line down the left edge of every annotated line, in live preview and source mode. */
+	showGutter: boolean;
 }
 
 /** Plain CriticMarkup out of the box, since that is the standard. */
@@ -44,7 +50,10 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	wrappers: { comment: "brace", delete: "brace", replace: "brace", insert: "brace" },
 	fencedFallback: "brace",
 	channel: "brace",
-	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true }
+	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
+	renderInEditor: true,
+	showAuthorsInEditor: true,
+	showGutter: true
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
@@ -136,5 +145,27 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			}
 		);
+
+		new Setting(containerEl).setName("Editor").setHeading();
+
+		const toggle = (name: string, desc: string, key: "renderInEditor" | "showAuthorsInEditor" | "showGutter") =>
+			new Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addToggle(t =>
+					t.setValue(settings[key]).onChange(async value => {
+						settings[key] = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyEditorSettings();
+					})
+				);
+
+		toggle(
+			"Style annotations in live preview",
+			"Hide the syntax and colour the text: red for what goes, green for what arrives, blue for comments. The syntax always comes back while the caret is inside an annotation.",
+			"renderInEditor"
+		);
+		toggle("Show authors in the editor", "A chip after each change and before each reply. Turn off on notes with a single author, where it is just repetition.", "showAuthorsInEditor");
+		toggle("Show the diff gutter", "A coloured line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncoloured.", "showGutter");
 	}
 }

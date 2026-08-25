@@ -13,6 +13,8 @@ Read this before grepping. Each file owns one job, and most questions are answer
 | `src/compose.ts` | Writing. The syntax for each annotation type, used by the editor commands. |
 | `src/actions.ts` | Rewriting. Works out what text changes for an approve, dismiss, edit, reply, or removal. Pure functions, no Obsidian imports. |
 | `src/view.ts` | The sidebar. All rendering and interaction. |
+| `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
+| `src/authors.ts` | The author colour, shared by the sidebar chips and the editor chips. |
 | `src/settings.ts` | The settings tab and the settings shape. |
 | `src/modals.ts` | The author prompt and the annotation type picker. |
 | `src/types.ts` | Shared types. Start here to understand the data model. |
@@ -76,6 +78,8 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 **Percent marks do not render inside fenced blocks**, admonitions included, so they are ignored there and the commands fall back to a highlight.
 
 **Selecting in the editor needs focus, and reading view has no editor.** A selection made while focus is still in the sidebar is not drawn, and in reading view the CodeMirror calls act on an offscreen instance and appear to do nothing. Scroll to the line there instead.
+
+**Hidden syntax must come back under the caret.** The editor decorations hide wrapper marks, authors and reply markers with `Decoration.replace`, and every one of those is skipped for an annotation the selection touches, so there is never an invisible character being edited. Colours stay on while revealed, only the hiding stops. The decorations live in a `StateField`, not a `ViewPlugin`, because only state-field decorations may hide text that affects line layout. Percent marks are kept visible on purpose, and a footnote reply is left to Obsidian's own footnote rendering with only its label swapped for a chip. Changing a rendering setting swaps the extensions in place and calls `workspace.updateOptions()`, since a registered extension array is reconfigured from, never replaced.
 
 **Obsidian has no caret-moved event.** Caret tracking uses CodeMirror's update listener through `registerEditorExtension`, which fires for every editor, not just the active note. The editor is matched back to its note through the undocumented `editor.cm` on each markdown view, with a fallback to the active file if no view exposes it. After a document change the offsets are stale until the next scan, which recomputes the active card itself.
 

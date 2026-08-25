@@ -2,6 +2,7 @@ import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } 
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan } from "./types";
 import { AnnotationFilters } from "./settings";
+import { authorBackground } from "./authors";
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
 
@@ -24,23 +25,6 @@ interface EditableOptions {
 	clearSpan?: TextSpan;
 	/** Save the text exactly as typed. Annotated text carries its own spaces. */
 	keepWhitespace?: boolean;
-}
-
-/**
- * A stable hue per author name. Two hashes running in opposite directions get
- * mixed so that names sharing a prefix, like "Jeroen W" and "Jeroen B", land
- * far apart on the colour wheel instead of next to each other.
- */
-function authorHue(name: string): number {
-	let h1 = 0;
-	for (let i = 0; i < name.length; i++) {
-		h1 = (h1 * 31 + name.charCodeAt(i)) | 0;
-	}
-	let h2 = 0;
-	for (let i = name.length - 1; i >= 0; i--) {
-		h2 = (h2 * 37 + name.charCodeAt(i)) | 0;
-	}
-	return ((h1 ^ h2) >>> 0) % 360;
 }
 
 /**
@@ -456,7 +440,7 @@ export class AnnotationReviewView extends ItemView {
 			el.style.removeProperty("color");
 			if (author) {
 				el.setText(author);
-				el.style.backgroundColor = `hsla(${authorHue(author)}, 55%, 45%, 0.45)`;
+				el.style.backgroundColor = authorBackground(author);
 				el.style.color = "var(--text-normal)";
 			} else {
 				el.setText("No author");
@@ -625,13 +609,11 @@ export class AnnotationReviewView extends ItemView {
 
 		// The type leads: it is what varies from card to card, and the louder
 		// of the two chips. Same order as the syntax, operator then author.
-		// A comment on a span carries no author of its own, since the span was
-		// written by whoever wrote the note, so no chip there unless there is
-		// one. An operation without an author says so, since that is the
-		// proposal nobody has claimed.
+		// No chip at all without an author: the note does not say who did it,
+		// so the card does not either. Only replies say "No author".
 		const header = card.createEl("div", { cls: "annotation-review-header" });
 		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		if (annotation.author || annotation.type !== "comment") {
+		if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		}
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });

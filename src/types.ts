@@ -88,6 +88,8 @@ export interface Annotation extends Authored {
 	bodySpan?: TextSpan;
 	replacementSpan?: TextSpan;
 	commentSpan?: TextSpan;
+	/** Where the wrapper ends inside `fullMatch`, before any replies. */
+	wrapperLength: number;
 	/** The channel a new reply should use, matching whatever is already there. */
 	nextChannel: MetaChannel;
 }

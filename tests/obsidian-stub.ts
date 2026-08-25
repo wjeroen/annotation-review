@@ -82,6 +82,7 @@ export class Menu {}
 export const MarkdownRenderer = {
 	async render() {}
 };
+export const editorLivePreviewField = {};
 export function setIcon() {}
 export function setTooltip() {}
 export function debounce(cb: any) {

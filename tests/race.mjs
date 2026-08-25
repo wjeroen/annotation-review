@@ -8,7 +8,7 @@ const result = await esbuild.build({
 	format: "cjs",
 	platform: "node",
 	external: [...builtinModules],
-	alias: { obsidian: "./tests/obsidian-stub.ts", "@codemirror/view": "./tests/codemirror-stub.ts" },
+	alias: { obsidian: "./tests/obsidian-stub.ts", "@codemirror/view": "./tests/codemirror-stub.ts", "@codemirror/state": "./tests/codemirror-stub.ts" },
 	write: false
 });
 const mod = { exports: {} };

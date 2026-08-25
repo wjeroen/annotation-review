@@ -455,6 +455,7 @@ function buildAnnotation(
 		bodySpan,
 		replacementSpan: body.replacementSpan,
 		commentSpan,
+		wrapperLength: wrapperEnd - fullStart,
 		// A reply goes after whatever is last, so it matches that one's channel.
 		nextChannel: relative.length ? relative[relative.length - 1].channel : channel
 	};

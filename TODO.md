@@ -12,17 +12,13 @@
 - [ ] Anything in square brackets at the start of an entry is read as the author, so `^[[1] see the appendix]` gets the author "1". Accepted when square brackets were chosen over `{Author}`
 - [ ] Clearing the only author or reason on an entry that has replies after it leaves an empty `^[]` behind, since removing the entry would turn the first reply into the reason. Rare, and it parses, but it is ugly
 
-### Live preview rendering, next
-- [ ] Decorations through `registerEditorExtension`: hide wrapper, operator marks and author while the caret is outside, always reveal raw syntax when it is inside. Red and green text in highlights and braces, low-opacity red and green between visible percent marks. `~>` drawn as an arrow. Nothing inside backticks or code blocks, admonitions excepted. See the Live preview section of the vault's test note for what is decided and what is proposed
-- [ ] A diff gutter, red or green line down the left of changed lines, in live preview and source mode. Source mode keeps the text uncoloured
-- [ ] Reading view through a post processor
-- [ ] Comments: blue underline on the span, reply text inline in the comment colour, not dimmed, not behind an icon
-- [ ] Author chips in the editor, after an operation and before a reply, with a setting to hide them
+### Rendering, still to do
+- [ ] Reading view through a post processor. Braces show as literal text there until then; highlights and footnotes are Obsidian's own; percent marks are stripped by Obsidian
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
 ### Needs checking in Obsidian
 
-The checklist with fixtures is in the vault's Annotation Review Test note.
+The checklist with fixtures is in the vault's Annotation Review Test note. The whole editor rendering in `0.6.0-beta.6` is untested until it has been looked at.
 
 - [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
 - [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
@@ -74,6 +70,8 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Live preview rendering: syntax hidden and text coloured like a diff, red for what goes, green for what arrives, blue for comments, with everything revealed while the caret is inside. Highlights keep their background, percent marks stay visible with fainter text, braces vanish, `~>` becomes an arrow. Brace replies show inline in blue with an author chip in front, footnote replies stay Obsidian footnotes with a blue underline and their label as a chip. Author chips after changes. A diff gutter in live preview and source mode. Three settings, one per part (2026-08-25)
+- [x] No author chip on a card unless the annotation names one. Only unsigned replies say No author (2026-08-25)
 - [x] The author lives inside the wrapper now, `{--{"author":"Claude"}@@text--}` in braces (the CriticMarkup plugin's metadata, so that plugin agrees on every author) and `==--[Claude]@@text--==` elsewhere, terminated by `@@` so the text keeps every space. Every entry after the wrapper is a reply; there is no reason concept anymore, the first reply is shown prominently instead. An author-only footnote is an empty reply. Other metadata fields are kept and ignored (2026-08-25)
 - [x] Braces take only `{~~old~>new~~}` for a replacement, since the CriticMarkup plugin rejects the rest. Highlights and percent marks write `--old~>new++` and also read `--old--++new++` (2026-08-25)
 - [x] Comment inside an annotation always adds a reply. The plus button and reason field are gone. Comment cards show no author chip unless they have one, operations show No author, replies show it when unsigned (2026-08-25)

@@ -7,6 +7,8 @@ import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openReply } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
+import { editorExtensions } from "./src/editor";
+import type { Extension } from "@codemirror/state";
 
 /** How long to wait after the last keystroke before rescanning the note. */
 const RESCAN_DELAY_MS = 400;
@@ -40,12 +42,20 @@ export default class AnnotationReviewPlugin extends Plugin {
 	activeAnnotationId: string | null = null;
 	/** Only the newest scan is allowed to publish its result. */
 	private scanToken = 0;
+	/**
+	 * Registered once and mutated in place, since Obsidian reconfigures the
+	 * editors from the same array when asked to.
+	 */
+	private editorExtensionSlot: Extension[] = [];
 
 	async onload() {
 		await this.loadSettings();
 
 		this.registerView(VIEW_TYPE_ANNOTATION_REVIEW, leaf => new AnnotationReviewView(leaf, this));
 		this.addSettingTab(new AnnotationReviewSettingTab(this.app, this));
+
+		this.editorExtensionSlot.push(...editorExtensions(this.settings));
+		this.registerEditorExtension(this.editorExtensionSlot);
 
 		this.addRibbonIcon("check-check", "Open Annotation Review", () => this.activateView());
 		this.addCommand({
@@ -107,6 +117,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	/** Swaps the editor extensions for ones built from the current settings, in every open editor. */
+	applyEditorSettings() {
+		this.editorExtensionSlot.length = 0;
+		this.editorExtensionSlot.push(...editorExtensions(this.settings));
+		this.app.workspace.updateOptions();
 	}
 
 	async activateView() {
