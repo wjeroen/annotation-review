@@ -728,17 +728,27 @@ del.arv-replace {
 	border: 1px solid var(--background-modifier-border);
 }
 
-.arv-color-modal input.arv-color-slider::-webkit-slider-thumb {
+/* Obsidian styles every range thumb: a relative top offset, and on hover
+   and active a different size, color, border and shadow, from rules that
+   outrank these. So every one of those is pinned here, or the thumb sits
+   off center and changes under the finger. */
+.arv-color-modal input.arv-color-slider::-webkit-slider-thumb,
+.arv-color-modal input.arv-color-slider:hover::-webkit-slider-thumb,
+.arv-color-modal input.arv-color-slider:active::-webkit-slider-thumb {
 	-webkit-appearance: none;
 	appearance: none;
 	box-sizing: border-box;
-	width: 30px;
-	height: 30px;
+	position: static !important;
+	top: 0 !important;
+	width: 30px !important;
+	height: 30px !important;
 	margin-top: -4px;
-	border-radius: 50%;
-	background: var(--arv-thumb);
-	border: 3px solid white;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+	border-radius: 50% !important;
+	background: var(--arv-thumb) !important;
+	border: 3px solid white !important;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+	opacity: 1 !important;
+	transition: none !important;
 }
 
 .arv-color-modal input.arv-color-hex {
