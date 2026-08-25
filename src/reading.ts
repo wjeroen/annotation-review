@@ -128,6 +128,18 @@ function insideCode(node: Node): boolean {
 	return false;
 }
 
+/**
+ * Moves a chip at the start of `el` out in front of the <mark> it sits in,
+ * so the yellow does not run behind it. The editor puts the chip in front
+ * of the wrapper for the same reason.
+ */
+function hoistChip(el: Element) {
+	const first = el.firstElementChild;
+	if (!first || !first.classList.contains("arv-chip")) return;
+	const mark = el.closest("mark");
+	if (mark) mark.before(first);
+}
+
 /** Drops a leading `{` from the text node before `el` and a trailing `}` from the one after, if both are there. */
 function stripBraces(el: Element): boolean {
 	const before = el.previousSibling;
@@ -158,7 +170,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			const { author, rest } = splitAuthor(text, false);
 			if (author) {
 				mark.textContent = rest;
-				if (commentStyle === "chip") mark.prepend(chip(author));
+				if (commentStyle === "chip") mark.before(chip(author));
 				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
 					mark.style.textDecorationColor = authorColor(author, colors);
@@ -171,13 +183,14 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		if (styled) {
 			mark.textContent = "";
 			mark.appendChild(styled);
+			hoistChip(mark);
 		} else {
 			// A comment on a highlighted span, or a plain highlight: Obsidian's
 			// yellow stays. Only an author prefix, if any, is taken off.
 			const { author, rest } = splitAuthor(text, false);
 			if (author) {
 				mark.textContent = rest;
-				if (commentStyle === "chip") mark.prepend(chip(author));
+				if (commentStyle === "chip") mark.before(chip(author));
 				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
 					mark.style.textDecorationColor = authorColor(author, colors);
@@ -199,6 +212,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		del.classList.add("arv-replace");
 		del.textContent = "";
 		del.appendChild(styled);
+		hoistChip(del);
 	}
 
 	// Literal brace syntax in text: deletions, insertions and comments.

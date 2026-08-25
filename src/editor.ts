@@ -1,5 +1,5 @@
 import { EditorState, Extension, Range, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, GutterMarker, gutter } from "@codemirror/view";
+import { Decoration, DecorationSet, EditorView, GutterMarker, WidgetType, gutter } from "@codemirror/view";
 import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
 import { Annotation, Authored, TextSpan } from "./types";
@@ -53,6 +53,35 @@ const authorChip = (author: string, colors: AuthorColors) =>
 	});
 
 /**
+ * The author of an annotation as a widget in front of its wrapper, rather
+ * than a mark on the name inside it. Inside the wrapper the name sits in
+ * Obsidian's own span for the highlight, strikethrough or comment, and a
+ * child cannot undo a parent's background, so the chip took the yellow. In
+ * front of the wrapper it is outside that span and inherits none of it,
+ * while the line's font size still reaches it, so it grows in a heading.
+ * Replies keep the mark form: a footnote's smaller size is set on a span
+ * the widget would sit outside of.
+ */
+class ChipWidget extends WidgetType {
+	constructor(
+		readonly author: string,
+		readonly color: string
+	) {
+		super();
+	}
+	eq(other: ChipWidget) {
+		return other.author === this.author && other.color === this.color;
+	}
+	toDOM() {
+		const el = document.createElement("span");
+		el.className = "arv-chip";
+		el.textContent = this.author;
+		el.style.backgroundColor = this.color;
+		return el;
+	}
+}
+
+/**
  * The decorations for every annotation, given the current selection. Spans
  * come from the parser relative to each annotation, and are shifted to
  * absolute positions here.
@@ -81,13 +110,19 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		 * sits where the syntax puts it and takes the size of its
 		 * surroundings, shrinking inside a footnote.
 		 */
-		const author = (who: Authored, textSpans: TextSpan[], style: AuthorStyle) => {
+		const author = (who: Authored, textSpans: TextSpan[], style: AuthorStyle, before?: number) => {
 			if (!who.authorSpan) return;
 			if (style === "underline" && who.author) {
 				for (const span of textSpans) add(span, authorLine(who.author, settings.authorColors));
 			}
 			if (revealed) return;
 			const s = who.authorSpan;
+			if (style === "chip" && who.author && before !== undefined) {
+				add(s, hide);
+				const widget = new ChipWidget(who.author, authorBackground(who.author, settings.authorColors));
+				ranges.push(Decoration.widget({ widget, side: -1 }).range(base + before));
+				return;
+			}
 			const raw = a.fullMatch.slice(s.start, s.end);
 			const at = who.author && style === "chip" ? raw.indexOf(who.author) : -1;
 			if (at < 0) {
@@ -118,7 +153,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
 		// A comment on a spot sits among the operators, so it follows them.
-		author(a, contentSpans, a.type === "comment" && !a.isPoint ? settings.commentAuthorStyle : settings.changeAuthorStyle);
+		author(a, contentSpans, a.type === "comment" && !a.isPoint ? settings.commentAuthorStyle : settings.changeAuthorStyle, 0);
 		// A footnote reply's line runs over its square brackets, not the ^, so
 		// an empty signed reply still shows who left it.
 		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan], settings.commentAuthorStyle);
