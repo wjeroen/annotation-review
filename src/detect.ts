@@ -15,8 +15,8 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  *
  * Each entry after the wrapper is a footnote `^[...]` or a brace comment
  * `{>>...<<}`, attached by adjacency, and every one of them is a reply with
- * its own author. A `{>>...<<}` or `%%...%%` with nothing in front of it is a
- * comment on that spot rather than on a span.
+ * its own author. A `{>>...<<}` with nothing in front of it is a comment on
+ * that spot rather than on a span.
  */
 
 interface FenceRange extends ExcludedRange {
@@ -375,8 +375,8 @@ function buildAnnotation(
 	insideAdBlock: boolean,
 	channel: MetaChannel,
 	/**
-	 * For a comment on a spot, `{>>note<<}` or `%%note%%`, the wrapper's own
-	 * content: the note itself, with its author. In fullMatch coordinates.
+	 * For a comment on a spot, `{>>note<<}`, the wrapper's own content: the
+	 * note itself, with its author. In fullMatch coordinates.
 	 */
 	selfEntry?: MetaEntry
 ): Built {
@@ -548,9 +548,9 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}
 
-	// Percent marks. With no operator inside, the hidden text is not a span
-	// anyone sees, it is the remark itself, so `%%note%%` is a comment on that
-	// spot, the same as `{>>note<<}`, and may carry an author the same way.
+	// Percent marks. A comment on a hidden span shows its reply, which is the
+	// accepted cost of hiding the span. A bare %%note%% is a plain comment,
+	// the same as a bare highlight, and the filter can hide it.
 	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
 	while ((m = percentRegex.exec(content)) !== null) {
 		const fullStart = m.index;
@@ -561,15 +561,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 			percentRegex.lastIndex = fullStart + delim;
 			continue;
 		}
-		const inner = doubled ? m[1] : m[2];
-		const body = classifyInner(inner, delim);
-		let built: Built;
-		if (body.type === "comment") {
-			const self: MetaEntry = { channel, contentStart: delim, contentEnd: delim + inner.length, fullStart: 0, fullEnd: m[0].length };
-			built = buildAnnotation(content, filePath, fullStart, end, { type: "comment" }, "percent", true, false, channel, self);
-		} else {
-			built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false, channel);
-		}
+		const built = buildAnnotation(content, filePath, fullStart, end, classifyInner(doubled ? m[1] : m[2], delim), "percent", false, false, channel);
 		publish(built);
 		percentRegex.lastIndex = built.annotation.matchEnd;
 	}

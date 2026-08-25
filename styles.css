@@ -537,12 +537,21 @@
 }
 
 /* A replacement in braces is also, to Obsidian, a strikethrough. Only ours
-   loses the line; a genuine ~~strikethrough~~ keeps it. Obsidian sets the
-   line from a more specific selector than a class pair, so this has to be
-   important to apply at all. */
+   loses the line; a genuine ~~strikethrough~~ keeps it. Obsidian puts its
+   class on a span that wraps ours, and a text decoration flows down from a
+   parent, so the parent is what has to lose it, found through :has(). */
+.cm-strikethrough:has(.arv-del),
+.cm-strikethrough:has(.arv-ins),
 .cm-strikethrough.arv-del,
 .cm-strikethrough.arv-ins {
 	text-decoration-line: none !important;
+}
+
+/* The same for a {==commented span==}, which Obsidian also reads as a
+   highlight. The blue replaces the yellow rather than sitting on it. */
+.cm-highlight:has(.arv-comment),
+.cm-highlight.arv-comment {
+	background-color: transparent;
 }
 
 /* Comments and replies sit on a blue background, the way the CriticMarkup

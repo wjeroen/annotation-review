@@ -27,11 +27,7 @@ export interface AnnotationReviewSettings {
 	/** Expanded state carries across notes, and is tracked per tab. */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
-	/**
-	 * The wrapper the commands write, per operation. For a comment, percent
-	 * marks mean the selected text becomes a hidden remark, since a span
-	 * nobody can see cannot be commented on.
-	 */
+	/** The wrapper the commands write, per operation. */
 	wrappers: Record<AnnotationType, Wrapper>;
 	/** Stands in for percent marks inside fenced blocks, where they do not render. */
 	fencedFallback: "brace" | "highlight";
@@ -119,7 +115,6 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		for (const type of Object.keys(OPERATION_LABELS) as AnnotationType[]) {
 			const setting = new Setting(containerEl).setName(OPERATION_LABELS[type]);
-			if (type === "comment") setting.setDesc("With percent marks, the selected text becomes a hidden remark.");
 			addDropdown(setting, WRAPPER_LABELS, settings.wrappers[type], async value => {
 				settings.wrappers[type] = value as Wrapper;
 				await this.plugin.saveSettings();

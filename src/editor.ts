@@ -99,7 +99,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			// A commented highlight keeps Obsidian's own yellow, so a plain
 			// yellow highlight reads as a comment and nothing else does.
 			if (a.type === "comment") {
-				if (a.wrapper !== "highlight") add(a.originalSpan, mark("arv-comment"));
+				if (a.wrapper !== "highlight") add(a.originalSpan, mark("arv-comment" + faint));
 			} else {
 				add(a.originalSpan, mark("arv-del" + faint));
 			}

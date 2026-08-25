@@ -495,7 +495,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel));
 			return;
 		}
-		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author, this.settings.wrappers.comment));
+		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author));
 	}
 
 	private pickAnnotationType(editor: Editor) {

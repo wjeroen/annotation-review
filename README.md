@@ -50,8 +50,9 @@ This is ==--[Claude]@@is --==^[[Claude] The word is repeated.]^[[Alex] Agreed.]a
 A few rules that follow from this:
 
 - A comment on a span needs no author inside the wrapper: the span was written by whoever wrote the note, and the person commenting signs their reply.
-- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span, and an Obsidian `%%comment%%` is exactly the same thing in native syntax: the hidden text is the remark. Both may start with an author, as `{"author":"X"}@@`, `[X]@@` or `[X] `.
-- A bare `==highlight==` is listed as a plain comment on that text, and a bare `%%note%%` as a plain comment on that spot, so nothing in a note goes unseen. The filter button hides both, and that choice is remembered.
+- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span. It may start with an author, as `{"author":"X"}@@` or `[X] `.
+- A commented `%%hidden span%%` shows its reply while the span stays hidden, which is the accepted cost of hiding it.
+- A bare `==highlight==` or `%%hidden text%%` is listed as a plain comment on that text, so nothing in a note goes unseen. The filter button hides both, and that choice is remembered.
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
 - Percent marks do not render inside any fenced block, admonitions included, so use highlights or braces there.
 - A highlight cannot cross a blank line, but braces and percent marks can, which is the only way to insert or delete a paragraph break: `{++\n\n++}`.
@@ -68,7 +69,7 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`, or with percent marks chosen, the selection as a hidden remark. Inside an annotation, a reply. With nothing selected, a comment on that spot | Inside the reply, ready to type |
+| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a `{>>comment<<}` on that spot | Inside the reply, ready to type |
 | Delete | `{--{"author":"Claude"}@@text--}` | At the end |
 | Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
 | Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
@@ -85,7 +86,7 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
 
-Comments and replies sit on a blue background: a `{==commented span==}` and a `{>>reply<<}` with its markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
+Comments and replies sit on a blue background: a `{==commented span==}`, a hidden `%%commented span%%` (fainter, since it is hidden text) and a `{>>reply<<}` with its markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
 
 The author is shown one of three ways, chosen in settings: a line under the text in the author's color, the same color as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
@@ -113,10 +114,10 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
 
 - **Author**: written inside every new annotation and at the start of every reply.
-- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions. For a comment, percent marks turn the selected text into a hidden remark, since a span nobody can see cannot be commented on.
+- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors in the editor** (underline, chip, or none), **Show the diff gutter**: the three parts of the editor rendering, each its own setting. The first two apply to reading view as well.
-- **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style. A comment on a spot follows the comment wrapper instead: `{>>note<<}` with braces, an Obsidian `%%note%%` otherwise.
+- **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style. A comment on a spot is always a `{>>note<<}`.
 
 ## Code block handling
 

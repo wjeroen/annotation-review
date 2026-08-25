@@ -116,14 +116,13 @@ const point = `This is a test{>>What?<<}.`;
 check("a bare brace comment is a comment on a spot", [one(point).type, one(point).isPoint, one(point).originalText, one(point).commentText], ["comment", true, "", "What?"]);
 check("with a label", one(`Text{>>[C] What?<<}`).author, "C");
 check("with metadata", one(`Text{>>${C}What?<<}`).author, "Claude");
-check("a hidden note is the same thing", [one(`%%hidden%%`).type, one(`%%hidden%%`).isPoint, one(`%%hidden%%`).commentText], ["comment", true, "hidden"]);
-check("with no author and nothing attached it is plain", one(`%%hidden%%`).isPlain, true);
-check("a hidden note with a label", shape(one(`%%[Claude] hidden%%`)), ["comment", "Claude", "", null, null, []]);
-check("a hidden note with the light form", one(`%%[Claude]@@hidden%%`).author, "Claude");
-check("and is not plain then", one(`%%[Claude] hidden%%`).isPlain, false);
-check("an entry after a note is a reply", one(`%%What?%%^[[Joe] A test.]`).replies.map(r => [r.author, r.text]), [["Joe", "A test."]]);
-check("the doubled form works the same", shape(one(`%%%%[C] hidden%%%%`)), ["comment", "C", "", null, null, []]);
-check("dismissing removes it whole", dismiss(`A %%T%%^[note] B`), "A  B");
+check("a hidden span with nothing attached is a plain comment on it", [one(`%%hidden%%`).type, one(`%%hidden%%`).isPoint, one(`%%hidden%%`).originalText, one(`%%hidden%%`).isPlain], ["comment", false, "hidden", true]);
+check("a label without @@ inside percent marks is just text", shape(one(`%%[Claude] hidden%%`)), ["comment", null, "[Claude] hidden", null, null, []]);
+check("the light form names the author", shape(one(`%%[Claude]@@hidden%%`)), ["comment", "Claude", "hidden", null, null, []]);
+check("and is not plain then", one(`%%[Claude]@@hidden%%`).isPlain, false);
+check("a reply on a hidden span shows, the accepted cost", one(`%%What?%%^[[Joe] A test.]`).replies.map(r => [r.author, r.text]), [["Joe", "A test."]]);
+check("the doubled form works the same", shape(one(`%%%%[C]@@hidden%%%%`)), ["comment", "C", "hidden", null, null, []]);
+check("dismissing a hidden commented span restores it", dismiss(`A %%T%%^[note] B`), "A T B");
 check("one attached to an annotation is not a point comment", all(`{--is --}{>>[C] r<<}`).length, 1);
 check("after a space it is", all(`text {>>x<<}`).map(a => a.isPoint), [true]);
 
@@ -174,9 +173,9 @@ check("add in braces writes metadata", setAuthor(`{--T--}`, "Claude"), `{--${C}T
 check("add in a highlight writes the light form", setAuthor(`==--T--==`, "Claude"), `==--[Claude]@@T--==`);
 check("add on a replacement, before the old text", setAuthor(`==--old~>new++==`, "Claude"), `==--[Claude]@@old~>new++==`);
 check("add on a span comment", setAuthor(`==T==^[note]`, "Claude"), `==[Claude]@@T==^[note]`);
-check("add on a hidden note, as a label", setAuthor(`%%note%%`, "Claude"), `%%[Claude] note%%`);
+check("add on a hidden span, the light form", setAuthor(`%%note%%`, "Claude"), `%%[Claude]@@note%%`);
 check("add on a brace point comment, as metadata", setAuthor(`A{>>note<<}`, "Claude"), `A{>>${C}note<<}`);
-check("clear a label from a hidden note", setAuthor(`%%[Claude] note%%`, ""), `%%note%%`);
+check("clear it again", setAuthor(`%%[Claude]@@note%%`, ""), `%%note%%`);
 const withReply = `{--T--}^[why]`;
 check("add to a footnote reply, as a label", setAuthor(withReply, "Alex", a => a.replies[0]), `{--T--}^[[Alex] why]`);
 const withBraceReply = `{--T--}{>>why<<}`;
@@ -196,7 +195,7 @@ check("the new half, arrow form", setSpan(`==--a~>b++==`, "replacementSpan", "c"
 check("the new half, fused form", setSpan(`==--a--++b++==`, "replacementSpan", "c"), `==--a--++c++==`);
 check("the new half, tilde form", setSpan(`{~~a~>b~~}`, "replacementSpan", "c"), `{~~a~>c~~}`);
 check("the inserted text, spaces included", setSpan(`%%++[C]@@X++%%`, "bodySpan", "Y "), `%%++[C]@@Y ++%%`);
-check("a hidden note's text", setSpan(`%%[C] note%%`, "commentSpan", "other"), `%%[C] other%%`);
+check("a hidden span's text", setSpan(`%%[C]@@note%%`, "originalSpan", "other"), `%%[C]@@other%%`);
 check("a reply's text", (() => { const d = `{--T--}^[[A] why]`; const r = one(d).replies[0]; return computeSpanReplace(d, one(d), r.textSpan.start, r.textSpan.end, "because").newContent; })(), `{--T--}^[[A] because]`);
 check("a point comment has no text span", one(`A{>>x<<}`).originalSpan, undefined);
 
@@ -247,8 +246,8 @@ function fill(composed, typed) {
 check("comment, CriticMarkup throughout", composeComment("Sel.", "Claude", "brace", "brace").text, `{==Sel.==}{>>${C}<<}`);
 check("and it reads back", shape(one(fill(composeComment("Sel.", "Claude", "brace", "brace"), "My note."))), ["comment", null, "Sel.", null, null, [["Claude", "My note."]]]);
 check("comment, highlight and footnote", shape(one(fill(composeComment("Sel.", "C", "highlight", "footnote"), "My note."))), ["comment", null, "Sel.", null, null, [["C", "My note."]]]);
-check("comment with percent marks turns the selection into a hidden remark", composeComment("Sel.", "C", "percent", "footnote").text, `%%[C] Sel.%%`);
-check("and it reads back as a comment on a spot", shape(one(composeComment("Sel.", "C", "percent", "footnote").text)), ["comment", "C", "", null, null, []]);
+check("comment with percent marks hides the span and shows the reply", composeComment("Sel.", "C", "percent", "footnote").text, `%%Sel.%%^[[C] ]`);
+check("and it reads back as a comment on that span", shape(one(fill(composeComment("Sel.", "C", "percent", "footnote"), "hm"))), ["comment", null, "Sel.", null, null, [["C", "hm"]]]);
 check("a comment opens a reply even without an author", shape(one(fill(composeComment("Sel.", "", "brace", "brace"), "note"))), ["comment", null, "Sel.", null, null, [[null, "note"]]]);
 check("delete writes the author inside, metadata in braces", composeDelete("Sel.", "Claude", "brace").text, `{--${C}Sel.--}`);
 check("delete, light form in a highlight", composeDelete("Sel.", "Claude", "highlight").text, `==--[Claude]@@Sel.--==`);
@@ -269,9 +268,8 @@ check("an open reply, brace", openReply("Claude", "brace"), { text: `{>>${C}<<}`
 check("an open reply, footnote", openReply("C", "footnote"), { text: "^[[C] ]", cursor: 6 });
 check("an open reply without an author", openReply("", "footnote"), { text: "^[]", cursor: 2 });
 check("a finished reply", replyEntry("Claude", "ok", "brace"), `{>>${C}ok<<}`);
-check("a comment on a spot, braces", composePointComment("Claude", "brace"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
-check("a comment on a spot, any other wrapper", composePointComment("C", "highlight"), { text: "%%[C] %%", cursor: 6 });
-check("both read back as the same thing", [one(fill(composePointComment("C", "brace"), "hm")).commentText, one(fill(composePointComment("C", "percent"), "hm")).commentText], ["hm", "hm"]);
+check("a comment on a spot is always a brace comment", composePointComment("Claude"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
+check("and reads back as one", one(fill(composePointComment("Claude"), "hm")).commentText, "hm");
 // A nested insert only makes sense written into a surrounding one, so check
 // that the whole thing still reads as three separate inserts afterwards.
 const surrounding = `%%++[C]@@Before. After.++%%`;
