@@ -23,6 +23,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The sidebar's edit box and reply field size themselves to their text and grow while typing, so a long annotation is edited in a box that shows all of it (2026-08-25)
 - [x] Settings that sync brings in are reloaded and redrawn on arrival, through Obsidian's external settings change hook, rather than at the next restart (2026-08-25)
 - [x] The chip for an annotation's author is a widget in front of the wrapper, outside Obsidian's highlight, strikethrough or comment span, so it gets no yellow, no line and no grey. Reading view moves the chip in front of the `<mark>` too. Reply chips stay marks on the name, so they still shrink in a footnote (2026-08-25)
 - [x] The author style is two settings, one for changes and one for comments on a span and replies, a comment on a spot counting as a change. Chips inside a `~~replacement~~` no longer inherit Obsidian's strikethrough (2026-08-25)

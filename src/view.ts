@@ -4,6 +4,20 @@ import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan } from 
 import { AnnotationFilters } from "./settings";
 import { authorBackground } from "./authors";
 
+/**
+ * Sizes a textarea to its content, so it shows every line and grows as more
+ * are typed. The height is set from scratch each time, so it shrinks too.
+ */
+function fitToContent(field: HTMLTextAreaElement) {
+	field.style.height = "auto";
+	const style = getComputedStyle(field);
+	const extra =
+		style.boxSizing === "border-box"
+			? field.offsetHeight - field.clientHeight
+			: -(parseFloat(style.paddingTop) + parseFloat(style.paddingBottom));
+	field.style.height = `${field.scrollHeight + extra}px`;
+}
+
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
 
 const TYPE_LABELS: Record<AnnotationType, string> = {
@@ -381,10 +395,12 @@ export class AnnotationReviewView extends ItemView {
 			evt.stopPropagation();
 			el.empty();
 			el.removeClass("annotation-review-whitespace");
-			const input = el.createEl("textarea", { cls: "annotation-review-edit-input" });
+			const input = el.createEl("textarea", { cls: "annotation-review-edit-input", attr: { rows: "1" } });
 			input.value = text;
+			input.addEventListener("input", () => fitToContent(input));
 			input.focus();
 			input.select();
+			fitToContent(input);
 
 			let committed = false;
 			const commit = () => {
@@ -497,16 +513,20 @@ export class AnnotationReviewView extends ItemView {
 		prefill?: { value: string; cursor: number }
 	) {
 		const form = container.createEl("div", { cls: "annotation-review-inline-form is-hidden" });
-		const input = form.createEl("input", {
+		// A textarea rather than an input so a long reply wraps and the field
+		// grows with it. Enter still submits, and any newline a paste brings
+		// in becomes a space, since an entry is one line in the note.
+		const input = form.createEl("textarea", {
 			cls: "annotation-review-inline-input",
-			attr: { type: "text", placeholder }
+			attr: { rows: "1", placeholder }
 		});
+		input.addEventListener("input", () => fitToContent(input));
 		const sendBtn = form.createEl("button", { cls: "clickable-icon" });
 		setIcon(sendBtn, "send");
 		setTooltip(sendBtn, "Save");
 
 		const submit = () => {
-			const text = input.value.trim();
+			const text = input.value.replace(/\s*\n\s*/g, " ").trim();
 			input.blur();
 			// Submitting an empty field, including one left at just its
 			// prefilled brackets, closes it. Otherwise there is no way to put
@@ -539,6 +559,8 @@ export class AnnotationReviewView extends ItemView {
 				form.toggleClass("is-hidden", !wasHidden);
 				if (!wasHidden) return;
 				if (prefill) input.value = prefill.value;
+				// Only now that it is shown, since a hidden field measures as empty.
+				fitToContent(input);
 				input.focus();
 				if (prefill) input.setSelectionRange(prefill.cursor, prefill.cursor);
 			}
