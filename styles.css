@@ -547,16 +547,10 @@
 	text-decoration-line: none !important;
 }
 
-/* The same for a {==commented span==}, which Obsidian also reads as a
-   highlight. The blue replaces the yellow rather than sitting on it. */
-.cm-highlight:has(.arv-comment),
-.cm-highlight.arv-comment {
-	background-color: transparent;
-}
-
 /* Comments and replies sit on a blue background, the way the CriticMarkup
-   plugin's inline comments do. A commented highlight keeps its own yellow
-   instead, so a plain yellow highlight reads as a comment. */
+   plugin's inline comments do. The span a comment is about is never blue:
+   it keeps Obsidian's yellow in a highlight and in braces, and is only
+   fainter in percent marks. */
 .arv-comment {
 	background-color: color-mix(in srgb, var(--color-blue, var(--interactive-accent)) 22%, transparent);
 	border-radius: 2px;
@@ -584,14 +578,8 @@
 	color: var(--text-normal);
 }
 
-/* Reading view uses the same classes. A brace comment span rendered by
-   Obsidian as a <mark> goes blue instead of yellow, and a replacement
-   rendered as a <del> loses its line. */
-mark.arv-comment {
-	background-color: color-mix(in srgb, var(--color-blue, var(--interactive-accent)) 22%, transparent);
-	color: inherit;
-}
-
+/* Reading view uses the same classes. A replacement rendered by Obsidian as
+   a <del> loses its line. */
 del.arv-replace {
 	text-decoration: none;
 }

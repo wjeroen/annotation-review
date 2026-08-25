@@ -139,8 +139,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		if (insideCode(mark) || mark.children.length > 0) continue;
 		const text = mark.textContent ?? "";
 		if (stripBraces(mark)) {
-			// {==text==}: CriticMarkup's own comment span, blue rather than yellow.
-			mark.classList.add("arv-comment", "arv-brace-mark");
+			// {==text==}: CriticMarkup's own comment span, which keeps
+			// Obsidian's yellow the way a commented highlight does.
 			const { author, rest } = splitAuthor(text, false);
 			if (author) {
 				mark.textContent = rest;

@@ -96,13 +96,12 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 
 		// Colors stay on while revealed, only the hiding stops.
 		if (a.originalSpan) {
-			// A commented highlight keeps Obsidian's own yellow, so a plain
-			// yellow highlight reads as a comment and nothing else does.
-			if (a.type === "comment") {
-				if (a.wrapper !== "highlight") add(a.originalSpan, mark("arv-comment" + faint));
-			} else {
-				add(a.originalSpan, mark("arv-del" + faint));
-			}
+			// The span a comment is about gets no color of its own. Obsidian's
+			// yellow already marks it in a highlight and in braces, where blue
+			// on top came out green, and a percent mark's fainter text already
+			// shows what was selected. Only the comment itself goes blue.
+			if (a.type !== "comment") add(a.originalSpan, mark("arv-del" + faint));
+			else if (faint) add(a.originalSpan, mark(faint.trim()));
 		}
 		if (a.bodySpan) add(a.bodySpan, mark("arv-ins" + faint));
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
