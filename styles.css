@@ -542,11 +542,12 @@
 	color: color-mix(in srgb, var(--color-green, var(--text-success)) 60%, var(--text-faint));
 }
 
-/* A comment on a spot inside percent marks: the text and the blue both at
-   the same reduced strength as the red and green above, so nothing inside
-   the marks is louder than anything else there. */
+/* A comment on a spot inside percent marks: the blue at the same reduced
+   strength as the red and green above, the text left in Obsidian's grey.
+   Lifting the text by the same ratio made it far brighter than the hidden
+   text around it, since normal text is much further from the grey than
+   red or green are. */
 .arv-faint.arv-comment {
-	color: color-mix(in srgb, var(--text-normal) 60%, var(--text-faint));
 	background-color: color-mix(in srgb, var(--color-blue, var(--interactive-accent)) 13%, transparent);
 }
 

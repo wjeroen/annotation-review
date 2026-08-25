@@ -23,7 +23,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
-- [x] A `%%>>comment<<%%` is toned down like everything else inside percent marks, text and blue background both, so it is no longer the darkest text on the loudest background in the wrapper (2026-08-25)
+- [x] A `%%>>comment<<%%` keeps its text in Obsidian's hidden-text grey and only its blue background is toned down, to the same strength as the red and green inside percent marks. Lifting the text as well made it far brighter than the text around it (2026-08-25)
 - [x] Text inside percent marks is no fainter than Obsidian already makes it. An extra opacity from beta.6 sat on top of Obsidian's grey, which the blue background had been masking. Red and green inside percent marks are mixed toward that grey instead. A plain `{==highlight==}` or `%%note%%` is drawn like an annotated one, marks hidden and a gutter line, rather than left raw (2026-08-25)
 - [x] The span a comment is about is no longer blue, in live preview or reading view. In braces the blue sat on Obsidian's yellow and came out green, and in percent marks the fainter text already shows the span. Only the comment text is blue (2026-08-25)
 - [x] One replacement form, `~~old~>new~~`, in every wrapper. The arrow and fused variants are gone, since the rendering removes Obsidian's strikethrough anyway. An unsigned `>>` comment is no longer mistaken for a plain highlight, which had kept it from rendering (2026-08-25)
