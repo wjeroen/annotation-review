@@ -8,7 +8,7 @@ const result = await esbuild.build({
 	format: "cjs",
 	platform: "node",
 	external: [...builtinModules],
-	alias: { obsidian: "./tests/obsidian-stub.ts" },
+	alias: { obsidian: "./tests/obsidian-stub.ts", "@codemirror/view": "./tests/codemirror-stub.ts" },
 	write: false
 });
 const mod = { exports: {} };
@@ -28,8 +28,8 @@ function check(label, actual, expected) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const NOTES = {
-	"A.md": "Note A: ==alpha text==^[[Claude] delete]",
-	"B.md": "Note B: ==bravo text==^[[GPT] delete]"
+	"A.md": "Note A: ==--alpha text--==^[[Claude]]",
+	"B.md": "Note B: ==--bravo text--==^[[GPT]]"
 };
 
 /** Reads resolve after a per-file delay, so completion order can be controlled. */

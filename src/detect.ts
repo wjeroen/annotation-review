@@ -1,4 +1,19 @@
-import { AdmonitionBlock, Annotation, AnnotationReply, ExcludedRange, InsertContext, InsertForm, InsertPoint, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedRange, InsertContext, InsertPoint, MetaChannel, TextSpan, Wrapper } from "./types";
+
+/*
+ * The grammar, in one line:
+ *
+ *     <wrapper> <op> text <op> </wrapper> <entry>*
+ *
+ * The wrapper is `{...}`, `==...==` or `%%...%%` and only decides how the note
+ * shows the text. The operator inside is `--` (delete), `++` (insert), or a
+ * replacement written as `--old~>new++`, `--old--++new++` or `~~old~>new~~`.
+ * No operator means a comment on the wrapped text. Each entry after the
+ * wrapper is a footnote `^[...]` or a brace comment `{>>...<<}`, attached by
+ * adjacency. The first entry carries `[Author]` and the reason, every entry
+ * after it is a reply. A `{>>...<<}` with nothing in front of it is a comment
+ * on that spot rather than on a span.
+ */
 
 interface FenceRange extends ExcludedRange {
 	isAdBlock: boolean;
@@ -7,50 +22,43 @@ interface FenceRange extends ExcludedRange {
 	bodyEnd: number;
 }
 
-/** A footnote's ranges, in whatever coordinate space the caller passed in. */
-interface FootnoteSpan {
-	content: string;
-	/** Just the content, between `^[` and `]`. */
-	start: number;
-	end: number;
-	/** The whole footnote including its `^[` and `]` delimiters. */
+/**
+ * One footnote or brace comment attached to an annotation. Coordinates are
+ * absolute while scanning and relative to `fullMatch` once stored.
+ */
+interface MetaEntry {
+	channel: MetaChannel;
+	contentStart: number;
+	contentEnd: number;
 	fullStart: number;
 	fullEnd: number;
 }
 
-interface RawHighlightMatch {
-	fullStart: number;
-	matchEnd: number;
-	isPlusWrapped: boolean;
-	innerText: string;
-	/** The inner text's range inside fullMatch. */
-	innerSpan: TextSpan;
-	/** Length of the `==...==` part, so a new footnote can be placed right after it. */
-	highlightLen: number;
-	footnotes: FootnoteSpan[];
-	fullMatch: string;
+/** The operation an annotation performs, and where its text sits inside `fullMatch`. */
+interface Body {
+	type: AnnotationType;
+	originalSpan?: TextSpan;
+	bodySpan?: TextSpan;
+	replacementSpan?: TextSpan;
 }
 
 const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
-const HIGHLIGHT_REGEX = /==(\+\+)?([\s\S]+?)\1==/g;
-const FOOTNOTE_REGEX = /^\^\[((?:\[[^\]]*\])?[^\]]*)\]/;
+const HIGHLIGHT_REGEX = /==([\s\S]+?)==/g;
+const PERCENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
+const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
+const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
+const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
 const AUTHOR_REGEX = /^\[([^\]]+)\]\s*/;
-// Each of these splits into keyword, separator, then reason, so the reason can
-// be removed along with the separator that introduces it.
-const ARROW_REPLACE_REGEX = /^(→\s*")([^"]*)(")(\s*,?\s*)([\s\S]*)$/;
-const DELETE_REGEX = /^(delete\b)(\s*,?\s*)([\s\S]*)$/i;
-const INSERT_KEYWORD_REGEX = /^(insert\b)(\s*,?\s*)([\s\S]*)$/i;
-/**
- * Stricter than INSERT_KEYWORD_REGEX, for the forms where a trailing footnote
- * could just as easily be a reply. "insert" and "insert, reason" match, while
- * a reply like "insert reads well here" does not, so replies aren't swallowed
- * as reasons.
- */
-const INSERT_REASON_REGEX = /^insert\b[ \t]*(?:,[ \t]*([\s\S]*))?$/i;
-const NATIVE_COMMENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
 const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
+
+const BRACE_OPENERS = new Set(["{--", "{++", "{~~", "{==", "{>>"]);
+const BRACE_CLOSERS = new Set(["--}", "++}", "~~}", "==}", "<<}"]);
+
+function rangeAt(pos: number, ranges: ExcludedRange[]): ExcludedRange | undefined {
+	return ranges.find(r => pos >= r.start && pos < r.end);
+}
 
 function hasDelimiterInsideRanges(start: number, end: number, ranges: ExcludedRange[]): boolean {
 	return ranges.some(range =>
@@ -76,12 +84,6 @@ function makeId(filePath: string, start: number, fullMatch: string): string {
 	return `ann-${start}-${hash}`;
 }
 
-function skipWhitespace(text: string, index: number, end: number): number {
-	let i = index;
-	while (i < end && /\s/.test(text[i])) i++;
-	return i;
-}
-
 /** The span of [start, end) with surrounding whitespace trimmed off both ends. */
 function trimmedSpan(text: string, start: number, end: number): TextSpan {
 	let s = start;
@@ -93,28 +95,25 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 
 interface AuthorParse {
 	author?: string;
+	/** The label plus the whitespace after it. */
 	authorSpan?: TextSpan;
-	authorInsertAt: number;
-	/** Where the content after the author label begins. */
+	/** Right after the label's closing bracket, before any whitespace. */
+	labelEnd: number;
 	restStart: number;
 }
 
 /** Reads a leading `[Author] ` label out of a segment of `text`. */
 function parseAuthorAt(text: string, contentStart: number, contentEnd: number): AuthorParse {
-	const segment = text.slice(contentStart, contentEnd);
-	const m = AUTHOR_REGEX.exec(segment);
+	const m = AUTHOR_REGEX.exec(text.slice(contentStart, contentEnd));
 	if (m) {
 		return {
 			author: m[1],
 			authorSpan: { start: contentStart, end: contentStart + m[0].length },
-			authorInsertAt: contentStart,
+			labelEnd: contentStart + m[1].length + 2,
 			restStart: contentStart + m[0].length
 		};
 	}
-	return {
-		authorInsertAt: contentStart,
-		restStart: skipWhitespace(text, contentStart, contentEnd)
-	};
+	return { labelEnd: contentStart, restStart: contentStart };
 }
 
 function getFenceRanges(content: string): FenceRange[] {
@@ -171,7 +170,7 @@ function getFenceRanges(content: string): FenceRange[] {
 
 function collectRanges(content: string, pattern: RegExp): ExcludedRange[] {
 	const ranges: ExcludedRange[] = [];
-	const regex = new RegExp(pattern);
+	const regex = new RegExp(pattern.source, "g");
 	let m: RegExpExecArray | null;
 	while ((m = regex.exec(content)) !== null) {
 		ranges.push({ start: m.index, end: m.index + m[0].length });
@@ -180,389 +179,272 @@ function collectRanges(content: string, pattern: RegExp): ExcludedRange[] {
 }
 
 /**
- * Reads a run of footnotes (`^[a]^[b]`) from the start of `rest`, returning
- * each one's content span relative to `rest` plus how much text they consumed.
+ * Reads the run of entries attached at `from`: footnotes and brace comments in
+ * any mix, each one starting exactly where the previous one ended.
  */
-function extractFootnotes(rest: string): { footnotes: FootnoteSpan[]; consumedLength: number } {
-	const footnotes: FootnoteSpan[] = [];
-	let pos = 0;
+function extractMeta(content: string, from: number): MetaEntry[] {
+	const entries: MetaEntry[] = [];
+	const footnote = new RegExp(FOOTNOTE_REGEX.source, "y");
+	const braceComment = new RegExp(BRACE_COMMENT_REGEX.source, "y");
+	let pos = from;
 	for (;;) {
-		const m = FOOTNOTE_REGEX.exec(rest.slice(pos));
-		if (!m) break;
-		const contentStart = pos + 2; // past the opening "^["
-		footnotes.push({
-			content: m[1],
-			start: contentStart,
-			end: contentStart + m[1].length,
-			fullStart: pos,
-			fullEnd: pos + m[0].length
-		});
-		pos += m[0].length;
-	}
-	return { footnotes, consumedLength: pos };
-}
-
-/** Shifts footnote spans from `rest` coordinates into `fullMatch` coordinates. */
-function shiftFootnotes(footnotes: FootnoteSpan[], offset: number): FootnoteSpan[] {
-	return footnotes.map(f => ({
-		content: f.content,
-		start: f.start + offset,
-		end: f.end + offset,
-		fullStart: f.fullStart + offset,
-		fullEnd: f.fullEnd + offset
-	}));
-}
-
-function parseReplies(fullMatch: string, footnotes: FootnoteSpan[]): AnnotationReply[] {
-	return footnotes.map(fn => {
-		const parsed = parseAuthorAt(fullMatch, fn.start, fn.end);
-		const textSpan = trimmedSpan(fullMatch, parsed.restStart, fn.end);
-		return {
-			author: parsed.author,
-			authorSpan: parsed.authorSpan,
-			authorInsertAt: parsed.authorInsertAt,
-			text: fullMatch.slice(textSpan.start, textSpan.end),
-			textSpan,
-			fullSpan: { start: fn.fullStart, end: fn.fullEnd }
-		};
-	});
-}
-
-function findHighlightMatches(content: string, excludedRanges: ExcludedRange[]): RawHighlightMatch[] {
-	const matches: RawHighlightMatch[] = [];
-	const regex = new RegExp(HIGHLIGHT_REGEX);
-	let m: RegExpExecArray | null;
-	while ((m = regex.exec(content)) !== null) {
-		const fullStart = m.index;
-		const highlightEnd = m.index + m[0].length;
-		const isPlusWrapped = !!m[1];
-		const innerText = m[2];
-
-		if (/\n\s*\n/.test(innerText)) {
-			// This pairing is almost certainly wrong, most likely the opening
-			// == is stray text (someone typing == literally, e.g. describing
-			// the syntax itself) rather than a real delimiter, and it happened
-			// to pair with a real annotation's opening ==. Only the first ==
-			// gets treated as consumed, so the second one gets a fresh chance
-			// to pair with its own real closing ==. Without this, one stray ==
-			// desyncs every real annotation for the rest of the file.
-			regex.lastIndex = fullStart + (isPlusWrapped ? 4 : 2);
-			continue;
+		let entry: MetaEntry | null = null;
+		if (content.startsWith("^[", pos)) {
+			footnote.lastIndex = pos;
+			const m = footnote.exec(content);
+			if (m) entry = { channel: "footnote", contentStart: pos + 2, contentEnd: pos + 2 + m[1].length, fullStart: pos, fullEnd: pos + m[0].length };
+		} else if (content.startsWith("{>>", pos)) {
+			braceComment.lastIndex = pos;
+			const m = braceComment.exec(content);
+			if (m) entry = { channel: "brace", contentStart: pos + 3, contentEnd: pos + 3 + m[1].length, fullStart: pos, fullEnd: pos + m[0].length };
 		}
-
-		const rest = content.slice(highlightEnd);
-		const { footnotes, consumedLength } = extractFootnotes(rest);
-		const matchEnd = highlightEnd + consumedLength;
-
-		if (hasDelimiterInsideRanges(fullStart, matchEnd, excludedRanges)) {
-			// Same recovery as above. One delimiter of this pair sits in code
-			// or a link, so the pairing is wrong rather than the annotation
-			// being invalid. Text that merely mentions the syntax, like a
-			// backticked ==, would otherwise swallow the opening delimiter of
-			// the next real annotation and shift every pairing after it.
-			regex.lastIndex = fullStart + (isPlusWrapped ? 4 : 2);
-			continue;
-		}
-
-		const highlightLen = highlightEnd - fullStart;
-		const innerStart = isPlusWrapped ? 4 : 2;
-		matches.push({
-			fullStart,
-			matchEnd,
-			isPlusWrapped,
-			innerText,
-			innerSpan: { start: innerStart, end: innerStart + innerText.length },
-			highlightLen,
-			footnotes: shiftFootnotes(footnotes, highlightLen),
-			fullMatch: content.slice(fullStart, matchEnd)
-		});
+		if (!entry) break;
+		entries.push(entry);
+		pos = entry.fullEnd;
 	}
-	return matches;
+	return entries;
+}
+
+interface FirstEntry {
+	author?: string;
+	authorSpan?: TextSpan;
+	authorClearSpan?: TextSpan;
+	authorInsert?: InsertPoint;
+	text: string;
+	reasonSpan?: TextSpan;
+	reasonClearSpan?: TextSpan;
+	reasonInsert?: InsertPoint;
+	nextChannel: MetaChannel;
 }
 
 /**
- * Pulls an optional reason out of a footnote that reads like `insert` or
- * `insert, reason`. Returns null when the footnote is something else, which
- * means it belongs to the replies instead.
+ * The first entry carries the author and the reason. Every field also records
+ * how to add, change or remove it, since the sidebar edits them in place.
+ * Without an entry at all, both get a whole new footnote.
  */
-function readInsertReasonFootnote(
-	fullMatch: string,
-	footnote: FootnoteSpan
-): {
-	author?: string;
-	authorSpan?: TextSpan;
-	authorInsertAt: number;
-	reason?: string;
-	reasonSpan?: TextSpan;
-	reasonInsertAt: number;
-	/** This footnote exists only to carry the reason, so clearing it removes the lot. */
-	footnoteSpan: TextSpan;
-} | null {
-	const parsed = parseAuthorAt(fullMatch, footnote.start, footnote.end);
-	const segment = fullMatch.slice(parsed.restStart, footnote.end);
-	const m = INSERT_REASON_REGEX.exec(segment.trim());
-	if (!m) return null;
-
-	const contentEnd = trimmedSpan(fullMatch, parsed.restStart, footnote.end).end;
-	const footnoteSpan = { start: footnote.fullStart, end: footnote.fullEnd };
-	if (m[1] && m[1].trim()) {
-		const reasonStart = fullMatch.lastIndexOf(m[1].trim(), contentEnd);
+function parseFirst(fullMatch: string, entry: MetaEntry | undefined, wrapperEnd: number, hasReplies: boolean): FirstEntry {
+	if (!entry) {
 		return {
-			author: parsed.author,
-			authorSpan: parsed.authorSpan,
-			authorInsertAt: parsed.authorInsertAt,
-			reason: m[1].trim(),
-			reasonSpan: { start: reasonStart, end: reasonStart + m[1].trim().length },
-			reasonInsertAt: contentEnd,
-			footnoteSpan
+			text: "",
+			authorInsert: { at: wrapperEnd, prefix: "^[[", suffix: "]]" },
+			reasonInsert: { at: wrapperEnd, prefix: "^[", suffix: "]" },
+			nextChannel: "footnote"
 		};
 	}
+	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd);
+	const textSpan = trimmedSpan(fullMatch, a.restStart, entry.contentEnd);
+	const text = fullMatch.slice(textSpan.start, textSpan.end);
+	const hasText = text.length > 0;
+	const whole = { start: entry.fullStart, end: entry.fullEnd };
+	const out: FirstEntry = { author: a.author, authorSpan: a.authorSpan, text, nextChannel: entry.channel };
+
+	if (a.author) {
+		// Removing the last thing in an entry removes the entry, unless replies
+		// follow it, since the first entry is what makes them replies.
+		out.authorClearSpan = hasText || hasReplies ? a.authorSpan : whole;
+	} else {
+		out.authorInsert = { at: entry.contentStart, prefix: "[", suffix: hasText ? "] " : "]" };
+	}
+
+	if (hasText) {
+		out.reasonSpan = textSpan;
+		out.reasonClearSpan = a.author
+			? { start: a.labelEnd, end: entry.contentEnd }
+			: hasReplies ? { start: entry.contentStart, end: entry.contentEnd } : whole;
+	} else {
+		const needsSpace = !!a.author && a.labelEnd === entry.contentEnd;
+		out.reasonInsert = { at: entry.contentEnd, prefix: needsSpace ? " " : "", suffix: "" };
+	}
+	return out;
+}
+
+function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
+	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd);
+	const textSpan = trimmedSpan(fullMatch, a.restStart, entry.contentEnd);
 	return {
-		author: parsed.author,
-		authorSpan: parsed.authorSpan,
-		authorInsertAt: parsed.authorInsertAt,
-		reasonInsertAt: contentEnd,
-		footnoteSpan
+		author: a.author,
+		authorSpan: a.authorSpan,
+		authorInsert: { at: entry.contentStart, prefix: "[", suffix: textSpan.end > textSpan.start ? "] " : "]" },
+		text: fullMatch.slice(textSpan.start, textSpan.end),
+		textSpan,
+		fullSpan: { start: entry.fullStart, end: entry.fullEnd },
+		channel: entry.channel
 	};
 }
 
-function classifyHighlightMatch(
-	match: RawHighlightMatch,
-	filePath: string,
-	content: string,
-	isInsideAdBlock: (offset: number) => boolean
-): Annotation | null {
-	const fullMatch = match.fullMatch;
-	const base = {
-		id: makeId(filePath, match.fullStart, fullMatch),
-		filePath,
-		line: lineAt(content, match.fullStart),
-		matchStart: match.fullStart,
-		matchEnd: match.matchEnd,
-		fullMatch,
-		insideAdBlock: isInsideAdBlock(match.fullStart)
-	};
-
-	// The ==++text++== insert form. The author sits inside the highlight, and a
-	// leading "insert, reason" footnote (if any) carries the reason.
-	if (match.isPlusWrapped) {
-		const innerAuthor = parseAuthorAt(fullMatch, match.innerSpan.start, match.innerSpan.end);
-		const bodySpan = trimmedSpan(fullMatch, innerAuthor.restStart, match.innerSpan.end);
-
-		let author = innerAuthor.author;
-		let authorSpan = innerAuthor.authorSpan;
-		let authorInsertAt = innerAuthor.authorInsertAt;
-		let reason: string | undefined;
-		let reasonSpan: TextSpan | undefined;
-		let reasonClearSpan: TextSpan | undefined;
-		let reasonInsert: InsertPoint | undefined;
-		let replies: AnnotationReply[];
-		let tailStart: number;
-
-		const reasonFootnote = match.footnotes[0] ? readInsertReasonFootnote(fullMatch, match.footnotes[0]) : null;
-		if (reasonFootnote) {
-			if (!author && reasonFootnote.author) {
-				author = reasonFootnote.author;
-				authorSpan = reasonFootnote.authorSpan;
-				authorInsertAt = reasonFootnote.authorInsertAt;
-			}
-			reason = reasonFootnote.reason;
-			reasonSpan = reasonFootnote.reasonSpan;
-			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
-			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
-			replies = parseReplies(fullMatch, match.footnotes.slice(1));
-			tailStart = reasonFootnote.footnoteSpan.end;
-		} else {
-			replies = parseReplies(fullMatch, match.footnotes);
-			reasonInsert = { at: match.highlightLen, prefix: "^[insert, ", suffix: "]" };
-			tailStart = match.highlightLen;
-		}
-
-		return {
-			...base,
-			type: "insert",
-			originalText: "",
-			author,
-			reason,
-			insertedText: fullMatch.slice(bodySpan.start, bodySpan.end),
-			replies,
-			repliesRaw: fullMatch.slice(tailStart),
-			insertForm: "highlight",
-			authorSpan,
-			authorInsertAt,
-			bodySpan,
-			reasonSpan,
-			reasonClearSpan,
-			reasonInsert
-		};
-	}
-
-	const first = match.footnotes[0];
-	if (!first) return null;
-
-	const parsed = parseAuthorAt(fullMatch, first.start, first.end);
-	const segStart = parsed.restStart;
-	const segment = fullMatch.slice(segStart, first.end);
-	const contentEnd = trimmedSpan(fullMatch, segStart, first.end).end;
-	const replies = parseReplies(fullMatch, match.footnotes.slice(1));
-	const repliesRaw = fullMatch.slice(first.fullEnd);
-	const authorBits = {
-		author: parsed.author,
-		authorSpan: parsed.authorSpan,
-		authorInsertAt: parsed.authorInsertAt
-	};
-
-	/** Reason fields shared by every keyword-led footnote. */
-	const reasonFields = (keywordEnd: number, separator: string, reasonText: string) => {
-		const hasReason = !!reasonText.trim();
-		return {
-			reason: hasReason ? reasonText.trim() : undefined,
-			reasonSpan: hasReason ? trimmedSpan(fullMatch, keywordEnd + separator.length, first.end) : undefined,
-			reasonClearSpan: hasReason ? { start: keywordEnd, end: contentEnd } : undefined,
-			reasonInsert: hasReason ? undefined : { at: contentEnd, prefix: ", ", suffix: "" }
-		};
-	};
-
-	const arrowMatch = ARROW_REPLACE_REGEX.exec(segment);
-	if (arrowMatch) {
-		const replacementStart = segStart + arrowMatch[1].length;
-		const keywordEnd = replacementStart + arrowMatch[2].length + arrowMatch[3].length;
-		return {
-			...base,
-			...authorBits,
+/**
+ * Works out the operation from the markers at both ends of the wrapped text.
+ * `base` is where that text starts inside fullMatch, so the spans come out
+ * relative to it. Whitespace is kept exactly as written, since `++is ++`
+ * inserting its own trailing space is the whole point of the markers.
+ */
+function classifyInner(inner: string, base: number): Body {
+	const n = inner.length;
+	if (n >= 4) {
+		const head = inner.slice(0, 2);
+		const tail = inner.slice(-2);
+		const mid = inner.slice(2, -2);
+		const replace = (splitAt: number, splitLen: number): Body => ({
 			type: "replace",
-			originalText: match.innerText,
-			replacement: arrowMatch[2],
-			replies,
-			repliesRaw,
-			originalSpan: match.innerSpan,
-			replacementSpan: { start: replacementStart, end: replacementStart + arrowMatch[2].length },
-			...reasonFields(keywordEnd, arrowMatch[4], arrowMatch[5])
-		};
+			originalSpan: { start: base + 2, end: base + 2 + splitAt },
+			replacementSpan: { start: base + 2 + splitAt + splitLen, end: base + n - 2 }
+		});
+		if (head === "~~" && tail === "~~") {
+			const k = mid.indexOf("~>");
+			if (k !== -1) return replace(k, 2);
+		} else if (head === "--" && tail === "++") {
+			const arrow = mid.indexOf("~>");
+			const fused = mid.indexOf("--++");
+			if (arrow !== -1 && (fused === -1 || arrow < fused)) return replace(arrow, 2);
+			if (fused !== -1) return replace(fused, 4);
+		} else if (head === "--" && tail === "--") {
+			return { type: "delete", originalSpan: { start: base + 2, end: base + n - 2 } };
+		} else if (head === "++" && tail === "++") {
+			return { type: "insert", bodySpan: { start: base + 2, end: base + n - 2 } };
+		}
 	}
-
-	const deleteMatch = DELETE_REGEX.exec(segment);
-	if (deleteMatch) {
-		return {
-			...base,
-			...authorBits,
-			type: "delete",
-			originalText: match.innerText,
-			replies,
-			repliesRaw,
-			originalSpan: match.innerSpan,
-			...reasonFields(segStart + deleteMatch[1].length, deleteMatch[2], deleteMatch[3])
-		};
-	}
-
-	const insertMatch = INSERT_KEYWORD_REGEX.exec(segment);
-	if (insertMatch) {
-		return {
-			...base,
-			...authorBits,
-			type: "insert",
-			originalText: "",
-			insertedText: match.innerText,
-			replies,
-			repliesRaw,
-			insertForm: "footnote",
-			bodySpan: match.innerSpan,
-			...reasonFields(segStart + insertMatch[1].length, insertMatch[2], insertMatch[3])
-		};
-	}
-
-	const bodySpan = trimmedSpan(fullMatch, segStart, first.end);
-	return {
-		...base,
-		...authorBits,
-		type: "comment",
-		originalText: match.innerText,
-		commentText: fullMatch.slice(bodySpan.start, bodySpan.end),
-		replies,
-		repliesRaw,
-		originalSpan: match.innerSpan,
-		bodySpan
-	};
+	return { type: "comment", originalSpan: { start: base, end: base + n } };
 }
 
-function findNativeCommentMatches(content: string, filePath: string, excludedRanges: ExcludedRange[]): Annotation[] {
-	const results: Annotation[] = [];
-	const regex = new RegExp(NATIVE_COMMENT_REGEX);
-	let m: RegExpExecArray | null;
-	while ((m = regex.exec(content)) !== null) {
-		const fullStart = m.index;
-		const commentEnd = m.index + m[0].length;
-		if (hasDelimiterInsideRanges(fullStart, commentEnd, excludedRanges)) continue;
+interface BraceScan {
+	closeStart: number;
+	closeEnd: number;
+	/** The `~>` or `--++` dividing old text from new, for a replacement. */
+	split?: TextSpan;
+}
 
-		const rest = content.slice(commentEnd);
-		const { footnotes, consumedLength } = extractFootnotes(rest);
-		const matchEnd = commentEnd + consumedLength;
-		regex.lastIndex = matchEnd;
-
-		const fullMatch = content.slice(fullStart, matchEnd);
-		const commentLen = commentEnd - fullStart;
-		const raw = m[1] !== undefined ? m[1] : m[2];
-		const delimLen = m[1] !== undefined ? 4 : 2;
-		const innerSpan: TextSpan = { start: delimLen, end: delimLen + raw.length };
-		const shifted = shiftFootnotes(footnotes, commentLen);
-
-		const innerAuthor = parseAuthorAt(fullMatch, innerSpan.start, innerSpan.end);
-		const bodySpan = trimmedSpan(fullMatch, innerAuthor.restStart, innerSpan.end);
-
-		let author = innerAuthor.author;
-		let authorSpan = innerAuthor.authorSpan;
-		let authorInsertAt = innerAuthor.authorInsertAt;
-		let reason: string | undefined;
-		let reasonSpan: TextSpan | undefined;
-		let reasonClearSpan: TextSpan | undefined;
-		let reasonInsert: InsertPoint | undefined;
-		let replies: AnnotationReply[];
-		let tailStart: number;
-
-		const reasonFootnote = shifted[0] ? readInsertReasonFootnote(fullMatch, shifted[0]) : null;
-		if (reasonFootnote) {
-			if (!author && reasonFootnote.author) {
-				author = reasonFootnote.author;
-				authorSpan = reasonFootnote.authorSpan;
-				authorInsertAt = reasonFootnote.authorInsertAt;
-			}
-			reason = reasonFootnote.reason;
-			reasonSpan = reasonFootnote.reasonSpan;
-			if (reason) reasonClearSpan = reasonFootnote.footnoteSpan;
-			else reasonInsert = { at: reasonFootnote.reasonInsertAt, prefix: ", ", suffix: "" };
-			replies = parseReplies(fullMatch, shifted.slice(1));
-			tailStart = reasonFootnote.footnoteSpan.end;
-		} else {
-			replies = parseReplies(fullMatch, shifted);
-			reasonInsert = { at: commentLen, prefix: "^[insert, ", suffix: "]" };
-			tailStart = commentLen;
+/**
+ * Finds the closer for the brace opener at `start`. Braces are the one wrapper
+ * whose opening and closing marks differ, so they can nest, and the depth
+ * count is what lets `{++a {++b++} c++}` close at the last `++}` rather than
+ * the first. Anything in an excluded range is stepped over whole.
+ */
+function scanBrace(content: string, start: number, excluded: ExcludedRange[]): BraceScan | null {
+	const op = content.slice(start + 1, start + 3);
+	let depth = 0;
+	let split: TextSpan | undefined;
+	let i = start + 3;
+	while (i < content.length) {
+		const skip = rangeAt(i, excluded);
+		if (skip) {
+			i = skip.end;
+			continue;
 		}
-
-		results.push({
-			id: makeId(filePath, fullStart, fullMatch),
-			type: "insert",
-			filePath,
-			line: lineAt(content, fullStart),
-			matchStart: fullStart,
-			matchEnd,
-			fullMatch,
-			originalText: "",
-			author,
-			reason,
-			insertedText: fullMatch.slice(bodySpan.start, bodySpan.end),
-			insideAdBlock: false,
-			replies,
-			repliesRaw: fullMatch.slice(tailStart),
-			insertForm: delimLen === 4 ? "percent-nested" : "percent",
-			authorSpan,
-			authorInsertAt,
-			bodySpan,
-			reasonSpan,
-			reasonClearSpan,
-			reasonInsert
-		});
+		const three = content.slice(i, i + 3);
+		if (BRACE_OPENERS.has(three)) {
+			depth++;
+			i += 3;
+			continue;
+		}
+		if (BRACE_CLOSERS.has(three)) {
+			if (depth > 0) {
+				depth--;
+				i += 3;
+				continue;
+			}
+			const closer = three.slice(0, 2);
+			const fits =
+				op === "--" ? closer === (split ? "++" : "--") :
+				op === "~~" ? closer === "~~" && !!split :
+				op === "++" ? closer === "++" :
+				op === "==" ? closer === "==" :
+				closer === "<<";
+			return fits ? { closeStart: i, closeEnd: i + 3, split } : null;
+		}
+		if (depth === 0 && !split) {
+			if ((op === "--" || op === "~~") && content.startsWith("~>", i)) {
+				split = { start: i, end: i + 2 };
+				i += 2;
+				continue;
+			}
+			if (op === "--" && content.startsWith("--++", i)) {
+				split = { start: i, end: i + 4 };
+				i += 4;
+				continue;
+			}
+		}
+		i++;
 	}
-	return results;
+	return null;
+}
+
+/** The body of a brace annotation, with spans relative to its opener. */
+function braceBody(op: string, start: number, scan: BraceScan): Body | null {
+	const contentEnd = scan.closeStart - start;
+	if (op === "++") return { type: "insert", bodySpan: { start: 3, end: contentEnd } };
+	if (op === "==") return { type: "comment", originalSpan: { start: 3, end: contentEnd } };
+	if (scan.split) {
+		return {
+			type: "replace",
+			originalSpan: { start: 3, end: scan.split.start - start },
+			replacementSpan: { start: scan.split.end - start, end: contentEnd }
+		};
+	}
+	if (op === "--") return { type: "delete", originalSpan: { start: 3, end: contentEnd } };
+	return null;
+}
+
+interface Built {
+	annotation: Annotation;
+	/** The entries in absolute coordinates, so later scans can skip them. */
+	entries: MetaEntry[];
+}
+
+function buildAnnotation(
+	content: string,
+	filePath: string,
+	fullStart: number,
+	wrapperEnd: number,
+	body: Body,
+	wrapper: Wrapper,
+	isPoint: boolean,
+	insideAdBlock: boolean
+): Built {
+	const entries = extractMeta(content, wrapperEnd);
+	const matchEnd = entries.length ? entries[entries.length - 1].fullEnd : wrapperEnd;
+	const fullMatch = content.slice(fullStart, matchEnd);
+	const relative = entries.map(e => ({
+		channel: e.channel,
+		contentStart: e.contentStart - fullStart,
+		contentEnd: e.contentEnd - fullStart,
+		fullStart: e.fullStart - fullStart,
+		fullEnd: e.fullEnd - fullStart
+	}));
+	const replies = relative.slice(1).map(e => parseReply(fullMatch, e));
+	const first = parseFirst(fullMatch, relative[0], wrapperEnd - fullStart, replies.length > 0);
+	const slice = (span?: TextSpan) => (span ? fullMatch.slice(span.start, span.end) : undefined);
+
+	const annotation: Annotation = {
+		id: makeId(filePath, fullStart, fullMatch),
+		type: body.type,
+		filePath,
+		line: lineAt(content, fullStart),
+		matchStart: fullStart,
+		matchEnd,
+		fullMatch,
+		wrapper,
+		isPoint,
+		originalText: slice(body.originalSpan) ?? "",
+		insertedText: slice(body.bodySpan),
+		replacement: slice(body.replacementSpan),
+		commentText: body.type === "comment" && first.text ? first.text : undefined,
+		reason: body.type !== "comment" && first.text ? first.text : undefined,
+		author: first.author,
+		insideAdBlock,
+		replies,
+		originalSpan: body.originalSpan,
+		bodySpan: body.bodySpan,
+		replacementSpan: body.replacementSpan,
+		authorSpan: first.authorSpan,
+		authorClearSpan: first.authorClearSpan,
+		authorInsert: first.authorInsert,
+		reasonSpan: first.reasonSpan,
+		reasonClearSpan: first.reasonClearSpan,
+		reasonInsert: first.reasonInsert,
+		// A reply goes after whatever is last, so it matches that one's channel.
+		nextChannel: relative.length ? relative[relative.length - 1].channel : first.nextChannel
+	};
+	return { annotation, entries };
 }
 
 export function detectAnnotations(content: string, filePath: string): Annotation[] {
@@ -570,24 +452,117 @@ export function detectAnnotations(content: string, filePath: string): Annotation
 	const inlineCode = collectRanges(content, INLINE_CODE_REGEX);
 	const links = collectRanges(content, MARKDOWN_LINK_REGEX);
 	const htmlComments = collectRanges(content, HTML_COMMENT_REGEX);
+	const footnotes = collectRanges(content, FOOTNOTE_REGEX);
+	const braceComments = collectRanges(content, BRACE_COMMENT_REGEX);
+	const nonAdFences = fenceRanges.filter(r => !r.isAdBlock);
 
-	const nonAdFenceRanges = fenceRanges.filter(r => !r.isAdBlock);
-	const highlightExcluded: ExcludedRange[] = [...nonAdFenceRanges, ...inlineCode, ...links, ...htmlComments];
-	const nativeCommentExcluded: ExcludedRange[] = [...fenceRanges, ...inlineCode, ...links, ...htmlComments];
+	// Delimiters inside code, links, or the text of an entry are not delimiters.
+	const prose: ExcludedRange[] = [...inlineCode, ...links, ...htmlComments, ...footnotes, ...braceComments];
+	const wrapperExcluded: ExcludedRange[] = [...nonAdFences, ...prose];
+	// Percent marks do not render inside any fenced block, admonitions included.
+	const percentExcluded: ExcludedRange[] = [...fenceRanges, ...prose];
+	const pointExcluded: ExcludedRange[] = [...nonAdFences, ...inlineCode, ...links, ...htmlComments, ...footnotes];
 
 	const isInsideAdBlock = (offset: number) =>
 		fenceRanges.some(r => r.isAdBlock && offset >= r.start && offset < r.end);
 
-	const highlightMatches = findHighlightMatches(content, highlightExcluded);
-	const highlightAnnotations = highlightMatches
-		.map(m => classifyHighlightMatch(m, filePath, content, isInsideAdBlock))
-		.filter((a): a is Annotation => a !== null);
+	const results: Annotation[] = [];
+	/** Entries already claimed by an annotation, so they are not read as point comments too. */
+	const consumed: ExcludedRange[] = [];
+	const publish = (built: Built) => {
+		results.push(built.annotation);
+		for (const e of built.entries) consumed.push({ start: e.fullStart, end: e.fullEnd });
+	};
+	let m: RegExpExecArray | null;
 
-	const nativeCommentAnnotations = findNativeCommentMatches(content, filePath, nativeCommentExcluded);
+	// Braces. Every opener gets its turn, including ones nested inside another
+	// brace annotation, so both the outer and the inner one are found.
+	const braceEqOpen = new Set<number>();
+	const braceEqClose = new Set<number>();
+	const braceRegex = new RegExp(BRACE_OPEN_REGEX.source, "g");
+	while ((m = braceRegex.exec(content)) !== null) {
+		const start = m.index;
+		if (m[1] === ">>") continue;
+		if (rangeAt(start, wrapperExcluded)) continue;
+		const scan = scanBrace(content, start, wrapperExcluded);
+		if (!scan) continue;
+		const body = braceBody(m[1], start, scan);
+		if (!body) continue;
+		if (m[1] === "==") {
+			braceEqOpen.add(start);
+			braceEqClose.add(scan.closeStart);
+		}
+		publish(buildAnnotation(content, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start)));
+	}
 
-	const all = [...highlightAnnotations, ...nativeCommentAnnotations];
-	all.sort((a, b) => a.matchStart - b.matchStart);
-	return all;
+	// Highlights. Whenever a pairing is rejected only the opening delimiter
+	// counts as consumed, so the closing one gets a fresh chance to pair with
+	// its real partner. Consuming both used to let one stray == desync every
+	// annotation after it.
+	const highlightRegex = new RegExp(HIGHLIGHT_REGEX.source, "g");
+	while ((m = highlightRegex.exec(content)) !== null) {
+		const fullStart = m.index;
+		const highlightEnd = fullStart + m[0].length;
+		const retry = () => {
+			highlightRegex.lastIndex = fullStart + 2;
+		};
+		// The == of a {==...==} belongs to the braces.
+		if (braceEqOpen.has(fullStart - 1) || braceEqClose.has(fullStart)) {
+			retry();
+			continue;
+		}
+		if (/\n\s*\n/.test(m[1])) {
+			retry();
+			continue;
+		}
+		if (hasDelimiterInsideRanges(fullStart, highlightEnd, wrapperExcluded)) {
+			retry();
+			continue;
+		}
+		const body = classifyInner(m[1], 2);
+		const built = buildAnnotation(content, filePath, fullStart, highlightEnd, body, "highlight", false, isInsideAdBlock(fullStart));
+		// An ordinary highlight with nothing attached is just a highlight.
+		if (body.type === "comment" && built.entries.length === 0) {
+			retry();
+			continue;
+		}
+		publish(built);
+		highlightRegex.lastIndex = built.annotation.matchEnd;
+	}
+
+	// Percent marks. A plain Obsidian comment with nothing attached is left
+	// alone, and since that pairing is a real comment it is consumed whole.
+	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
+	while ((m = percentRegex.exec(content)) !== null) {
+		const fullStart = m.index;
+		const end = fullStart + m[0].length;
+		const doubled = m[1] !== undefined;
+		const delim = doubled ? 4 : 2;
+		if (hasDelimiterInsideRanges(fullStart, end, percentExcluded)) {
+			percentRegex.lastIndex = fullStart + delim;
+			continue;
+		}
+		const body = classifyInner(doubled ? m[1] : m[2], delim);
+		const built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false);
+		if (body.type === "comment" && built.entries.length === 0) continue;
+		publish(built);
+		percentRegex.lastIndex = built.annotation.matchEnd;
+	}
+
+	// Point comments: whatever {>>...<<} is left over once the ones attached to
+	// an annotation have been claimed.
+	const pointRegex = /\{>>/g;
+	while ((m = pointRegex.exec(content)) !== null) {
+		const start = m.index;
+		if (rangeAt(start, consumed) || rangeAt(start, pointExcluded)) continue;
+		const built = buildAnnotation(content, filePath, start, start, { type: "comment" }, "brace", true, isInsideAdBlock(start));
+		if (built.entries.length === 0) continue;
+		publish(built);
+		pointRegex.lastIndex = built.annotation.matchEnd;
+	}
+
+	results.sort((a, b) => a.matchStart - b.matchStart);
+	return results;
 }
 
 export function detectAdmonitionBlocks(content: string, filePath: string): AdmonitionBlock[] {
@@ -611,15 +586,15 @@ export function detectAdmonitionBlocks(content: string, filePath: string): Admon
 /**
  * Which insert syntax belongs at `offset`.
  *
- * Percent marks don't render inside a fenced block, so those need the highlight
- * form. Inside an existing `%%...%%` span the new insert has to close and
- * reopen the surrounding comment, which is what the doubled form does, and
- * without it the surrounding text would break out of its comment and become
- * visible prose.
+ * Percent marks do not render inside a fenced block, so those need another
+ * wrapper. Inside an existing percent mark annotation the new insert has to
+ * close and reopen it, and the surrounding operator has to be closed and
+ * reopened too, or the two halves stop being well formed and the text around
+ * the new insert breaks out as visible prose.
  */
 export function getInsertContext(content: string, offset: number): InsertContext {
 	const fenceRanges = getFenceRanges(content);
-	if (fenceRanges.some(r => offset > r.start && offset < r.end)) return "fenced";
+	if (fenceRanges.some(r => offset > r.start && offset < r.end)) return { kind: "fenced" };
 
 	const excluded: ExcludedRange[] = [
 		...fenceRanges,
@@ -627,13 +602,23 @@ export function getInsertContext(content: string, offset: number): InsertContext
 		...collectRanges(content, MARKDOWN_LINK_REGEX),
 		...collectRanges(content, HTML_COMMENT_REGEX)
 	];
-	const regex = new RegExp(NATIVE_COMMENT_REGEX);
+	const regex = new RegExp(PERCENT_REGEX.source, "g");
 	let m: RegExpExecArray | null;
 	while ((m = regex.exec(content)) !== null) {
 		const start = m.index;
 		const end = m.index + m[0].length;
 		if (hasDelimiterInsideRanges(start, end, excluded)) continue;
-		if (offset > start && offset < end) return "native-comment";
+		if (offset <= start || offset >= end) continue;
+		const doubled = m[1] !== undefined;
+		const body = classifyInner(doubled ? m[1] : m[2], start + (doubled ? 4 : 2));
+		let marker = "";
+		if (body.type === "insert") marker = "++";
+		else if (body.type === "delete") marker = "--";
+		else if (body.type === "replace" && body.originalSpan && body.replacementSpan) {
+			// Inside a replacement, match whichever half the caret is in.
+			marker = offset <= body.originalSpan.end ? "--" : "++";
+		}
+		return { kind: "nested", marker };
 	}
-	return "plain";
+	return { kind: "plain" };
 }

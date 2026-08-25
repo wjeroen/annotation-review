@@ -1,27 +1,20 @@
 import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
+import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
-import { computeAddReply, computeMutation, computeRemoval, computeSetInsertReason, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
-import { AdmonitionBlock, Annotation, InsertContext } from "./src/types";
+import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
+import { AdmonitionBlock, Annotation, InsertContext, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composeInsertWithReason, composeReplace } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
-
-interface AnnotationReviewSettings {
-	/** Prefilled author label for new annotations. Blank means no label. */
-	defaultAuthor: string;
-	/** Expanded state carries across notes, and is tracked per tab. */
-	repliesExpanded: boolean;
-	admonitionsExpanded: boolean;
-}
-
-const DEFAULT_SETTINGS: AnnotationReviewSettings = {
-	defaultAuthor: "",
-	repliesExpanded: false,
-	admonitionsExpanded: false
-};
+import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 
 /** How long to wait after the last keystroke before rescanning the note. */
 const RESCAN_DELAY_MS = 400;
+
+/** Obsidian's editor keeps its CodeMirror view on `cm`. Undocumented, so treated as optional. */
+interface EditorWithCm extends Editor {
+	cm?: EditorView;
+}
 
 export default class AnnotationReviewPlugin extends Plugin {
 	annotations: Annotation[] = [];
@@ -29,6 +22,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 	settings: AnnotationReviewSettings = { ...DEFAULT_SETTINGS };
 	/** Path of the note the current annotation list came from. */
 	scannedPath: string | null = null;
+	/** The annotation the caret is inside, if any. */
+	activeAnnotationId: string | null = null;
 	/** Only the newest scan is allowed to publish its result. */
 	private scanToken = 0;
 
@@ -36,6 +31,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.registerView(VIEW_TYPE_ANNOTATION_REVIEW, leaf => new AnnotationReviewView(leaf, this));
+		this.addSettingTab(new AnnotationReviewSettingTab(this.app, this));
 
 		this.addRibbonIcon("check-check", "Open Annotation Review", () => this.activateView());
 		this.addCommand({
@@ -60,6 +56,17 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.registerEvent(this.app.workspace.on("file-open", () => this.rescanActiveFile()));
 		this.registerEvent(this.app.workspace.on("editor-change", () => debouncedRescan()));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.rescanActiveFile()));
+
+		// Obsidian has no caret-moved event, so this hangs off CodeMirror's
+		// update listener instead. It fires for every editor, and the note is
+		// worked out from the view that owns the editor.
+		this.registerEditorExtension(
+			EditorView.updateListener.of(update => {
+				if (update.selectionSet || update.docChanged) {
+					this.syncCursor(update.view, update.state.selection.main.head);
+				}
+			})
+		);
 
 		this.app.workspace.onLayoutReady(() => this.rescanActiveFile());
 	}
@@ -146,6 +153,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.annotations = [];
 			this.admonitions = [];
 			this.scannedPath = null;
+			this.activeAnnotationId = null;
 			this.refreshView();
 			return;
 		}
@@ -156,6 +164,9 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.annotations = detectAnnotations(content, file.path);
 		this.admonitions = detectAdmonitionBlocks(content, file.path);
 		this.scannedPath = file.path;
+		// Offsets are fresh now, so work out the active card again before drawing.
+		const editor = this.getEditorFor(file.path);
+		this.activeAnnotationId = editor ? (this.annotationAt(editor.posToOffset(editor.getCursor()))?.id ?? null) : null;
 		this.refreshView();
 
 		// The note on screen changed while this one was being read, so nothing
@@ -168,6 +179,42 @@ export default class AnnotationReviewPlugin extends Plugin {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
 			const view = leaf.view;
 			if (view instanceof AnnotationReviewView) view.refreshFromData();
+		}
+	}
+
+	/** The annotation around `offset`, the innermost one when braces are nested. */
+	private annotationAt(offset: number): Annotation | undefined {
+		let best: Annotation | undefined;
+		for (const a of this.annotations) {
+			if (offset < a.matchStart || offset > a.matchEnd) continue;
+			if (!best || a.matchEnd - a.matchStart < best.matchEnd - best.matchStart) best = a;
+		}
+		return best;
+	}
+
+	/** The note an editor belongs to, found through the view that owns it. */
+	private pathForEditorView(cm: EditorView): string | null {
+		let anyKnown = false;
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView)) continue;
+			const own = (view.editor as EditorWithCm).cm;
+			if (own) anyKnown = true;
+			if (own === cm) return view.file?.path ?? null;
+		}
+		// If no editor exposes its view at all, the active note is the best guess.
+		return anyKnown ? null : this.app.workspace.getActiveFile()?.path ?? null;
+	}
+
+	/** Marks the card whose annotation the caret sits in, and scrolls it into view. */
+	private syncCursor(cm: EditorView, offset: number) {
+		if (this.pathForEditorView(cm) !== this.scannedPath) return;
+		const id = this.annotationAt(offset)?.id ?? null;
+		if (id === this.activeAnnotationId) return;
+		this.activeAnnotationId = id;
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
+			const view = leaf.view;
+			if (view instanceof AnnotationReviewView) view.setActiveAnnotation(id);
 		}
 	}
 
@@ -198,14 +245,6 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (!file) return;
 		const content = await this.readContent(file);
 		await this.applyMutation(file, computeSpanReplace(content, annotation, start, end, replacement));
-	}
-
-	/** Sets or clears an insertion's reason, rewriting it into the matching form. */
-	async setInsertReason(annotation: Annotation, reason: string) {
-		const file = this.fileFor(annotation.filePath);
-		if (!file) return;
-		const content = await this.readContent(file);
-		await this.applyMutation(file, computeSetInsertReason(content, annotation, reason));
 	}
 
 	async deleteAdmonition(block: AdmonitionBlock) {
@@ -258,48 +297,50 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 * so none of them opens a dialog first.
 	 */
 	private annotationActions(): { id: string; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
+		const author = () => this.settings.defaultAuthor;
+		const wrapper = () => this.settings.wrapper;
 		return [
 			{
 				id: "comment",
 				label: "Comment",
 				icon: "message-square",
 				description: "Leave a remark on the selected text",
-				run: editor => this.annotate(editor, sel => composeComment(sel, this.settings.defaultAuthor))
+				run: editor => this.annotate(editor, sel => composeComment(sel, author(), wrapper()))
 			},
 			{
 				id: "delete",
 				label: "Delete",
 				icon: "strikethrough",
 				description: "Propose removing the selected text",
-				run: editor => this.annotate(editor, sel => composeDelete(sel, this.settings.defaultAuthor))
+				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), wrapper()))
 			},
 			{
 				id: "replace",
 				label: "Replace",
 				icon: "replace",
 				description: "Propose new wording for the selected text",
-				run: editor => this.annotate(editor, sel => composeReplace(sel, this.settings.defaultAuthor))
+				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), wrapper()))
 			},
 			{
 				id: "insert",
 				label: "Insert",
 				icon: "text-cursor-input",
 				description: "Mark the selected text as newly inserted",
-				run: editor => this.annotateInsert(editor)
+				run: editor => this.annotateInsert(editor, false)
 			},
 			{
 				id: "insert-highlight",
 				label: "Insert (highlight form)",
 				icon: "highlighter",
 				description: "Always uses the ==++text++== form",
-				run: editor => this.annotateInsert(editor, "fenced")
+				run: editor => this.annotateInsert(editor, false, { kind: "fenced" }, "highlight")
 			},
 			{
 				id: "insert-reason",
 				label: "Insert with a reason",
 				icon: "list-plus",
-				description: "Uses the footnote form, so a reason can be given",
-				run: editor => this.annotate(editor, sel => composeInsertWithReason(sel, this.settings.defaultAuthor))
+				description: "Leaves a footnote open for the reason",
+				run: editor => this.annotateInsert(editor, true)
 			}
 		];
 	}
@@ -363,11 +404,15 @@ export default class AnnotationReviewPlugin extends Plugin {
 		editor.focus();
 	}
 
-	private annotateInsert(editor: Editor, forcedContext?: InsertContext) {
+	private annotateInsert(editor: Editor, withReason: boolean, forcedContext?: InsertContext, forcedWrapper?: Wrapper) {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
 		const context = forcedContext ?? getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
-		this.annotate(editor, sel => composeInsert(sel, this.settings.defaultAuthor, context));
+		const wrapper = forcedWrapper ?? this.settings.insertWrapper;
+		const author = this.settings.defaultAuthor;
+		this.annotate(editor, sel =>
+			withReason ? composeInsertWithReason(sel, author, context, wrapper) : composeInsert(sel, author, context, wrapper)
+		);
 	}
 
 	private pickAnnotationType(editor: Editor) {

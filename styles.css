@@ -139,12 +139,44 @@
 }
 
 .annotation-review-annotation-card {
+	position: relative;
+	overflow: hidden;
 	border: 1px solid var(--background-modifier-border);
 	padding: 8px 10px;
 	transition: background-color 0.2s ease;
 }
 
 .annotation-review-annotation-card:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+/* A line along the top says which wrapper the annotation uses in the note:
+   yellow for a highlight, grey for percent marks that hide the text, purple
+   for braces. */
+.annotation-review-annotation-card::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 2px;
+}
+
+.annotation-wrapper-highlight::before {
+	background-color: var(--color-yellow, #e0b040);
+}
+
+.annotation-wrapper-percent::before {
+	background-color: var(--text-faint);
+}
+
+.annotation-wrapper-brace::before {
+	background-color: var(--color-purple, #a882ff);
+}
+
+/* The card whose annotation the caret is in. */
+.annotation-review-annotation-card.is-active {
+	border-color: var(--interactive-accent);
 	background-color: var(--background-modifier-hover);
 }
 
@@ -242,12 +274,34 @@
 	word-break: break-word;
 }
 
-.annotation-review-comment {
-	color: var(--text-muted);
+/* The reason, or a comment's text, reads like a reply: the author chip first,
+   then the text, which drops below the chip when it needs more than a line. */
+.annotation-review-note {
+	position: relative;
 	margin-top: 4px;
-	font-style: italic;
+	color: var(--text-muted);
+}
+
+.annotation-review-note-author {
+	display: inline-block;
+	font-size: 0.85em;
+}
+
+.annotation-review-note.is-stacked .annotation-review-note-author {
+	display: block;
+	margin-bottom: 2px;
+	width: fit-content;
+}
+
+.annotation-review-note-text {
 	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+/* Text that is only spaces or line breaks is described rather than shown. */
+.annotation-review-whitespace {
+	color: var(--text-faint);
+	font-style: italic;
 }
 
 .annotation-review-editable {

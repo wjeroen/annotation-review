@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, InsertPoint, TextSpan } from "./types";
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
 
@@ -13,6 +13,25 @@ const TYPE_LABELS: Record<AnnotationType, string> = {
 
 const NO_AUTHOR = "__none__";
 const ALL_VALUE = "";
+
+/** Anything with an author that can be set, changed or cleared. */
+interface AuthorTarget {
+	authorSpan?: TextSpan;
+	authorClearSpan?: TextSpan;
+	authorInsert?: InsertPoint;
+}
+
+interface EditableOptions {
+	inline?: boolean;
+	/**
+	 * Makes the field erasable: submitting it empty removes this wider range
+	 * instead, which is how a reason takes the space before it with it rather
+	 * than leaving a dangling gap. Without one, an empty submit just cancels.
+	 */
+	clearSpan?: TextSpan;
+	/** Save the text exactly as typed. Annotated text carries its own spaces. */
+	keepWhitespace?: boolean;
+}
 
 /**
  * A stable hue per author name. Two hashes running in opposite directions get
@@ -51,7 +70,10 @@ export class AnnotationReviewView extends ItemView {
 	 * results, and redrawing on each of those made the list jump to the top.
 	 */
 	refreshFromData() {
-		if (this.dataSignature() === this.lastSignature) return;
+		if (this.dataSignature() === this.lastSignature) {
+			this.setActiveAnnotation(this.plugin.activeAnnotationId);
+			return;
+		}
 		if (this.isEditing()) return;
 		this.render();
 	}
@@ -67,6 +89,18 @@ export class AnnotationReviewView extends ItemView {
 		const el = document.activeElement;
 		if (!el || !this.containerEl.contains(el)) return false;
 		return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+	}
+
+	/** Highlights the card the caret is in, without redrawing anything. */
+	setActiveAnnotation(id: string | null) {
+		const cards = Array.from(this.containerEl.querySelectorAll<HTMLElement>(".annotation-review-annotation-card"));
+		let target: HTMLElement | null = null;
+		for (const card of cards) {
+			const on = id !== null && card.dataset.id === id;
+			card.toggleClass("is-active", on);
+			if (on) target = card;
+		}
+		if (target) target.scrollIntoView({ block: "nearest" });
 	}
 
 	getViewType() {
@@ -285,35 +319,36 @@ export class AnnotationReviewView extends ItemView {
 		}
 	}
 
-	/**
-	 * A text field that turns into an inline editor on click.
-	 *
-	 * `clearSpan` makes the field erasable: submitting it empty removes that
-	 * wider range instead, which is how a reason takes the separator before it
-	 * with it rather than leaving a dangling comma. Without one, an empty
-	 * submit just cancels.
-	 */
+	/** A text field that turns into an inline editor on click. */
 	private renderEditableText(
 		container: Element,
 		cls: string,
 		annotation: Annotation,
 		span: TextSpan,
 		text: string,
-		inline = false,
-		clearSpan?: TextSpan
+		options: EditableOptions = {}
 	): HTMLElement {
-		const el = container.createEl(inline ? "span" : "div", { cls: `${cls} annotation-review-editable` });
+		const el = container.createEl(options.inline ? "span" : "div", { cls: `${cls} annotation-review-editable` });
 
 		const showDisplay = () => {
 			el.empty();
-			el.setText(text);
+			el.removeClass("annotation-review-whitespace");
+			// Text that is nothing but spaces or line breaks would show as an
+			// empty box, so say what it is instead.
+			if (text.length > 0 && text.trim().length === 0) {
+				el.setText(text.includes("\n") ? "(blank line)" : "(space)");
+				el.addClass("annotation-review-whitespace");
+			} else {
+				el.setText(text);
+			}
 		};
 		showDisplay();
-		setTooltip(el, "Click to edit");
+		setTooltip(el, options.clearSpan ? "Click to edit, clear to remove" : "Click to edit");
 
 		el.addEventListener("click", evt => {
 			evt.stopPropagation();
 			el.empty();
+			el.removeClass("annotation-review-whitespace");
 			const input = el.createEl("textarea", { cls: "annotation-review-edit-input" });
 			input.value = text;
 			input.focus();
@@ -323,13 +358,13 @@ export class AnnotationReviewView extends ItemView {
 			const commit = () => {
 				if (committed) return;
 				committed = true;
-				const newVal = input.value.trim();
+				const newVal = options.keepWhitespace ? input.value : input.value.trim();
 				// Give up focus first, otherwise the refresh that follows the
 				// save is suppressed as an edit in progress and the panel keeps
 				// showing the old text.
 				input.blur();
-				if (!newVal && clearSpan) {
-					this.plugin.replaceSpan(annotation, clearSpan.start, clearSpan.end, "");
+				if (!newVal && options.clearSpan) {
+					this.plugin.replaceSpan(annotation, options.clearSpan.start, options.clearSpan.end, "");
 				} else if (newVal && newVal !== text) {
 					this.plugin.replaceSpan(annotation, span.start, span.end, newVal);
 				} else {
@@ -352,54 +387,24 @@ export class AnnotationReviewView extends ItemView {
 	}
 
 	/**
-	 * An editable field whose save and clear are handled by the caller, for
-	 * cases where the change rewrites the annotation rather than replacing a
-	 * span of it.
+	 * Sets, changes or clears an author. Changing keeps whatever whitespace
+	 * followed the old label, and clearing the last thing in an entry takes
+	 * the entry with it.
 	 */
-	private renderEditableClearable(
-		container: Element,
-		cls: string,
-		text: string,
-		onSave: (newText: string) => void,
-		onClear: () => void
-	) {
-		const el = container.createEl("div", { cls: `${cls} annotation-review-editable` });
-		const showDisplay = () => {
-			el.empty();
-			el.setText(text);
-		};
-		showDisplay();
-		setTooltip(el, "Click to edit, clear to remove");
-
-		el.addEventListener("click", evt => {
-			evt.stopPropagation();
-			el.empty();
-			const input = el.createEl("textarea", { cls: "annotation-review-edit-input" });
-			input.value = text;
-			input.focus();
-			input.select();
-
-			let committed = false;
-			const commit = () => {
-				if (committed) return;
-				committed = true;
-				const newVal = input.value.trim();
-				input.blur();
-				if (!newVal) onClear();
-				else if (newVal !== text) onSave(newVal);
-				else showDisplay();
-			};
-			input.addEventListener("click", inner => inner.stopPropagation());
-			input.addEventListener("blur", commit);
-			input.addEventListener("keydown", inner => {
-				if (inner.key === "Enter" && !inner.shiftKey) {
-					inner.preventDefault();
-					commit();
-				} else if (inner.key === "Escape") {
-					showDisplay();
-				}
-			});
-		});
+	private saveAuthor(annotation: Annotation, target: AuthorTarget, newAuthor: string) {
+		if (target.authorSpan) {
+			if (!newAuthor) {
+				const clear = target.authorClearSpan ?? target.authorSpan;
+				this.plugin.replaceSpan(annotation, clear.start, clear.end, "");
+				return;
+			}
+			const current = annotation.fullMatch.slice(target.authorSpan.start, target.authorSpan.end);
+			const trailing = current.replace(/^\[[^\]]*\]/, "");
+			this.plugin.replaceSpan(annotation, target.authorSpan.start, target.authorSpan.end, `[${newAuthor}]${trailing}`);
+		} else if (newAuthor && target.authorInsert) {
+			const p = target.authorInsert;
+			this.plugin.replaceSpan(annotation, p.at, p.at, `${p.prefix}${newAuthor}${p.suffix}`);
+		}
 	}
 
 	/** An author chip that turns into an inline editor on click. */
@@ -518,21 +523,42 @@ export class AnnotationReviewView extends ItemView {
 		};
 	}
 
+	/**
+	 * An author chip followed by text, the way a reply reads. The chip moves
+	 * onto its own line when the text needs more than one.
+	 */
+	private renderAuthoredLine(
+		container: Element,
+		cls: string,
+		author: string | undefined,
+		onAuthor: (author: string) => void,
+		renderText: (row: HTMLElement) => HTMLElement
+	): HTMLElement {
+		const row = container.createEl("div", { cls });
+		this.renderAuthorBadge(row, author, `${cls}-author`, onAuthor);
+		row.appendText(" ");
+		const textEl = renderText(row);
+		// An inline span reports one rect per line it occupies, so more than
+		// one means the text didn't fit beside its author.
+		window.setTimeout(() => {
+			if (textEl.getClientRects().length > 1) row.addClass("is-stacked");
+		}, 0);
+		return row;
+	}
+
 	private renderAnnotationItem(container: Element, annotation: Annotation) {
 		const card = container.createEl("div", {
-			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type}`
+			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type} annotation-wrapper-${annotation.wrapper}`
 		});
+		card.dataset.id = annotation.id;
+		if (annotation.id === this.plugin.activeAnnotationId) card.addClass("is-active");
 
 		const header = card.createEl("div", { cls: "annotation-review-header" });
 		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		this.renderAuthorBadge(header, annotation.author, "", newAuthor => {
-			const replacement = newAuthor ? `[${newAuthor}] ` : "";
-			if (annotation.authorSpan) {
-				this.plugin.replaceSpan(annotation, annotation.authorSpan.start, annotation.authorSpan.end, replacement);
-			} else if (newAuthor) {
-				this.plugin.replaceSpan(annotation, annotation.authorInsertAt, annotation.authorInsertAt, replacement);
-			}
-		});
+		// With a reason to sit next to, the author goes there instead.
+		if (!annotation.reasonSpan) {
+			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
+		}
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 
 		const body = card.createEl("div", { cls: "annotation-review-body" });
@@ -542,16 +568,13 @@ export class AnnotationReviewView extends ItemView {
 				"annotation-review-text annotation-review-insert-text",
 				annotation,
 				annotation.bodySpan,
-				annotation.insertedText ?? ""
+				annotation.insertedText ?? "",
+				{ keepWhitespace: true }
 			);
-		} else if (annotation.type !== "insert" && annotation.originalSpan) {
-			this.renderEditableText(
-				body,
-				"annotation-review-text",
-				annotation,
-				annotation.originalSpan,
-				annotation.originalText
-			);
+		} else if (annotation.originalSpan) {
+			this.renderEditableText(body, "annotation-review-text", annotation, annotation.originalSpan, annotation.originalText, {
+				keepWhitespace: true
+			});
 		}
 
 		// The arrow sits on its own line so the old and new text stay left
@@ -563,34 +586,23 @@ export class AnnotationReviewView extends ItemView {
 				"annotation-review-replacement",
 				annotation,
 				annotation.replacementSpan,
-				annotation.replacement ?? ""
+				annotation.replacement ?? "",
+				{ keepWhitespace: true }
 			);
 		}
 
-		if (annotation.type === "comment" && annotation.bodySpan) {
-			this.renderEditableText(body, "annotation-review-comment", annotation, annotation.bodySpan, annotation.commentText ?? "");
-		} else if (annotation.reasonSpan && annotation.type === "insert") {
-			// An insertion changes shape with its reason, since the ++ markers
-			// only belong to the form without a footnote, so clearing it goes
-			// through a rewrite rather than a span edit.
-			this.renderEditableClearable(
+		if (annotation.reasonSpan) {
+			const reasonSpan = annotation.reasonSpan;
+			this.renderAuthoredLine(
 				body,
-				"annotation-review-comment",
-				annotation.reason ?? "",
-				newText => this.plugin.setInsertReason(annotation, newText),
-				() => this.plugin.setInsertReason(annotation, "")
-			);
-		} else if (annotation.reasonSpan) {
-			// Clearing the field removes the reason, along with the comma that
-			// introduced it.
-			this.renderEditableText(
-				body,
-				"annotation-review-comment",
-				annotation,
-				annotation.reasonSpan,
-				annotation.reason ?? "",
-				false,
-				annotation.reasonClearSpan
+				"annotation-review-note",
+				annotation.author,
+				a => this.saveAuthor(annotation, annotation, a),
+				row =>
+					this.renderEditableText(row, "annotation-review-note-text", annotation, reasonSpan, annotation.reason ?? annotation.commentText ?? "", {
+						inline: true,
+						clearSpan: annotation.reasonClearSpan
+					})
 			);
 		}
 
@@ -598,35 +610,21 @@ export class AnnotationReviewView extends ItemView {
 		// where the reason renders, a reply under the replies list.
 		const reasonInsert = annotation.reasonInsert;
 		const reasonForm = reasonInsert
-			? this.createInlineForm(card, "Reason...", text => {
-					// An insertion is rewritten rather than patched, since gaining
-					// a reason means losing its ++ markers.
-					if (annotation.type === "insert") this.plugin.setInsertReason(annotation, text);
-					else this.plugin.replaceSpan(annotation, reasonInsert.at, reasonInsert.at, `${reasonInsert.prefix}${text}${reasonInsert.suffix}`);
-				})
+			? this.createInlineForm(card, annotation.type === "comment" ? "Comment..." : "Reason...", text =>
+					this.plugin.replaceSpan(annotation, reasonInsert.at, reasonInsert.at, `${reasonInsert.prefix}${text}${reasonInsert.suffix}`)
+				)
 			: null;
 
 		if (annotation.replies.length > 0) {
 			if (this.plugin.settings.repliesExpanded) {
 				const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
 				for (const reply of annotation.replies) {
-					const replyEl = repliesEl.createEl("div", { cls: "annotation-review-reply" });
-					this.renderAuthorBadge(replyEl, reply.author, "annotation-review-reply-author", newAuthor => {
-						const replacement = newAuthor ? `[${newAuthor}] ` : "";
-						if (reply.authorSpan) {
-							this.plugin.replaceSpan(annotation, reply.authorSpan.start, reply.authorSpan.end, replacement);
-						} else if (newAuthor) {
-							this.plugin.replaceSpan(annotation, reply.authorInsertAt, reply.authorInsertAt, replacement);
-						}
-					});
-					replyEl.appendText(" ");
-					const textEl = this.renderEditableText(
-						replyEl,
-						"annotation-review-reply-text",
-						annotation,
-						reply.textSpan,
-						reply.text,
-						true
+					const replyEl = this.renderAuthoredLine(
+						repliesEl,
+						"annotation-review-reply",
+						reply.author,
+						a => this.saveAuthor(annotation, reply, a),
+						row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
 					);
 					const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });
 					setIcon(removeBtn, "x");
@@ -635,13 +633,6 @@ export class AnnotationReviewView extends ItemView {
 						evt.stopPropagation();
 						this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
 					});
-
-					// An inline span reports one rect per line it occupies, so
-					// more than one means the reply didn't fit beside its author
-					// and reads better with the author on its own line above.
-					window.setTimeout(() => {
-						if (textEl.getClientRects().length > 1) replyEl.addClass("is-stacked");
-					}, 0);
 				}
 			} else {
 				card.createEl("div", {
@@ -700,7 +691,7 @@ export class AnnotationReviewView extends ItemView {
 		if (reasonForm) {
 			const addReasonBtn = trailing.createEl("button", { cls: "clickable-icon" });
 			setIcon(addReasonBtn, "plus");
-			setTooltip(addReasonBtn, "Add a reason");
+			setTooltip(addReasonBtn, annotation.type === "comment" ? "Add the comment" : "Add a reason");
 			addReasonBtn.addEventListener("click", evt => {
 				evt.stopPropagation();
 				reasonForm.toggle();

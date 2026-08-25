@@ -2,40 +2,69 @@
 
 ## Current Sprint
 
+### Before 0.6.0 goes stable
+- [ ] **Update the skill to the new grammar.** The vault copy of `markdown-annotations.md` still describes the old keyword syntax, which the parser no longer reads. Jeroen updates it first, then it gets copied into `skills/annotation-review/SKILL.md` minus the personal preferences section. The stable release waits for this.
+- [ ] Decide what to do about braces in reading view. They show as literal braces without a CriticMarkup plugin. Try one, or style them from this plugin.
+
 ### Known gaps worth deciding on
 - [ ] Every unlabeled reply shows a "No author" chip, which is a bit heavy in a list of replies. A quieter affordance might read better
-- [ ] A highlight-form insert nested inside another one is not detected. Accepted rather than fixed, since Obsidian does not render that case properly either. The percent mark form is the one to use for nesting
+- [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
+- [ ] Anything in square brackets at the start of an entry is read as the author, so `^[[1] see the appendix]` gets the author "1". Accepted when square brackets were chosen over `{Author}`
+- [ ] Clearing the only author or reason on an entry that has replies after it leaves an empty `^[]` behind, since removing the entry would turn the first reply into the reason. Rare, and it parses, but it is ugly
 
 ### Needs checking in Obsidian
 
-Everything else has been confirmed working in the app. These are the changes in the current beta.
+The changes in `0.6.0-beta.1`. The checklist with fixtures is in the vault's Annotation Review Test note.
 
-- [ ] Adding a reason to a `==++text++==` insert drops the `++`, and clearing it puts them back
-- [ ] A percent mark insert keeps its marks either way, gaining and losing only the footnote
-- [ ] Replies on an insert survive both rewrites
-- [ ] Clicking a card selects the whole annotation in the note
-- [ ] Clicking a card in reading view scrolls to the right line, since nothing can be selected there
+- [ ] The coloured line along the top of each card: yellow highlight, grey percent marks, purple braces
+- [ ] Author chip at the start of the reason, not italic, moving onto its own line when the reason wraps
+- [ ] The card under the caret gets an accent border and scrolls into view, and clears when the caret leaves
+- [ ] Approving `{++is ++}` keeps the space
+- [ ] The settings tab, and the commands honouring the wrapper choices
+- [ ] Insert command inside an existing percent mark insertion writes the close and reopen form
+- [ ] Replies follow the channel of the last entry, footnote or brace comment
+- [ ] Point comments show as comment cards and dismiss cleanly
 
 ## Future Ideas
 
 ### Agreed for a next version
 
-- [ ] **Author label to the left of the comment or reason**, not italic, matching how replies read. When there is no comment or reason, the label stays where it is now. Small layout change, low risk.
-- [ ] **Label percent mark inserts as `%%Insert%%`** in the sidebar, to set them apart from the highlight forms. The form is already tracked as `insertForm`, so this is a badge change only.
-- [ ] **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
-- [ ] **Sync the cursor to the sidebar.** With the caret inside a highlight or its footnote, scroll that card into view and mark it as active. Every annotation already knows its offset range, so mapping a cursor position to a card is a lookup. The main choice is which event to listen on, since Obsidian has no dedicated caret-moved event, so it likely means checking the cursor on editor changes and on active leaf changes. Probably the cheapest of the four for how much it helps.
+- [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
+- [ ] **A setting for the metadata channel**, footnote or brace comment, for people who want fully portable CriticMarkup. Today the commands always write footnotes and only replies follow an existing brace comment.
+- [ ] **Style brace annotations in the editor**, so `{--text--}` reads as a deletion without a separate CriticMarkup plugin.
 
-### Rethinking the syntax, not decided
+### Rethinking the syntax: done in 0.6.0
 
-Worth taking seriously, but every option here breaks documents already annotated in the old syntax, so a reader that accepts both for a while is part of the cost.
+Kept because the reasoning is still useful. The full proposal, with an exhaustive example list per annotation type, lives in the Future ideas section of the vault's Annotation Review Test note.
 
-- [ ] **The comma separator before a reason.** It parses fine with a capitalised reason, so this is about how it reads rather than whether it works. A colon (`delete: Reason.`) reads better and is just as unambiguous, since the split happens at the first one only.
-- [ ] **Quotes around a replacement.** A real defect, not a style question: a replacement containing a double quote cannot be expressed at all. Options are a different delimiter, an escape, or accepting curly quotes as well.
-- [ ] **The arrow.** Accepting `->` alongside `→` is a couple of characters in one regex and removes the typing problem entirely. Worth doing whatever else changes.
-- [ ] **Keywords inside brackets**, so `^[[Claude] [delete] Reason.]`. Removes the separator question completely, at the cost of looking similar to the author label right next to it.
-- [ ] **Percent marks for every annotation type, not just inserts.** Worth thinking through carefully, because the two markers do different jobs. Percent marks *hide* their contents and highlights *show* them. That is exactly why inserts use percent marks: the inserted text is a proposal, so hiding it until approval is correct. A comment, deletion or replacement points at text the reader is supposed to keep seeing, so hiding it would be wrong. The choice between them is not arbitrary, so a switch would only make sense for the annotation's own metadata, not for the text it points at.
+The grammar is three independent choices instead of one English keyword in a footnote:
+
+```
+<wrapper> <op> content <op> </wrapper> <entry>*
+```
+
+The wrapper picks visibility (`{...}` literal, `==...==` highlighted, `%%...%%` hidden), the operator picks the operation (`--` delete, `++` insert, `~>` substitute, none means comment), and each entry, a footnote or a `{>>...<<}`, carries only `[Author]` and free prose. This settled the comma separator, the quoted replacement and the arrow at once, because none of them survive. It also matches an existing standard rather than being one more private dialect.
+
+Decisions taken along the way:
+
+- Author labels stay in the entries, never inside the operator markers. Once whitespace inside the markers is significant, `{++[Claude] is ++}` cannot say whether the space after the label belongs to the inserted text.
+- Whitespace inside the markers is significant. `{++is ++}` carries its own trailing space.
+- Square brackets for the author. Rendering and the graph were both checked, neither produces a phantom link.
+- Brace comments are a second metadata channel, read exactly like footnotes. The commands write footnotes by default.
+- The footnote no longer decides an annotation's type, so the rule that a self-contained insert's first footnote is a reply disappeared. First entry is author and reason, every later one is a reply, no exceptions.
+- Braces are the only wrapper that nests. `==` and `%%` cannot, and percent marks chain by closing and reopening instead.
+- A footnote inside a percent wrapper was tried as a way to keep hidden annotations silent, and does not work: live preview breaks, reader view still lists the footnote, and the highlight equivalent swallows the rest of the line.
+- Migration was not a goal. The old forms were deleted from the parser rather than converted.
+- Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] The parser reads the CriticMarkup based grammar and nothing else: three wrappers, four operations, footnotes or brace comments for author, reason and replies, point comments, brace nesting, whitespace kept exactly as written. The old keyword syntax is gone (2026-08-25)
+- [x] The commands write the new grammar, with the wrapper per operation chosen in a new settings tab. Insertions fall back to a highlight in fenced blocks and to the close and reopen form inside an existing percent mark insertion, operator included (2026-08-25)
+- [x] Author chip sits at the start of the reason or comment text, not italic, and moves onto its own line when the text wraps, the way replies already did. It stays in the header when there is no reason (2026-08-25)
+- [x] A line along the top of each card shows the wrapper: yellow for a highlight, grey for percent marks, purple for braces (2026-08-25)
+- [x] The card under the caret is marked and scrolled into view, through CodeMirror's update listener since Obsidian has no caret event. Recomputed after every scan so it survives typing (2026-08-25)
+- [x] Whitespace-only text, such as an inserted paragraph break, is described on the card rather than shown as an empty box (2026-08-25)
+- [x] Replies are written in the channel of the last existing entry, so a brace comment chain stays a brace comment chain (2026-08-25)
 - [x] An insertion now changes shape with its reason. The `++` markers only mark inserted text when no footnote says so, so adding a reason drops them and clearing it brings them back. Percent mark inserts keep their marks either way, since those hide the text rather than label it, and converting one would reveal hidden text and not survive a round trip (2026-08-24)
 - [x] Fix: clicking a card did not select the annotation. Selecting needs the editor focused afterwards, and reading view has no visible editor at all, so it now scrolls to the line there instead (2026-08-24)
 - [x] Fix: text that merely mentions the syntax, such as a backticked `==` inside a sentence explaining it, swallowed the next real annotation's opening delimiter and shifted every pairing after it. Rejecting a pairing now consumes only its opening delimiter, whatever the reason for rejecting it (2026-08-24)
@@ -61,18 +90,4 @@ Worth taking seriously, but every option here breaks documents already annotated
 - [x] Tabs span the full panel width so the active underline splits it exactly in half. Obsidian's own view padding was insetting them (2026-08-23)
 - [x] Approve, Dismiss and the filter buttons are genuinely shorter now. Obsidian gives buttons a fixed height, so the earlier padding change had no visible effect (2026-08-23)
 - [x] Sidebar now reads from the open editor instead of from disk, so it updates while you type instead of waiting for Obsidian's autosave. Writes go through the editor too, so they join the undo history and never overwrite unsaved typing (2026-08-23)
-- [x] Replies work on `%%...%%` inserts, previously only on highlight annotations (2026-08-23)
-- [x] Reply and reason fields moved above the action buttons, where their result appears, so they get the full card width (2026-08-23)
-- [x] Author chips are editable on annotations and replies, including setting one where there was none and clearing an existing one (2026-08-23)
-- [x] Plus button to add a reason to an annotation that has none, since there was previously no field to click (2026-08-23)
-- [x] Replace layout: arrow on its own line with the original and replacement left aligned under each other, and the replaced text tinted orange to match its badge instead of green (2026-08-23)
-- [x] Editor commands for creating annotations: one per type, plus a type picker, plus a default author command. Insert syntax is chosen automatically for fenced blocks and for nesting inside an existing insert (2026-08-23)
-- [x] Editing now targets exact character ranges recorded during detection rather than searching for matching text, so repeated text in an annotation can no longer be edited in the wrong place (2026-08-23)
-- [x] Fix: a single stray literal `==` anywhere in a note used to desync every real annotation after it in the whole file. Now the detector recovers immediately (2026-08-23)
-- [x] Editing annotations, replacements, inserted text, and replies directly from the sidebar by clicking the text (2026-08-23)
-- [x] Expand/collapse-all toggle for replies in the Annotations tab (2026-08-23)
-- [x] Deleting an admonition block now also collapses the blank line below it (or above it, if only that one's empty) instead of leaving three blank lines behind (2026-08-23)
-- [x] Fix: approve/dismiss/reply/delete now relocate an annotation's text if an earlier action shifted its position (2026-08-23)
 - [x] Core plugin: detection, approve/dismiss, sidebar, install via BRAT (2026-08-23)
-- [x] Author filter, colored author badges, Admonitions tab, Refresh button, reason-field fixes (2026-08-23)
-- [x] Redesigned sidebar: tabs with underline indicator, Menu-based filter buttons, live-rendered admonitions, per-block delete (2026-08-23)

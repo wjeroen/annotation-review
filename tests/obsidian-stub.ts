@@ -8,11 +8,20 @@ export class Plugin {
 	registerView() {}
 	addRibbonIcon() {}
 	addCommand() {}
+	addSettingTab() {}
 	registerEvent() {}
+	registerEditorExtension() {}
 	async loadData() {
 		return {};
 	}
 	async saveData() {}
+}
+export class PluginSettingTab {
+	app: any;
+	containerEl: any = { empty() {} };
+	constructor(app: any, _plugin: any) {
+		this.app = app;
+	}
 }
 export class ItemView {
 	leaf: any;
@@ -51,6 +60,9 @@ export class Setting {
 		return this;
 	}
 	addTextArea() {
+		return this;
+	}
+	addDropdown() {
 		return this;
 	}
 	addButton() {

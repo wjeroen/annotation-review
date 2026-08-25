@@ -5,7 +5,7 @@ const built = await esbuild.build({
 	stdin: {
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
-			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval, computeSetInsertReason } from "./src/actions";
+			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composeInsertWithReason } from "./src/compose";
 		`,
 		resolveDir: ".",
@@ -31,7 +31,6 @@ const {
 	computeAddReply,
 	computeSpanReplace,
 	computeRemoval,
-	computeSetInsertReason,
 	composeComment,
 	composeDelete,
 	composeReplace,
@@ -45,180 +44,218 @@ function check(label, actual, expected) {
 	if (a === e) { pass++; console.log(`  ok   ${label}`); }
 	else { fail++; console.log(`  FAIL ${label}\n         got:      ${a}\n         expected: ${e}`); }
 }
-const one = (doc) => detectAnnotations(doc, "t.md")[0];
+const all = doc => detectAnnotations(doc, "t.md");
+const one = doc => all(doc)[0];
+/** The parts that matter, in one line: type, author, original, inserted, replacement, reason or comment. */
+const shape = a => a ? [a.type, a.author ?? null, a.originalText, a.insertedText ?? null, a.replacement ?? null, a.reason ?? a.commentText ?? null] : null;
+const approve = doc => computeMutation(doc, one(doc), "approve").newContent;
+const dismiss = doc => computeMutation(doc, one(doc), "dismiss").newContent;
+const PLAIN = { kind: "plain" };
 
-console.log("=== Types ===");
-check("comment", one(`==T.==^[[C] note]`).type, "comment");
-check("delete", one(`==T.==^[[C] delete]`).type, "delete");
-check("replace", one(`==T.==^[[C] → "N."]`).type, "replace");
-check("insert, percent marks", one(`%%[C] N.%%`).type, "insert");
-check("insert, highlight form", one(`==++[C] N.++==`).type, "insert");
-check("insert, footnote form", one(`==N.==^[[C] insert]`).type, "insert");
-check("no footnote is not an annotation", detectAnnotations(`==T.==`, "t.md").length, 0);
+console.log("=== Every wrapper carries every operation ===");
+for (const w of ["{--is --}", "==--is --==", "%%--is --%%"]) {
+	check(`delete ${w}`, shape(one(`This is ${w}a test.`)), ["delete", null, "is ", null, null, null]);
+}
+for (const w of ["{++is ++}", "==++is ++==", "%%++is ++%%", "%%%%++is ++%%%%"]) {
+	check(`insert ${w}`, shape(one(`This ${w}a test.`)), ["insert", null, "", "is ", null, null]);
+}
+for (const w of [
+	"{--isn't~>is++}", "{--isn't--++is++}", "{~~isn't~>is~~}",
+	"==--isn't~>is++==", "==--isn't--++is++==", "==~~isn't~>is~~==",
+	"%%--isn't~>is++%%", "%%--isn't--++is++%%", "%%~~isn't~>is~~%%"
+]) {
+	check(`replace ${w}`, shape(one(`This ${w} a test.`)), ["replace", null, "isn't", null, "is", null]);
+}
+check("comment, brace highlight on its own", shape(one(`{==This is a test==}`)), ["comment", null, "This is a test", null, null, null]);
+check("comment, highlight with a footnote", shape(one(`==This is a test==^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
+check("comment, percent with a footnote", shape(one(`%%This is a test%%^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
+check("an ordinary highlight is not an annotation", all(`==plain==`).length, 0);
+check("an ordinary Obsidian comment is not an annotation", all(`%%hidden%%`).length, 0);
+check("tildes without an arrow are just strikethrough", shape(one(`==~~gone~~==^[note]`)), ["comment", null, "~~gone~~", null, null, "note"]);
+check("wrapper is recorded", all(`{--a--} ==--b--==^[x] %%--c--%%^[x]`).map(a => a.wrapper), ["brace", "highlight", "percent"]);
 
-console.log("\n=== The type keyword is not repeated in the reason ===");
-check("delete reason", one(`==T.==^[[C] delete, outdated]`).reason, "outdated");
-check("replace reason", one(`==T.==^[[C] → "N.", clearer]`).reason, "clearer");
-check("replace text", one(`==T.==^[[C] → "N.", clearer]`).replacement, "N.");
+console.log("\n=== Whitespace is kept exactly as written ===");
+check("approve insert keeps its trailing space", approve(`This {++is ++}a test.`), "This is a test.");
+check("approve delete removes the space with it", approve(`This is {--is --}a test.`), "This is a test.");
+check("dismiss delete puts it all back", dismiss(`This is {--is --}a test.`), "This is is a test.");
+check("a blank line can be inserted", one(`A.{++\n\n++}B.`).insertedText, "\n\n");
+check("approving it", approve(`A.{++\n\n++}B.`), "A.\n\nB.");
+check("a blank line can be deleted", approve(`A.{--\n\n--}B.`), "A.B.");
+check("percent marks can span paragraphs", approve(`A.%%++\n\nNew paragraph.\n\n++%%B.`), "A.\n\nNew paragraph.\n\nB.");
+check("a highlight cannot cross a blank line", all(`==--a\n\nb--==^[x]`).length, 0);
 
-console.log("\n=== Code blocks ===");
-const fenced = "```python\n==x==^[[C] delete]\n```\n\n```ad-j\n==y==^[[C] delete]\n```";
-check("plain fence ignored, ad- fence scanned", detectAnnotations(fenced, "t.md").map(a => a.originalText), ["y"]);
-check("admonition blocks listed", detectAdmonitionBlocks(fenced, "t.md").map(b => b.adType), ["ad-j"]);
-check("bare ad-c paragraph is not an annotation", detectAnnotations("```ad-c\nJust a note.\n```", "t.md").length, 0);
-
-console.log("\n=== A stray == must not desync the rest of the file ===");
-const stray = `Someone writes == literally here.\n\n==Real one.==^[[C] delete]\n\n==Another.==^[[C] delete]`;
-check("both real annotations survive", detectAnnotations(stray, "t.md").map(a => a.originalText), ["Real one.", "Another."]);
-
-console.log("\n=== Nested inserts ===");
-check("doubled marks give three inserts",
-	detectAnnotations(`%%[C] One.%%%%[G] Two.%%%%[C] Three.%%`, "t.md").map(a => a.insertedText),
-	["One.", "Two.", "Three."]);
+console.log("\n=== Author and reason, in either channel ===");
+check("footnote, author only", shape(one(`{--is --}^[[Claude]]`)), ["delete", "Claude", "is ", null, null, null]);
+check("brace comment, author only", shape(one(`{--is --}{>>[Claude]<<}`)), ["delete", "Claude", "is ", null, null, null]);
+check("footnote, author and reason", shape(one(`{--is --}^[[Claude] Why.]`)), ["delete", "Claude", "is ", null, null, "Why."]);
+check("brace comment, author and reason", shape(one(`{--is --}{>>[Claude] Why.<<}`)), ["delete", "Claude", "is ", null, null, "Why."]);
+check("footnote, reason only", shape(one(`{--is --}^[Why.]`)), ["delete", null, "is ", null, null, "Why."]);
+check("on a highlight", shape(one(`==--is --==^[[Claude] Why.]`)), ["delete", "Claude", "is ", null, null, "Why."]);
+check("on percent marks", shape(one(`%%++is ++%%^[[Claude] Why.]`)), ["insert", "Claude", "", "is ", null, "Why."]);
+check("an empty footnote is still an attached entry", shape(one(`{--is --}^[]`)), ["delete", null, "is ", null, null, null]);
+check("author only on a comment span", shape(one(`==text==^[[Claude]]`)), ["comment", "Claude", "text", null, null, null]);
+check("a space breaks the attachment", one(`{--is --} ^[[Claude] Why.]`).author, undefined);
+check("and the annotation ends before it", one(`{--is --} ^[[Claude] Why.]`).fullMatch, "{--is --}");
 
 console.log("\n=== Replies ===");
-const withReplies = `==T.==^[[C] delete]^[[A] disagree]^[[C] fair]`;
-const wr = one(withReplies);
-check("replies parsed", wr.replies.map(r => [r.author, r.text]), [["A", "disagree"], ["C", "fair"]]);
-check("replies on a percent insert", one(`%%[G] N.%%^[[A] nice]`).replies.length, 1);
-check("dismissing one reply",
-	computeSpanReplace(withReplies, wr, wr.replies[0].fullSpan.start, wr.replies[0].fullSpan.end, "").newContent,
-	`==T.==^[[C] delete]^[[C] fair]`);
-check("a reply starting with 'insert' stays a reply", one(`%%[C] N.%%^[[A] insert reads well]`).replies.length, 1);
+const threaded = `{--is --}^[[C] Why.]^[[A] Agreed.]^[[C] Done.]`;
+check("footnote replies", one(threaded).replies.map(r => [r.author, r.text]), [["A", "Agreed."], ["C", "Done."]]);
+check("brace comment replies", one(`{--is --}{>>[C] Why.<<}{>>[A] Agreed.<<}`).replies.map(r => [r.author, r.text]), [["A", "Agreed."]]);
+check("channels can mix", one(`{--is --}^[[C] Why.]{>>[A] Agreed.<<}`).replies.length, 1);
+check("a new reply follows the last channel used", one(`{--is --}^[[C] Why.]{>>[A] Agreed.<<}`).nextChannel, "brace");
+check("author only, then a reply", shape(one(`{--is --}^[[C]]^[[A] Agreed.]`)).concat([one(`{--is --}^[[C]]^[[A] Agreed.]`).replies.length]), ["delete", "C", "is ", null, null, null, 1]);
+check("the first entry is never a reply", one(`{--is --}^[[A] Agreed.]`).replies.length, 0);
+check("adding a footnote reply", computeAddReply(threaded, one(threaded), "[J] ok").newContent, `${threaded}^[[J] ok]`);
+const braced = `{--is --}{>>[C] Why.<<}`;
+check("adding a brace reply", computeAddReply(braced, one(braced), "[J] ok").newContent, `${braced}{>>[J] ok<<}`);
+const t = one(threaded);
+check("dismissing one reply", computeSpanReplace(threaded, t, t.replies[0].fullSpan.start, t.replies[0].fullSpan.end, "").newContent, `{--is --}^[[C] Why.]^[[C] Done.]`);
+check("approving takes the replies with it", approve(threaded), "");
 
-console.log("\n=== Approve and dismiss ===");
-check("approve replace", computeMutation(`==Old.==^[[C] → "New."]`, one(`==Old.==^[[C] → "New."]`), "approve").newContent, "New.");
-check("dismiss replace", computeMutation(`==Old.==^[[C] → "New."]`, one(`==Old.==^[[C] → "New."]`), "dismiss").newContent, "Old.");
-check("approve delete", computeMutation(`==Old.==^[[C] delete]`, one(`==Old.==^[[C] delete]`), "approve").newContent, "");
-check("approve insert", computeMutation(`%%[C] New.%%`, one(`%%[C] New.%%`), "approve").newContent, "New.");
-check("dismiss insert", computeMutation(`%%[C] New.%%`, one(`%%[C] New.%%`), "dismiss").newContent, "");
-check("comments cannot be approved", computeMutation(`==T.==^[[C] note]`, one(`==T.==^[[C] note]`), "approve").ok, false);
-check("approving takes replies with it",
-	computeMutation(withReplies, wr, "approve").newContent, "");
+console.log("\n=== Point comments ===");
+const point = `This is a test{>>What?<<}.`;
+check("a bare brace comment is a comment on a spot", [one(point).type, one(point).isPoint, one(point).originalText, one(point).commentText], ["comment", true, "", "What?"]);
+check("with an author", one(`Text{>>[C] What?<<}`).author, "C");
+check("with a reply", one(`Text{>>[C] What?<<}{>>[J] A test.<<}`).replies.map(r => r.text), ["A test."]);
+check("dismissing removes it", dismiss(`A{>>x<<}B`), "AB");
+check("one attached to an annotation is not a point comment", all(`{--is --}{>>[C] r<<}`).length, 1);
+check("after a space it is", all(`text {>>x<<}`).map(a => a.isPoint), [true]);
+
+console.log("\n=== Nesting ===");
+check("braces nest", all(`{++outer {++inner++} rest++}`).map(a => a.insertedText), ["outer {++inner++} rest", "inner"]);
+check("percent marks chain", all(`%%++A ++%%%%++X++%%%%++B++%%`).map(a => a.insertedText), ["A ", "X", "B"]);
+const nested = `{++a {--b--}^[[C] why] c++}`;
+check("an inner annotation keeps its own entries", all(nested).map(shape), [["insert", null, "", "a {--b--}^[[C] why] c", null, null], ["delete", "C", "b", null, null, "why"]]);
+check("approving the inner one", computeMutation(nested, all(nested)[1], "approve").newContent, `{++a  c++}`);
 
 console.log("\n=== Author editing ===");
-const withAuthor = `==T.==^[[C] delete]`;
-const wa = one(withAuthor);
-check("change", computeSpanReplace(withAuthor, wa, wa.authorSpan.start, wa.authorSpan.end, "[J] ").newContent, `==T.==^[[J] delete]`);
-check("clear", computeSpanReplace(withAuthor, wa, wa.authorSpan.start, wa.authorSpan.end, "").newContent, `==T.==^[delete]`);
-const noAuthor = `==T.==^[delete]`;
-const na = one(noAuthor);
-check("add where there was none",
-	computeSpanReplace(noAuthor, na, na.authorInsertAt, na.authorInsertAt, "[C] ").newContent, `==T.==^[[C] delete]`);
-
-console.log("\n=== Adding a reason where there is none ===");
-function addReason(doc, text) {
-	const ann = one(doc);
-	const r = ann.reasonInsert;
-	return r ? computeSpanReplace(doc, ann, r.at, r.at, `${r.prefix}${text}${r.suffix}`).newContent : "(none)";
+function setAuthor(doc, target, value, ann = one(doc)) {
+	const tgt = target ?? ann;
+	if (tgt.authorSpan) {
+		if (!value) { const c = tgt.authorClearSpan ?? tgt.authorSpan; return computeSpanReplace(doc, ann, c.start, c.end, "").newContent; }
+		const trailing = ann.fullMatch.slice(tgt.authorSpan.start, tgt.authorSpan.end).replace(/^\[[^\]]*\]/, "");
+		return computeSpanReplace(doc, ann, tgt.authorSpan.start, tgt.authorSpan.end, `[${value}]${trailing}`).newContent;
+	}
+	const p = tgt.authorInsert;
+	return computeSpanReplace(doc, ann, p.at, p.at, `${p.prefix}${value}${p.suffix}`).newContent;
 }
-check("delete", addReason(`==T.==^[[C] delete]`, "why"), `==T.==^[[C] delete, why]`);
-check("replace", addReason(`==T.==^[[C] → "N."]`, "why"), `==T.==^[[C] → "N.", why]`);
-check("percent insert", addReason(`%%[C] N.%%`, "why"), `%%[C] N.%%^[insert, why]`);
-check("that reason reads back as a reason", one(`%%[C] N.%%^[insert, why]`).reason, "why");
-check("a comment has no reason slot", one(`==T.==^[[C] note]`).reasonInsert, undefined);
+check("change", setAuthor(`==--T--==^[[C] why]`, null, "J"), `==--T--==^[[J] why]`);
+check("change keeps the spacing after the label", setAuthor(`==--T--==^[[C]]`, null, "J"), `==--T--==^[[J]]`);
+check("clear, leaving the reason", setAuthor(`==--T--==^[[C] why]`, null, ""), `==--T--==^[why]`);
+check("clearing the only thing in an entry removes the entry", setAuthor(`==--T--==^[[C]]`, null, ""), `==--T--==`);
+check("unless replies follow it", setAuthor(`==--T--==^[[C]]^[[A] r]`, null, ""), `==--T--==^[]^[[A] r]`);
+check("add to an entry that has a reason", setAuthor(`==--T--==^[why]`, null, "C"), `==--T--==^[[C] why]`);
+check("add to a brace entry", setAuthor(`{--T--}{>>why<<}`, null, "C"), `{--T--}{>>[C] why<<}`);
+check("add where there is no entry at all", setAuthor(`==--T--==`, null, "C"), `==--T--==^[[C]]`);
+const withReply = `{--T--}^[[C] why]^[r]`;
+check("add to a reply", setAuthor(withReply, one(withReply).replies[0], "A"), `{--T--}^[[C] why]^[[A] r]`);
+
+console.log("\n=== Reason editing ===");
+function setReason(doc, value) {
+	const ann = one(doc);
+	if (value) { const p = ann.reasonInsert; return computeSpanReplace(doc, ann, p.at, p.at, `${p.prefix}${value}${p.suffix}`).newContent; }
+	const c = ann.reasonClearSpan;
+	return computeSpanReplace(doc, ann, c.start, c.end, "").newContent;
+}
+check("add after an author", setReason(`{--T--}^[[C]]`, "why"), `{--T--}^[[C] why]`);
+check("add where there is no entry", setReason(`{--T--}`, "why"), `{--T--}^[why]`);
+check("add to a brace entry", setReason(`{--T--}{>>[C]<<}`, "why"), `{--T--}{>>[C] why<<}`);
+check("clear keeps the author", setReason(`{--T--}^[[C] why]`, ""), `{--T--}^[[C]]`);
+check("clear removes an entry that was only the reason", setReason(`{--T--}^[why]`, ""), `{--T--}`);
+check("unless replies follow it", setReason(`{--T--}^[why]^[[A] r]`, ""), `{--T--}^[]^[[A] r]`);
+check("a comment's text works the same way", setReason(`==T==^[[C] note]`, ""), `==T==^[[C]]`);
+check("a reason offers to be added when there is none", one(`{--T--}^[[C]]`).reasonInsert !== undefined, true);
+check("and not when there is one", one(`{--T--}^[[C] why]`).reasonInsert, undefined);
+
+console.log("\n=== Editing the annotated text ===");
+function setSpan(doc, spanName, value) {
+	const ann = one(doc);
+	const s = ann[spanName];
+	return computeSpanReplace(doc, ann, s.start, s.end, value).newContent;
+}
+check("the deleted text", setSpan(`{--Old--}^[[C]]`, "originalSpan", "New"), `{--New--}^[[C]]`);
+check("the old half of a replacement", setSpan(`{--a~>b++}`, "originalSpan", "c"), `{--c~>b++}`);
+check("the new half, arrow form", setSpan(`{--a~>b++}`, "replacementSpan", "c"), `{--a~>c++}`);
+check("the new half, fused form", setSpan(`{--a--++b++}`, "replacementSpan", "c"), `{--a--++c++}`);
+check("the new half, tilde form", setSpan(`==~~a~>b~~==`, "replacementSpan", "c"), `==~~a~>c~~==`);
+check("the inserted text, spaces included", setSpan(`%%++X++%%`, "bodySpan", "Y "), `%%++Y ++%%`);
+check("a point comment has no text span", one(`A{>>x<<}`).originalSpan, undefined);
+
+console.log("\n=== Approve and dismiss ===");
+check("approve replace", approve(`This ==--isn't~>is++==^[[C]] a test.`), "This is a test.");
+check("dismiss replace", dismiss(`This ==--isn't~>is++==^[[C]] a test.`), "This isn't a test.");
+check("approve fused replace", approve(`{--isn't--++is++}`), "is");
+check("approve tilde replace", approve(`{~~isn't~>is~~}`), "is");
+check("approve insert", approve(`%%++New.++%%^[[C]]`), "New.");
+check("dismiss insert", dismiss(`%%++New.++%%^[[C]]`), "");
+check("dismiss brace comment span", dismiss(`{==T==}{>>note<<}`), "T");
+check("dismiss hidden comment span", dismiss(`%%T%%^[note]`), "T");
+check("comments cannot be approved", computeMutation(`==T==^[note]`, one(`==T==^[note]`), "approve").ok, false);
+
+console.log("\n=== Code, links and stray delimiters ===");
+const fenced = "```python\n==--x--==^[[C]]\n```\n\n```ad-j\n==--y--==^[[C]]\n{++z++}\n```";
+check("plain fence ignored, ad- fence scanned", all(fenced).map(a => a.originalText || a.insertedText), ["y", "z"]);
+check("admonition blocks listed", detectAdmonitionBlocks(fenced, "t.md").map(b => b.adType), ["ad-j"]);
+check("percent marks inside an admonition are ignored", all("```ad-j\n%%++x++%%\n```").length, 0);
+check("insideAdBlock is set", all(fenced).map(a => a.insideAdBlock), [true, true]);
+check("a backticked == does not desync what follows",
+	all("Wrap it in `==` like so.\nFirst: ==--one--==^[[C]]\nSecond: ==--two--==^[[C]]").map(a => a.originalText), ["one", "two"]);
+check("a stray == does not either",
+	all("Someone writes == literally.\n\n==--Real--==^[[C]]\n\n==--Another--==^[[C]]").map(a => a.originalText), ["Real", "Another"]);
+check("a backticked brace form is ignored", all("Use `{++x++}` like so. {++real++}").map(a => a.insertedText), ["real"]);
+check("a backticked percent form is ignored", all("Use `%%++x++%%` like so. %%++real++%%").map(a => a.insertedText), ["real"]);
+check("markers inside an entry's text are not annotations", all(`==T==^[[C] use {++x++} here]`).map(a => a.type), ["comment"]);
+check("a brace highlight next to a real one", all(`{==x==} and ==y==^[c]`).map(a => a.originalText), ["x", "y"]);
+check("double hyphens in prose are not a deletion", shape(one(`==a -- b==^[c]`)), ["comment", null, "a -- b", null, null, "c"]);
+check("nor inside one", one(`{--a -- b--}`).originalText, "a -- b");
+check("a link is not an annotation", all(`[text](==x==)`).length, 0);
+check("everything comes back in note order", all(`{++a++} ==--b--==^[x] %%++c++%% d{>>e<<}`).map(a => a.type), ["insert", "delete", "insert", "comment"]);
+
+console.log("\n=== Insert context ===");
+const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%++an insert++%% %%--gone--%% %%--old~>new++%% after.";
+check("plain", getInsertContext(ctx, ctx.indexOf("Plain")), PLAIN);
+check("fenced", getInsertContext(ctx, ctx.indexOf("fenced")), { kind: "fenced" });
+check("inside an insert", getInsertContext(ctx, ctx.indexOf("an insert")), { kind: "nested", marker: "++" });
+check("inside a deletion", getInsertContext(ctx, ctx.indexOf("gone")), { kind: "nested", marker: "--" });
+check("inside the old half of a replacement", getInsertContext(ctx, ctx.indexOf("old")), { kind: "nested", marker: "--" });
+check("inside the new half", getInsertContext(ctx, ctx.indexOf("new")), { kind: "nested", marker: "++" });
+
+console.log("\n=== What the editor commands write is read back correctly ===");
+/** Types `typed` at the caret position the command would have left. */
+function fill(composed, typed) {
+	return composed.text.slice(0, composed.cursor) + typed + composed.text.slice(composed.cursor);
+}
+check("comment, highlight", shape(one(fill(composeComment("Sel.", "C", "highlight"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment, braces", shape(one(fill(composeComment("Sel.", "C", "brace"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment, percent", shape(one(fill(composeComment("Sel.", "C", "percent"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment without an author", shape(one(fill(composeComment("Sel.", "", "highlight"), "note"))), ["comment", null, "Sel.", null, null, "note"]);
+check("delete writes", composeDelete("Sel.", "C", "highlight").text, `==--Sel.--==^[[C] ]`);
+check("delete reads back", shape(one(composeDelete("Sel.", "C", "highlight").text)), ["delete", "C", "Sel.", null, null, null]);
+check("a reason typed at the caret", one(fill(composeDelete("Sel.", "C", "brace"), "why")).reason, "why");
+check("replace writes", composeReplace("Sel.", "C", "highlight").text, `==--Sel.~>++==^[[C]]`);
+check("replace reads back", shape(one(fill(composeReplace("Sel.", "C", "highlight"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
+check("replace, braces", shape(one(fill(composeReplace("Sel.", "C", "brace"), "New."))), ["replace", "C", "Sel.", null, "New.", null]);
+check("replace without an author", shape(one(fill(composeReplace("Sel.", "", "highlight"), "New."))), ["replace", null, "Sel.", null, "New.", null]);
+check("insert, percent by default", composeInsert("Sel.", "C", PLAIN, "percent").text, `%%++Sel.++%%^[[C]]`);
+check("insert reads back", shape(one(composeInsert("Sel.", "C", PLAIN, "percent").text)), ["insert", "C", "", "Sel.", null, null]);
+check("insert falls back to a highlight in a fence", composeInsert("Sel.", "C", { kind: "fenced" }, "percent").text, `==++Sel.++==^[[C]]`);
+check("insert with braces chosen", composeInsert("Sel.", "C", PLAIN, "brace").text, `{++Sel.++}^[[C]]`);
+check("braces stay braces in a fence", composeInsert("Sel.", "C", { kind: "fenced" }, "brace").text, `{++Sel.++}^[[C]]`);
+check("insert with a reason", one(fill(composeInsertWithReason("Sel.", "C", PLAIN, "percent"), "context")).reason, "context");
+// A nested insert only makes sense written into a surrounding one, so check
+// that the whole thing still reads as three separate inserts afterwards.
+const surrounding = `%%++Before. After.++%%^[[C]]`;
+const splitPoint = surrounding.indexOf("After.");
+const context = getInsertContext(surrounding, splitPoint);
+const combined = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", context, "percent").text + surrounding.slice(splitPoint);
+check("nesting keeps all three inserts", all(combined).map(a => [a.author ?? null, a.insertedText]), [[null, "Before. "], ["G", "Mine."], ["C", "After."]]);
+const nestedReason = surrounding.slice(0, splitPoint) + fill(composeInsertWithReason("Mine.", "G", context, "percent"), "why") + surrounding.slice(splitPoint);
+check("nesting with a reason", all(nestedReason).map(a => a.reason ?? null), [null, "why", null]);
 
 console.log("\n=== Deleting an admonition tidies the blank lines ===");
 const block = "```ad-c\nNote.\n```";
 const doc = `Before.\n\n${block}\n\nAfter.`;
 check("collapses to one blank line", computeRemoval(doc, doc.indexOf(block), block).newContent, "Before.\n\nAfter.");
-
-console.log("\n=== Insert context ===");
-const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%an insert%% after.";
-check("plain", getInsertContext(ctx, ctx.indexOf("Plain")), "plain");
-check("fenced", getInsertContext(ctx, ctx.indexOf("fenced")), "fenced");
-check("inside an existing insert", getInsertContext(ctx, ctx.indexOf("an insert")), "native-comment");
-
-console.log("\n=== Adding a reply ===");
-check("author typed into the field", computeAddReply(withAuthor, wa, "[J] hmm").newContent, `==T.==^[[C] delete]^[[J] hmm]`);
-
-console.log("\n=== Clearing a reason ===");
-function clearReason(doc) {
-	const ann = one(doc);
-	const c = ann.reasonClearSpan;
-	return c ? computeSpanReplace(doc, ann, c.start, c.end, "").newContent : "(nothing to clear)";
-}
-check("delete keeps its keyword", clearReason(`==T.==^[[C] delete, why]`), `==T.==^[[C] delete]`);
-check("replace keeps its replacement", clearReason(`==T.==^[[C] → "N.", why]`), `==T.==^[[C] → "N."]`);
-check("footnote insert keeps its keyword", clearReason(`==T.==^[[C] insert, why]`), `==T.==^[[C] insert]`);
-check("percent insert drops the whole footnote", clearReason(`%%[C] N.%%^[insert, why]`), `%%[C] N.%%`);
-check("highlight insert drops the whole footnote", clearReason(`==++[C] N.++==^[insert, why]`), `==++[C] N.++==`);
-check("a cleared reason offers to be added again", one(`==T.==^[[C] delete]`).reasonInsert !== undefined, true);
-check("replies are untouched by clearing", clearReason(`==T.==^[[C] delete, why]^[[A] hmm]`), `==T.==^[[C] delete]^[[A] hmm]`);
-
-console.log("\n=== Editing the highlighted source text ===");
-const srcDoc = `==Old text.==^[[C] delete]`;
-const src = one(srcDoc);
-check("delete exposes its source text", computeSpanReplace(srcDoc, src, src.originalSpan.start, src.originalSpan.end, "New text.").newContent,
-	`==New text.==^[[C] delete]`);
-check("comment exposes its source text", one(`==T.==^[[C] note]`).originalSpan !== undefined, true);
-check("an insert has no separate source text", one(`%%[C] N.%%`).originalSpan, undefined);
-
-console.log("\n=== Mentioning the syntax must not desync what follows ===");
-// A backticked == is ignored, but it used to be consumed all the same, which
-// paired it with the next real annotation's opening delimiter and shifted
-// every pairing after it.
-const mentioned = "Wrap it in `==` like so.\n" +
-	"First: ==one==^[[C] delete]\n" +
-	"Second: ==two==^[[C] delete]\n" +
-	"Third: ==three==^[[C] delete]";
-check("all three still parse", detectAnnotations(mentioned, "t.md").map(a => a.originalText), ["one", "two", "three"]);
-const mentionedPlus = "Wrap it in `==++text++==` like so.\n\nReal: ==++[C] inserted++==";
-check("a backticked highlight insert does not swallow the next one",
-	detectAnnotations(mentionedPlus, "t.md").map(a => a.insertedText), ["inserted"]);
-
-console.log("\n=== What the editor commands write is read back correctly ===");
-function roundTrip(written) {
-	const a = one(written);
-	return a ? [a.type, a.author ?? null, a.originalText || a.insertedText, a.replacement ?? null] : null;
-}
-/** Types `typed` at the caret position the command would have left. */
-function fill(composed, typed) {
-	return composed.text.slice(0, composed.cursor) + typed + composed.text.slice(composed.cursor);
-}
-check("comment", roundTrip(fill(composeComment("Sel.", "C"), "My note.")), ["comment", "C", "Sel.", null]);
-check("comment without an author", roundTrip(fill(composeComment("Sel.", ""), "My note.")), ["comment", null, "Sel.", null]);
-check("comment text lands at the caret", one(fill(composeComment("Sel.", "C"), "My note.")).commentText, "My note.");
-check("delete", roundTrip(composeDelete("Sel.", "C").text), ["delete", "C", "Sel.", null]);
-check("a reason typed at the caret", one(fill(composeDelete("Sel.", "C"), ", why")).reason, "why");
-check("replace", roundTrip(fill(composeReplace("Sel.", "C"), "New.")), ["replace", "C", "Sel.", "New."]);
-check("insert with a reason", one(fill(composeInsertWithReason("Sel.", "C"), "context")).reason, "context");
-check("insert, plain", roundTrip(composeInsert("Sel.", "C", "plain").text), ["insert", "C", "Sel.", null]);
-check("insert, highlight form", roundTrip(composeInsert("Sel.", "C", "fenced").text), ["insert", "C", "Sel.", null]);
-check("insert, nested in another insert", roundTrip(composeInsert("Sel.", "C", "native-comment").text), ["insert", "C", "Sel.", null]);
-// A nested insert only makes sense written into a surrounding one, so check
-// that the whole thing still reads as three separate inserts afterwards.
-const surrounding = `%%[C] Before. After.%%`;
-const splitPoint = surrounding.indexOf(" After.");
-const nested = surrounding.slice(0, splitPoint) + composeInsert("Mine.", "G", "native-comment").text + surrounding.slice(splitPoint);
-check("nesting keeps all three inserts",
-	detectAnnotations(nested, "t.md").map(a => [a.author, a.insertedText]),
-	[["C", "Before."], ["G", "Mine."], [null, "After."]]);
-
-
-console.log("\n=== An insert changes shape with its reason ===");
-function setReason(doc, reason) {
-	const ann = one(doc);
-	const r = computeSetInsertReason(doc, ann, reason);
-	return r.ok ? r.newContent : r.reason;
-}
-check("highlight form loses its ++ when given a reason",
-	setReason(`==++[C] Text.++==`, "why"), `==Text.==^[[C] insert, why]`);
-check("footnote form gets its ++ back when cleared",
-	setReason(`==Text.==^[[C] insert, why]`, ""), `==++[C] Text.++==`);
-check("round trip is stable",
-	setReason(setReason(`==++[C] Text.++==`, "why"), ""), `==++[C] Text.++==`);
-check("replies survive the rewrite",
-	setReason(`==++[C] Text.++==^[[A] hmm]`, "why"), `==Text.==^[[C] insert, why]^[[A] hmm]`);
-check("replies survive the rewrite back",
-	setReason(`==Text.==^[[C] insert, why]^[[A] hmm]`, ""), `==++[C] Text.++==^[[A] hmm]`);
-check("no author is fine", setReason(`==++Text.++==`, "why"), `==Text.==^[insert, why]`);
-// Percent marks hide the text, so they stay either way. Turning one into a
-// highlight would reveal hidden text and would not survive clearing again.
-check("percent form keeps its marks", setReason(`%%[C] Text.%%`, "why"), `%%[C] Text.%%^[insert, why]`);
-check("percent form clears back", setReason(`%%[C] Text.%%^[insert, why]`, ""), `%%[C] Text.%%`);
-check("nested percent form keeps its marks", setReason(`%%%%[C] Text.%%%%`, "why"), `%%%%[C] Text.%%%%^[insert, why]`);
-check("only insertions are rewritten this way", computeSetInsertReason(`==T.==^[[C] delete]`, one(`==T.==^[[C] delete]`), "why").ok, false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -50,6 +50,12 @@ function replaceRange(content: string, from: number, to: number, replacement: st
 
 const NOT_FOUND = "This annotation's text couldn't be found anymore. Rescanning, please try again.";
 
+/**
+ * Approving or dismissing replaces the whole annotation, entries included,
+ * with the text that should remain. The texts are used exactly as written,
+ * spaces and line breaks included, since an insertion of `is ` carries its
+ * own trailing space and trimming it would run two words together.
+ */
 export function computeMutation(content: string, annotation: Annotation, action: AnnotationAction): MutationResult {
 	const { fullMatch, type } = annotation;
 	const matchStart = locateMatch(content, annotation.matchStart, fullMatch);
@@ -78,11 +84,13 @@ export function computeMutation(content: string, annotation: Annotation, action:
 	return replaceRange(content, matchStart, matchEnd, replacement);
 }
 
+/** A reply goes on the end, in the same channel as the entries already there. */
 export function computeAddReply(content: string, annotation: Annotation, replyText: string): MutationResult {
 	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
 	if (matchStart === null) return { ok: false, reason: NOT_FOUND };
 	const matchEnd = matchStart + annotation.fullMatch.length;
-	return replaceRange(content, matchEnd, matchEnd, `^[${replyText}]`);
+	const entry = annotation.nextChannel === "brace" ? `{>>${replyText}<<}` : `^[${replyText}]`;
+	return replaceRange(content, matchEnd, matchEnd, entry);
 }
 
 /**
@@ -103,43 +111,6 @@ export function computeSpanReplace(
 		return { ok: false, reason: "That part of the annotation moved. Rescanning, please try again." };
 	}
 	return replaceRange(content, matchStart + spanStart, matchStart + spanEnd, replacement);
-}
-
-/**
- * Sets or clears the reason on an insert, rewriting it into the right form.
- *
- * The `++` markers only exist to mark inserted text when no footnote carries
- * the `insert` keyword, so an insert with a reason drops them and an insert
- * that loses its reason gets them back. Percent mark inserts keep their own
- * delimiters either way, since those hide the text rather than label it.
- */
-export function computeSetInsertReason(content: string, annotation: Annotation, reason: string): MutationResult {
-	if (annotation.type !== "insert") {
-		return { ok: false, reason: "Only an insertion is rewritten this way." };
-	}
-	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
-	if (matchStart === null) return { ok: false, reason: NOT_FOUND };
-
-	const label = annotation.author ? `[${annotation.author}] ` : "";
-	const text = annotation.insertedText ?? "";
-	const tail = annotation.repliesRaw ?? "";
-	const trimmed = reason.trim();
-
-	let rebuilt: string;
-	if (annotation.insertForm === "percent" || annotation.insertForm === "percent-nested") {
-		// Percent marks hide the text, so they stay whether or not there is a
-		// reason. Turning one into a highlight would make hidden text visible,
-		// and the change would not survive removing the reason again.
-		const marks = annotation.insertForm === "percent-nested" ? "%%%%" : "%%";
-		const body = `${marks}${label}${text}${marks}`;
-		rebuilt = trimmed ? `${body}^[insert, ${trimmed}]${tail}` : `${body}${tail}`;
-	} else if (trimmed) {
-		rebuilt = `==${text}==^[${label}insert, ${trimmed}]${tail}`;
-	} else {
-		rebuilt = `==++${label}${text}++==${tail}`;
-	}
-
-	return replaceRange(content, matchStart, matchStart + annotation.fullMatch.length, rebuilt);
 }
 
 export function computeRemoval(content: string, expectedStart: number, expectedRaw: string): MutationResult {
