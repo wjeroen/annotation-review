@@ -255,7 +255,7 @@ export class AnnotationReviewView extends ItemView {
 							.setChecked(filters[key])
 							.onClick(() => {
 								filters[key] = !filters[key];
-								void this.plugin.saveSettings();
+								this.plugin.saveLocalState();
 								this.render();
 							})
 					);
@@ -278,7 +278,7 @@ export class AnnotationReviewView extends ItemView {
 				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse replies" : "Expand replies");
 				expandBtn.addEventListener("click", () => {
 					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
-					void this.plugin.saveSettings();
+					this.plugin.saveLocalState();
 					this.render();
 				});
 			}
@@ -314,7 +314,7 @@ export class AnnotationReviewView extends ItemView {
 			setTooltip(expandBtn, this.plugin.settings.admonitionsExpanded ? "Collapse all" : "Expand all");
 			expandBtn.addEventListener("click", () => {
 				this.plugin.settings.admonitionsExpanded = !this.plugin.settings.admonitionsExpanded;
-				void this.plugin.saveSettings();
+				this.plugin.saveLocalState();
 				this.render();
 			});
 		}
@@ -440,7 +440,7 @@ export class AnnotationReviewView extends ItemView {
 			el.style.removeProperty("color");
 			if (author) {
 				el.setText(author);
-				el.style.backgroundColor = authorBackground(author);
+				el.style.backgroundColor = authorBackground(author, this.plugin.settings.authorColors);
 				el.style.color = "var(--text-normal)";
 			} else {
 				el.setText("No author");
@@ -667,7 +667,7 @@ export class AnnotationReviewView extends ItemView {
 				// Show the replies, otherwise a new one lands under a collapsed
 				// count and looks like nothing happened.
 				this.plugin.settings.repliesExpanded = true;
-				void this.plugin.saveSettings();
+				this.plugin.saveLocalState();
 				this.plugin.addReply(annotation, text);
 			},
 			replyPrefill

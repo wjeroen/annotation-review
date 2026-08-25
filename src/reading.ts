@@ -1,4 +1,4 @@
-import { authorColor, authorBackground } from "./authors";
+import { AuthorColors, authorColor, authorBackground } from "./authors";
 import { AuthorStyle } from "./settings";
 
 /*
@@ -21,7 +21,11 @@ import { AuthorStyle } from "./settings";
 export interface ReadingSettings {
 	renderInEditor: boolean;
 	authorStyle: AuthorStyle;
+	authorColors: AuthorColors;
 }
+
+/** The chosen colors, set for the duration of one processReadingView call, which is synchronous. */
+let colors: AuthorColors = {};
 
 const META_PREFIX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
 const LABEL_PREFIX = /^\[([^\]]+)\]\s+/;
@@ -55,7 +59,7 @@ function piece(cls: string, text: string, author: string | undefined, style: Aut
 	span.textContent = text;
 	if (author && style === "underline") {
 		span.classList.add("arv-author");
-		span.style.textDecorationColor = authorColor(author);
+		span.style.textDecorationColor = authorColor(author, colors);
 		span.title = author;
 	}
 	return span;
@@ -65,7 +69,7 @@ function chip(author: string): HTMLElement {
 	const el = document.createElement("span");
 	el.className = "arv-chip";
 	el.textContent = author;
-	el.style.backgroundColor = authorBackground(author);
+	el.style.backgroundColor = authorBackground(author, colors);
 	return el;
 }
 
@@ -133,6 +137,7 @@ const BRACE_COMMENT = /\{>>([\s\S]*?)<<\}/g;
 export function processReadingView(root: HTMLElement, settings: ReadingSettings) {
 	if (!settings.renderInEditor) return;
 	const style = settings.authorStyle;
+	colors = settings.authorColors;
 
 	// Highlights: the operator marks and author sit inside the <mark>.
 	for (const mark of Array.from(root.querySelectorAll("mark"))) {
@@ -147,7 +152,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 				if (style === "chip") mark.prepend(chip(author));
 				else if (style === "underline") {
 					mark.classList.add("arv-author");
-					mark.style.textDecorationColor = authorColor(author);
+					mark.style.textDecorationColor = authorColor(author, colors);
 					mark.title = author;
 				}
 			}
@@ -166,7 +171,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 				if (style === "chip") mark.prepend(chip(author));
 				else if (style === "underline") {
 					mark.classList.add("arv-author");
-					mark.style.textDecorationColor = authorColor(author);
+					mark.style.textDecorationColor = authorColor(author, colors);
 					mark.title = author;
 				}
 			}

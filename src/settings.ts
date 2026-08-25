@@ -1,6 +1,8 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
+import type { ColorComponent } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
+import { AuthorColors, defaultColorHex } from "./authors";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
 export type AuthorStyle = "underline" | "chip" | "none";
@@ -24,7 +26,11 @@ export interface AnnotationFilters {
 export interface AnnotationReviewSettings {
 	/** Prefilled author label for new annotations. Blank means no label. */
 	defaultAuthor: string;
-	/** Expanded state carries across notes, and is tracked per tab. */
+	/**
+	 * Expanded state carries across notes, and is tracked per tab. It is kept
+	 * on this device rather than in data.json, as are the filters, since it
+	 * changes with every click. See saveLocalState in main.ts.
+	 */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
 	/** The wrapper the commands write, per operation. */
@@ -40,6 +46,8 @@ export interface AnnotationReviewSettings {
 	authorStyle: AuthorStyle;
 	/** A colored line down the left edge of every annotated line, in live preview and source mode. */
 	showGutter: boolean;
+	/** Colors chosen per author, winning over the one computed from the name. */
+	authorColors: AuthorColors;
 }
 
 /** Plain CriticMarkup out of the box, since that is the standard. */
@@ -53,7 +61,8 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
 	renderInEditor: true,
 	authorStyle: "underline",
-	showGutter: true
+	showGutter: true,
+	authorColors: {}
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
@@ -167,5 +176,68 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			}
 		);
 		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
+
+		new Setting(containerEl)
+			.setName("Author colors")
+			.setDesc("Each author gets a color from their name. Pick one here to use instead, in the sidebar and the editor alike.")
+			.setHeading();
+
+		// Rows are edited in place and written back as a whole, so a name can
+		// be retyped without losing its color. A new row's picker follows the
+		// name until the color is touched, so it starts where the name would
+		// land on its own and adjusting is a nudge rather than a search.
+		const rows = Object.entries(settings.authorColors).map(([name, color]) => ({ name, color, touched: true }));
+		const list = containerEl.createDiv();
+		const save = async () => {
+			settings.authorColors = {};
+			for (const row of rows) if (row.name) settings.authorColors[row.name] = row.color;
+			await this.plugin.saveSettings();
+			this.plugin.applyEditorSettings();
+			this.plugin.refreshViews();
+		};
+		const draw = () => {
+			list.empty();
+			for (const row of rows) {
+				let picker: ColorComponent | null = null;
+				new Setting(list)
+					.addText(text =>
+						text
+							.setPlaceholder("Author")
+							.setValue(row.name)
+							.onChange(async value => {
+								row.name = value.trim();
+								if (!row.touched && row.name) {
+									row.color = defaultColorHex(row.name);
+									picker?.setValue(row.color);
+								}
+								await save();
+							})
+					)
+					.addColorPicker(component => {
+						picker = component.setValue(row.color).onChange(async value => {
+							row.color = value;
+							row.touched = true;
+							await save();
+						});
+					})
+					.addExtraButton(button =>
+						button
+							.setIcon("trash")
+							.setTooltip("Remove")
+							.onClick(async () => {
+								rows.splice(rows.indexOf(row), 1);
+								draw();
+								await save();
+							})
+					);
+			}
+		};
+		draw();
+		new Setting(containerEl).addButton(button =>
+			button.setButtonText("Add author").onClick(() => {
+				rows.push({ name: "", color: "#888888", touched: false });
+				draw();
+			})
+		);
 	}
 }

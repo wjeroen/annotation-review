@@ -66,6 +66,8 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 
 **Reading view has already been rendered when we see it.** Obsidian has turned `==` into `<mark>`, `~~` into `<del>`, `^[...]` into a footnote and dropped `%%...%%` entirely, and split anything with inline formatting across elements. The post processor restyles only what sits whole inside one text node or one `<mark>` or `<del>`, and leaves the rest raw rather than half styled. Percent mark annotations are simply absent there, which matches "hidden until approved".
 
+**Sidebar state never goes into `data.json`.** Expanded toggles and the type filter change with every click, and each click used to rewrite the whole file from memory, so two devices kept overwriting each other's settings through sync. They live in `app.saveLocalStorage` through `saveLocalState`, and `saveSettings` writes everything else. Anything that changes with a click rather than in the settings tab belongs with them.
+
 **Obsidian has no caret-moved event.** Caret tracking uses CodeMirror's update listener through `registerEditorExtension`, which fires for every editor, not just the active note. The editor is matched back to its note through the undocumented `editor.cm` on each markdown view, with a fallback to the active file if no view exposes it. After a document change the offsets are stale until the next scan, which recomputes the active card itself.
 
 ## Testing

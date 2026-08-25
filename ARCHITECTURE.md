@@ -13,7 +13,7 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 | `src/view.ts` | The sidebar. All rendering and interaction. |
 | `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
 | `src/reading.ts` | Reading view, as a markdown post processor over the rendered HTML. Same classes as live preview, but its own small parser, since there is no source text to decorate. |
-| `src/authors.ts` | The author color, shared by the sidebar chips and the editor. |
+| `src/authors.ts` | The author color, shared by the sidebar chips and the editor. A color chosen in settings wins over the computed one. |
 | `src/settings.ts` | The settings tab and the settings shape. |
 | `src/modals.ts` | The author prompt and the annotation type picker. |
 | `src/types.ts` | Shared types. Start here to understand the data model. |
@@ -51,4 +51,4 @@ Live preview is a CodeMirror `StateField` of decorations, recomputed when the do
 
 Reading view is a markdown post processor over rendered HTML. Obsidian has already turned `==` into `<mark>`, `~~` into `<del>`, `^[...]` into a footnote and dropped `%%...%%` entirely, and split anything with inline formatting across elements. The post processor restyles only what sits whole inside one text node or one `<mark>` or `<del>`, and leaves the rest raw rather than half styled.
 
-The author is drawn as a colored underline, a chip, or nothing, chosen in settings and applied to both. The color comes from `authors.ts` and matches the sidebar chip. A chip in the editor is the author's own name styled in place, with the rest of the mark hidden, so it takes the size of whatever it sits in and shrinks inside a footnote.
+The author is drawn as a colored underline, a chip, or nothing, chosen in settings and applied to both. The color comes from `authors.ts` and matches the sidebar chip, and a color chosen in settings replaces the computed one in all three places at once. A chip in the editor is the author's own name styled in place, with the rest of the mark hidden, so it takes the size of whatever it sits in and shrinks inside a footnote.

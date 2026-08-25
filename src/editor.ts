@@ -3,7 +3,7 @@ import { Decoration, DecorationSet, EditorView, GutterMarker, gutter } from "@co
 import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
 import { Annotation, Authored, TextSpan } from "./types";
-import { authorBackground, authorColor } from "./authors";
+import { AuthorColors, authorBackground, authorColor } from "./authors";
 import { AuthorStyle } from "./settings";
 
 /*
@@ -29,6 +29,7 @@ export interface EditorRenderSettings {
 	renderInEditor: boolean;
 	authorStyle: AuthorStyle;
 	showGutter: boolean;
+	authorColors: AuthorColors;
 }
 
 /** The annotations in a document, reparsed whenever it changes. */
@@ -39,15 +40,15 @@ const annotationsField = StateField.define<Annotation[]>({
 
 const hide = Decoration.replace({});
 const mark = (cls: string) => Decoration.mark({ class: cls });
-const authorLine = (author: string) =>
+const authorLine = (author: string, colors: AuthorColors) =>
 	Decoration.mark({
 		class: "arv-author",
-		attributes: { style: `text-decoration-color: ${authorColor(author)}`, title: author }
+		attributes: { style: `text-decoration-color: ${authorColor(author, colors)}`, title: author }
 	});
-const authorChip = (author: string) =>
+const authorChip = (author: string, colors: AuthorColors) =>
 	Decoration.mark({
 		class: "arv-chip",
-		attributes: { style: `background-color: ${authorBackground(author)}` }
+		attributes: { style: `background-color: ${authorBackground(author, colors)}` }
 	});
 
 /**
@@ -82,7 +83,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		const author = (who: Authored, textSpans: TextSpan[]) => {
 			if (!who.authorSpan) return;
 			if (settings.authorStyle === "underline" && who.author) {
-				for (const span of textSpans) add(span, authorLine(who.author));
+				for (const span of textSpans) add(span, authorLine(who.author, settings.authorColors));
 			}
 			if (revealed) return;
 			const s = who.authorSpan;
@@ -93,7 +94,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 				return;
 			}
 			add({ start: s.start, end: s.start + at }, hide);
-			add({ start: s.start + at, end: s.start + at + who.author!.length }, authorChip(who.author!));
+			add({ start: s.start + at, end: s.start + at + who.author!.length }, authorChip(who.author!, settings.authorColors));
 			add({ start: s.start + at + who.author!.length, end: s.end }, hide);
 		};
 

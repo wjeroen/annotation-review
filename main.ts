@@ -11,6 +11,11 @@ import { editorExtensions } from "./src/editor";
 import { processReadingView } from "./src/reading";
 import type { Extension } from "@codemirror/state";
 
+/** Sidebar state that stays on this device, see saveLocalState. */
+type LocalState = Pick<AnnotationReviewSettings, "repliesExpanded" | "admonitionsExpanded" | "filters">;
+const LOCAL_KEYS: (keyof LocalState)[] = ["repliesExpanded", "admonitionsExpanded", "filters"];
+const LOCAL_STATE_KEY = "annotation-review-state";
+
 /** How long to wait after the last keystroke before rescanning the note. */
 const RESCAN_DELAY_MS = 400;
 
@@ -100,9 +105,20 @@ export default class AnnotationReviewPlugin extends Plugin {
 	async loadSettings() {
 		const saved = ((await this.loadData()) ?? {}) as Partial<AnnotationReviewSettings> & { wrapper?: Wrapper; insertWrapper?: Wrapper; showAuthorsInEditor?: boolean };
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+		// Keys from older versions are dropped here, so they leave data.json on the next save.
+		for (const key of Object.keys(this.settings)) if (!(key in DEFAULT_SETTINGS)) delete (this.settings as unknown as Record<string, unknown>)[key];
 		// Nested objects, so a key added in a later version still gets its default.
 		this.settings.filters = { ...DEFAULT_SETTINGS.filters, ...(saved.filters ?? {}) };
 		this.settings.wrappers = { ...DEFAULT_SETTINGS.wrappers, ...(saved.wrappers ?? {}) };
+		this.settings.authorColors = { ...(saved.authorColors ?? {}) };
+		// Sidebar state is per device. Whatever data.json still carries from
+		// before 0.6.2 seeds it, and the local copy wins once there is one.
+		const local = (this.app.loadLocalStorage?.(LOCAL_STATE_KEY) ?? null) as Partial<LocalState> | null;
+		if (local) {
+			if (local.repliesExpanded !== undefined) this.settings.repliesExpanded = local.repliesExpanded;
+			if (local.admonitionsExpanded !== undefined) this.settings.admonitionsExpanded = local.admonitionsExpanded;
+			this.settings.filters = { ...this.settings.filters, ...(local.filters ?? {}) };
+		}
 		// The first 0.6.0 betas had one wrapper for three operations and one for
 		// insertions, and only wrote footnotes. Carry that over rather than
 		// silently switching someone to CriticMarkup.
@@ -117,8 +133,34 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (saved.showAuthorsInEditor === false && saved.authorStyle === undefined) this.settings.authorStyle = "none";
 	}
 
+	/** Writes the settings that follow the vault to every device. Sidebar state is left out, see saveLocalState. */
 	async saveSettings() {
-		await this.saveData(this.settings);
+		const synced: Record<string, unknown> = { ...this.settings };
+		for (const key of LOCAL_KEYS) delete synced[key];
+		await this.saveData(synced);
+	}
+
+	/**
+	 * Sidebar state, kept on this device only. It changes with every click,
+	 * and when it lived in data.json each click rewrote the whole file from
+	 * memory, so two devices kept overwriting each other's settings through
+	 * sync. Anything that changes with a click rather than in the settings
+	 * tab belongs here.
+	 */
+	saveLocalState() {
+		const state: LocalState = {
+			repliesExpanded: this.settings.repliesExpanded,
+			admonitionsExpanded: this.settings.admonitionsExpanded,
+			filters: this.settings.filters
+		};
+		this.app.saveLocalStorage?.(LOCAL_STATE_KEY, state);
+	}
+
+	/** Redraws every sidebar, for a settings change that alters how cards look. */
+	refreshViews() {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
+			if (leaf.view instanceof AnnotationReviewView) leaf.view.render();
+		}
 	}
 
 	/** Swaps the editor extensions for ones built from the current settings, in every open editor. */

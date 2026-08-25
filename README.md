@@ -119,6 +119,9 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors in the editor** (underline, chip, or none), **Show the diff gutter**: the three parts of the editor rendering, each its own setting. The first two apply to reading view as well.
 - **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
+- **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search.
+
+Everything above follows the vault through sync. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.
 
 ## Code block handling
 

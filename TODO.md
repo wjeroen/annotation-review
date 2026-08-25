@@ -23,6 +23,8 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Author colors in settings: a row per author with a color picker, winning over the computed color in the sidebar, live preview and reading view. A new row's picker follows the name until touched (2026-08-25)
+- [x] Fix: settings did not survive sync between devices. Every expand toggle and filter click rewrote data.json from memory, so the last device to click overwrote the other's settings. That state is per device now, and keys left over from old versions are dropped from data.json (2026-08-25)
 - [x] A `%%>>comment<<%%` keeps its text in Obsidian's hidden-text grey and only its blue background is toned down, to the same strength as the red and green inside percent marks. Lifting the text as well made it far brighter than the text around it (2026-08-25)
 - [x] Text inside percent marks is no fainter than Obsidian already makes it. An extra opacity from beta.6 sat on top of Obsidian's grey, which the blue background had been masking. Red and green inside percent marks are mixed toward that grey instead. A plain `{==highlight==}` or `%%note%%` is drawn like an annotated one, marks hidden and a gutter line, rather than left raw (2026-08-25)
 - [x] The span a comment is about is no longer blue, in live preview or reading view. In braces the blue sat on Obsidian's yellow and came out green, and in percent marks the fainter text already shows the span. Only the comment text is blue (2026-08-25)
