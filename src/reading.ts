@@ -89,20 +89,13 @@ function render(inner: string, style: AuthorStyle, isProse: boolean): DocumentFr
 		withAuthor("arv-ins", rest, author);
 		return out;
 	}
-	const replaceForms: [string, string, RegExp][] = [
-		["~~", "~~", /~>/],
-		["--", "++", /~>|--\+\+/]
-	];
-	for (const [open, close, splitter] of replaceForms) {
-		if (n >= 4 && head === open && tail === close) {
-			const { author, rest } = splitAuthor(inner.slice(2, -2), false);
-			const m = splitter.exec(rest);
-			if (!m) continue;
-			const old = rest.slice(0, m.index);
-			const neu = rest.slice(m.index + m[0].length);
+	if (n >= 4 && head === "~~" && tail === "~~") {
+		const { author, rest } = splitAuthor(inner.slice(2, -2), false);
+		const k = rest.indexOf("~>");
+		if (k !== -1) {
 			if (author && style === "chip") out.appendChild(chip(author));
-			out.appendChild(piece("arv-del", old, author, style));
-			out.appendChild(piece("arv-ins", neu, author, style));
+			out.appendChild(piece("arv-del", rest.slice(0, k), author, style));
+			out.appendChild(piece("arv-ins", rest.slice(k + 2), author, style));
 			return out;
 		}
 	}

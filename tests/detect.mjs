@@ -63,10 +63,10 @@ for (const w of ["{--is --}", "==--is --==", "%%--is --%%"]) {
 for (const w of ["{++is ++}", "==++is ++==", "%%++is ++%%", "%%%%++is ++%%%%"]) {
 	check(`insert ${w}`, shape(one(`This ${w}a test.`)), ["insert", null, "", "is ", null, []]);
 }
-for (const w of ["{~~isn't~>is~~}", "==--isn't~>is++==", "==--isn't--++is++==", "==~~isn't~>is~~==", "%%--isn't~>is++%%", "%%--isn't--++is++%%", "%%~~isn't~>is~~%%"]) {
+for (const w of ["{~~isn't~>is~~}", "==~~isn't~>is~~==", "%%~~isn't~>is~~%%"]) {
 	check(`replace ${w}`, shape(one(`This ${w} a test.`)), ["replace", null, "isn't", null, "is", []]);
 }
-check("braces take only the CriticMarkup replacement form", all(`{--isn't~>is++} and {--isn't--++is++}`).length, 0);
+check("the old arrow forms are gone", all(`{--isn't~>is++} and ==--isn't~>is++== and ==--isn't--++is++==`).filter(a => a.type === "replace").length, 0);
 check("comment, brace highlight on its own", shape(one(`{==This is a test==}`)), ["comment", null, "This is a test", null, null, []]);
 check("comment, highlight with a reply", shape(one(`==This is a test==^[What?]`)), ["comment", null, "This is a test", null, null, [[null, "What?"]]]);
 check("a plain highlight is a comment with nothing attached", [one(`==plain==`).type, one(`==plain==`).isPlain], ["comment", true]);
@@ -80,7 +80,7 @@ check("light form in percent marks", shape(one(`This is %%--[Claude]@@is --%%a t
 check("metadata in a highlight is accepted too", shape(one(`==++${C}is ++==`)), ["insert", "Claude", "", "is ", null, []]);
 check("light form in braces is accepted too", shape(one(`{++[Claude]@@is ++}`)), ["insert", "Claude", "", "is ", null, []]);
 check("on a replacement, at the start of the old text", shape(one(`{~~${C}isn't~>is~~}`)), ["replace", "Claude", "isn't", null, "is", []]);
-check("on a highlight replacement", shape(one(`==--[Claude]@@isn't~>is++==`)), ["replace", "Claude", "isn't", null, "is", []]);
+check("on a highlight replacement", shape(one(`==~~[Claude]@@isn't~>is~~==`)), ["replace", "Claude", "isn't", null, "is", []]);
 check("on a span comment", shape(one(`==[Claude]@@This is a test==`)), ["comment", "Claude", "This is a test", null, null, []]);
 check("the short key works", one(`{--{"a":"Claude"}@@is --}`).author, "Claude");
 check("other metadata fields are kept, not read", one(`{--{"author":"Claude","time":1755000000}@@is --}`).authorMeta, { time: 1755000000 });
@@ -114,6 +114,7 @@ check("approving takes the replies with it", approve(threaded), "");
 console.log("\n=== Comments on a spot ===");
 for (const w of ["{>>What?<<}", "==>>What?<<==", "%%>>What?<<%%"]) {
 	check(`>> is an operator, ${w}`, [one(`This is a test${w}.`).type, one(`This is a test${w}.`).isPoint, one(`This is a test${w}.`).commentText], ["comment", true, "What?"]);
+	check(`and unsigned it is still deliberate, ${w}`, one(`This is a test${w}.`).isPlain, false);
 }
 check("a highlighted comment on a spot with an author", shape(one(`Text==>>[Claude]@@What?<<==`)), ["comment", "Claude", "", null, null, []]);
 check("a hidden comment on a spot with an author", one(`Text%%>>[Claude]@@What?<<%%`).commentText, "What?");
@@ -179,7 +180,7 @@ check("clear", setAuthor(`==--[Claude]@@T--==`, ""), `==--T--==`);
 check("clearing keeps other metadata fields", setAuthor(`{--{"author":"Claude","time":5}@@T--}`, ""), `{--{"time":5}@@T--}`);
 check("add in braces writes metadata", setAuthor(`{--T--}`, "Claude"), `{--${C}T--}`);
 check("add in a highlight writes the light form", setAuthor(`==--T--==`, "Claude"), `==--[Claude]@@T--==`);
-check("add on a replacement, before the old text", setAuthor(`==--old~>new++==`, "Claude"), `==--[Claude]@@old~>new++==`);
+check("add on a replacement, before the old text", setAuthor(`==~~old~>new~~==`, "Claude"), `==~~[Claude]@@old~>new~~==`);
 check("add on a span comment", setAuthor(`==T==^[note]`, "Claude"), `==[Claude]@@T==^[note]`);
 check("add on a hidden span, the light form", setAuthor(`%%note%%`, "Claude"), `%%[Claude]@@note%%`);
 check("add on a brace point comment, as metadata", setAuthor(`A{>>note<<}`, "Claude"), `A{>>${C}note<<}`);
@@ -199,19 +200,17 @@ function setSpan(doc, spanName, value) {
 }
 check("the deleted text, after its author", setSpan(`{--${C}Old--}`, "originalSpan", "New"), `{--${C}New--}`);
 check("the old half of a replacement", setSpan(`{~~a~>b~~}`, "originalSpan", "c"), `{~~c~>b~~}`);
-check("the new half, arrow form", setSpan(`==--a~>b++==`, "replacementSpan", "c"), `==--a~>c++==`);
-check("the new half, fused form", setSpan(`==--a--++b++==`, "replacementSpan", "c"), `==--a--++c++==`);
-check("the new half, tilde form", setSpan(`{~~a~>b~~}`, "replacementSpan", "c"), `{~~a~>c~~}`);
+check("the new half", setSpan(`{~~a~>b~~}`, "replacementSpan", "c"), `{~~a~>c~~}`);
+check("the new half in a highlight", setSpan(`==~~a~>b~~==`, "replacementSpan", "c"), `==~~a~>c~~==`);
 check("the inserted text, spaces included", setSpan(`%%++[C]@@X++%%`, "bodySpan", "Y "), `%%++[C]@@Y ++%%`);
 check("a hidden span's text", setSpan(`%%[C]@@note%%`, "originalSpan", "other"), `%%[C]@@other%%`);
 check("a reply's text", (() => { const d = `{--T--}^[[A] why]`; const r = one(d).replies[0]; return computeSpanReplace(d, one(d), r.textSpan.start, r.textSpan.end, "because").newContent; })(), `{--T--}^[[A] because]`);
 check("a point comment has no text span", one(`A{>>x<<}`).originalSpan, undefined);
 
 console.log("\n=== Approve and dismiss ===");
-check("approve replace", approve(`This ==--[Claude]@@isn't~>is++== a test.`), "This is a test.");
-check("dismiss replace", dismiss(`This ==--[Claude]@@isn't~>is++== a test.`), "This isn't a test.");
-check("approve fused replace", approve(`==--isn't--++is++==`), "is");
-check("approve tilde replace", approve(`{~~isn't~>is~~}`), "is");
+check("approve replace", approve(`This ==~~[Claude]@@isn't~>is~~== a test.`), "This is a test.");
+check("dismiss replace", dismiss(`This ==~~[Claude]@@isn't~>is~~== a test.`), "This isn't a test.");
+check("approve replace in braces", approve(`{~~isn't~>is~~}`), "is");
 check("approve insert", approve(`%%++[C]@@New.++%%`), "New.");
 check("dismiss insert", dismiss(`%%++[C]@@New.++%%`), "");
 check("dismiss brace comment span", dismiss(`{==T==}{>>note<<}`), "T");
@@ -238,13 +237,12 @@ check("a link is not an annotation", all(`[text](==x==)`).length, 0);
 check("everything comes back in note order", all(`{++a++} ==--b--==^[x] %%++c++%% d{>>e<<}`).map(a => a.type), ["insert", "delete", "insert", "comment"]);
 
 console.log("\n=== Insert context ===");
-const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%++an insert++%% %%--gone--%% %%--old~>new++%% after.";
+const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%++an insert++%% %%--gone--%% %%~~old~>new~~%% after.";
 check("plain", getInsertContext(ctx, ctx.indexOf("Plain")), PLAIN);
 check("fenced", getInsertContext(ctx, ctx.indexOf("fenced")), FENCED);
 check("inside an insert", getInsertContext(ctx, ctx.indexOf("an insert")), { kind: "nested", marker: "++" });
 check("inside a deletion", getInsertContext(ctx, ctx.indexOf("gone")), { kind: "nested", marker: "--" });
-check("inside the old half of a replacement", getInsertContext(ctx, ctx.indexOf("old")), { kind: "nested", marker: "--" });
-check("inside the new half", getInsertContext(ctx, ctx.indexOf("new")), { kind: "nested", marker: "++" });
+check("inside a replacement there is nothing to reopen", getInsertContext(ctx, ctx.indexOf("old")), { kind: "nested", marker: "" });
 
 console.log("\n=== What the editor commands write is read back correctly ===");
 /** Types `typed` at the caret position the command would have left. */
@@ -261,8 +259,8 @@ check("delete writes the author inside, metadata in braces", composeDelete("Sel.
 check("delete, light form in a highlight", composeDelete("Sel.", "Claude", "highlight").text, `==--[Claude]@@Sel.--==`);
 check("delete without an author", composeDelete("Sel.", "", "brace").text, `{--Sel.--}`);
 check("delete reads back", shape(one(composeDelete("Sel.", "Claude", "brace").text)), ["delete", "Claude", "Sel.", null, null, []]);
-check("replace in braces is the CriticMarkup form", composeReplace("Sel.", "Claude", "brace").text, `{~~${C}Sel.~>~~}`);
-check("replace in a highlight is the arrow form", composeReplace("Sel.", "Claude", "highlight").text, `==--[Claude]@@Sel.~>++==`);
+check("replace in braces", composeReplace("Sel.", "Claude", "brace").text, `{~~${C}Sel.~>~~}`);
+check("replace in a highlight, the same form", composeReplace("Sel.", "Claude", "highlight").text, `==~~[Claude]@@Sel.~>~~==`);
 check("replace reads back", shape(one(fill(composeReplace("Sel.", "Claude", "brace"), "New."))), ["replace", "Claude", "Sel.", null, "New.", []]);
 check("replace, highlight, reads back", shape(one(fill(composeReplace("Sel.", "Claude", "highlight"), "New."))), ["replace", "Claude", "Sel.", null, "New.", []]);
 check("replace without an author", shape(one(fill(composeReplace("Sel.", "", "percent"), "New."))), ["replace", null, "Sel.", null, "New.", []]);

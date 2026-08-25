@@ -26,7 +26,7 @@ An annotation is a wrapper, an operator, an optional author, and any number of r
 | --- | --- | --- |
 | Delete | `--text--` | `This is ==--is --==a test.` |
 | Insert | `++text++` | `This {++is ++}a test.` |
-| Replace | `~~old~>new~~` in braces. In a highlight or percent marks also `--old~>new++`, the default there, or `--old--++new++` | `This {~~isn't~>is~~} a test.` |
+| Replace | `~~old~>new~~` | `This {~~isn't~>is~~} a test.` |
 | Comment on a span | no operator | `==This is a test==^[What is it a test of?]` |
 | Comment on a spot | `>>note<<` | `This is a test.{>>What is it a test of?<<}` |
 
@@ -60,7 +60,7 @@ A few rules that follow from this:
 
 ### Compatibility with the CriticMarkup plugin
 
-Braces, the five CriticMarkup marks, `{~~old~>new~~}`, adjacent `{>>...<<}` comments as replies, and the `{"author":"..."}@@` author are all shared with [Fevol's obsidian-criticmarkup](https://github.com/Fevol/obsidian-criticmarkup), so a note annotated in braces reads the same in both. Highlights, percent marks, footnotes, `[Author]` labels, the `--old~>new++` form and annotations inside admonitions are this plugin's own.
+Braces, the five CriticMarkup marks, `{~~old~>new~~}`, adjacent `{>>...<<}` comments as replies, and the `{"author":"..."}@@` author are all shared with [Fevol's obsidian-criticmarkup](https://github.com/Fevol/obsidian-criticmarkup), so a note annotated in braces reads the same in both. Highlights, percent marks, footnotes, `[Author]` labels and annotations inside admonitions are this plugin's own.
 
 ## Creating annotations from the editor
 
@@ -85,7 +85,7 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 ## In the editor
 
-In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `{~~replacement~~}` in braces is also a strikethrough to Obsidian; ours loses the line, a genuine `~~strikethrough~~` keeps it.
+In live preview the syntax is hidden and the text is colored the way a diff reads: red for what goes, green for what arrives. A highlight keeps its background under the color, braces and percent marks disappear, with the text inside percent marks a little fainter since it is hidden text. A replacement shows the old text in red and the new text in green right against each other. A `~~replacement~~` is also a strikethrough to Obsidian. Ours loses the line, a genuine `~~strikethrough~~` keeps it.
 
 Comments and replies sit on a blue background: a `{==commented span==}`, a hidden `%%commented span%%` (fainter, since it is hidden text) and a `{>>reply<<}` with its markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. A commented `==highlight==` keeps Obsidian's yellow instead, so a plain yellow highlight reads as a comment and nothing else does.
 

@@ -79,17 +79,10 @@ export function composeDelete(selected: string, author: string, wrapper: Wrapper
 	return { text, cursor: text.length };
 }
 
-/**
- * Caret after the arrow, ready for the replacement text. Braces take the
- * CriticMarkup form, `{~~old~>new~~}`, which is the only one that plugin
- * reads. Highlights and percent marks take `--old~>new++`, which reads better
- * when the old half is red and the new half green.
- */
+/** Caret after the arrow, ready for the replacement text. CriticMarkup's `~~old~>new~~` in every wrapper. */
 export function composeReplace(selected: string, author: string, wrapper: Wrapper): Composed {
-	const prefix = authorPrefix(author, wrapper);
-	const head = wrapper === "brace" ? `{~~${prefix}${selected}~>` : `${OPEN[wrapper]}--${prefix}${selected}~>`;
-	const tail = wrapper === "brace" ? "~~}" : `++${CLOSE[wrapper]}`;
-	return { text: head + tail, cursor: head.length };
+	const head = `${OPEN[wrapper]}~~${authorPrefix(author, wrapper)}${selected}~>`;
+	return { text: `${head}~~${CLOSE[wrapper]}`, cursor: head.length };
 }
 
 /**

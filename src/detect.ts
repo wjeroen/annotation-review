@@ -7,10 +7,8 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  *
  * The wrapper is `{...}`, `==...==` or `%%...%%` and only decides how the note
  * shows the text. The operator inside is `--` (delete), `++` (insert), `>>`
- * (a comment on that spot, the text being the remark), or a replacement:
- * `~~old~>new~~` everywhere, and `--old~>new++` or `--old--++new++` in
- * highlights and percent marks as well. No operator means a comment on the
- * wrapped text. Right after the opening operator marks an
+ * (a comment on that spot, the text being the remark), or `~~old~>new~~`
+ * (replace). No operator means a comment on the wrapped text. Right after the opening operator marks an
  * optional author, `{"author":"X"}@@` (the CriticMarkup plugin's metadata) or
  * `[X]@@`, terminated by `@@` so the text after it keeps every space.
  *
@@ -279,11 +277,6 @@ function classifyInner(inner: string, base: number): Body {
 		if (head === "~~" && tail === "~~") {
 			const k = mid.indexOf("~>");
 			if (k !== -1) return replace(k, 2);
-		} else if (head === "--" && tail === "++") {
-			const arrow = mid.indexOf("~>");
-			const fused = mid.indexOf("--++");
-			if (arrow !== -1 && (fused === -1 || arrow < fused)) return replace(arrow, 2);
-			if (fused !== -1) return replace(fused, 4);
 		} else if (head === "--" && tail === "--") {
 			return { type: "delete", originalSpan: { start: base + 2, end: base + n - 2 } };
 		} else if (head === "++" && tail === "++") {
@@ -443,9 +436,9 @@ function buildAnnotation(
 		fullMatch,
 		wrapper,
 		isPoint,
-		// A highlight or hidden note with nothing attached and nobody named
-		// could be ordinary Obsidian markup.
-		isPlain: body.type === "comment" && !author && replies.length === 0,
+		// A highlight or hidden text with nothing attached and nobody named
+		// could be ordinary Obsidian markup. A >> comment never is.
+		isPlain: body.type === "comment" && !isPoint && !author && replies.length === 0,
 		originalText: slice(originalSpan) ?? "",
 		commentText: slice(commentSpan),
 		insertedText: slice(bodySpan),
@@ -654,13 +647,9 @@ export function getInsertContext(content: string, offset: number): InsertContext
 		if (offset <= start || offset >= end) continue;
 		const doubled = m[1] !== undefined;
 		const body = classifyInner(doubled ? m[1] : m[2], start + (doubled ? 4 : 2));
-		let marker = "";
-		if (body.type === "insert") marker = "++";
-		else if (body.type === "delete") marker = "--";
-		else if (body.type === "replace" && body.originalSpan && body.replacementSpan) {
-			// Inside a replacement, match whichever half the caret is in.
-			marker = offset <= body.originalSpan.end ? "--" : "++";
-		}
+		// Inside a replacement or a comment there is nothing sensible to
+		// reopen, so the surrounding one is simply closed and reopened as is.
+		const marker = body.type === "insert" ? "++" : body.type === "delete" ? "--" : "";
 		return { kind: "nested", marker };
 	}
 	return { kind: "plain" };
