@@ -1,4 +1,4 @@
-import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce } from "obsidian";
+import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce, Platform } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
@@ -386,11 +386,31 @@ export default class AnnotationReviewPlugin extends Plugin {
 			return;
 		}
 
+		// On mobile, focusing the editor raises the keyboard, which then covers
+		// half the screen for a tap that only meant "show me". So there the
+		// note is scrolled and nothing else, not even the caret moves, and on
+		// a phone the sidebar drawer is closed too, since it covers the note.
+		if (Platform.isMobile) {
+			view.editor.scrollIntoView({ from, to }, true);
+			if (Platform.isPhone) this.collapseSidebar();
+			return;
+		}
+
 		view.editor.setSelection(from, to);
 		view.editor.scrollIntoView({ from, to }, true);
 		// Without focus the selection is not drawn, since the click left focus
 		// in the sidebar.
 		view.editor.focus();
+	}
+
+	/** Closes whichever side drawer the sidebar lives in. */
+	private collapseSidebar() {
+		const { leftSplit, rightSplit } = this.app.workspace;
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
+			const root = leaf.getRoot();
+			if (root === leftSplit) leftSplit.collapse();
+			else if (root === rightSplit) rightSplit.collapse();
+		}
 	}
 
 

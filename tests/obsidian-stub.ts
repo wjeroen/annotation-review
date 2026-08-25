@@ -84,6 +84,7 @@ export const MarkdownRenderer = {
 	async render() {}
 };
 export const editorLivePreviewField = {};
+export const Platform = { isMobile: false, isPhone: false, isTablet: false };
 export function setIcon() {}
 export function setTooltip() {}
 export function debounce(cb: any) {
