@@ -121,7 +121,7 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
 - **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search.
 
-Everything above follows the vault through sync. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.
+Everything above follows the vault through sync, and is picked up the moment it arrives, no restart needed. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.
 
 ## Code block handling
 

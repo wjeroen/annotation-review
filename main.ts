@@ -161,6 +161,19 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.app.saveLocalStorage?.(LOCAL_STATE_KEY, state);
 	}
 
+	/**
+	 * data.json changed on disk from outside Obsidian, which is a sync
+	 * service bringing another device's settings. Without this they would
+	 * only be read at the next load, so a color chosen on the phone would
+	 * wait for a restart of the laptop. Sidebar state is per device and is
+	 * not in that file, so it is untouched here.
+	 */
+	async onExternalSettingsChange() {
+		await this.loadSettings();
+		this.applyEditorSettings();
+		this.refreshViews();
+	}
+
 	/** Redraws every sidebar, for a settings change that alters how cards look. */
 	refreshViews() {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
