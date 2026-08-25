@@ -28,8 +28,8 @@ function check(label, actual, expected) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const NOTES = {
-	"A.md": "Note A: ==--alpha text--==^[[Claude]]",
-	"B.md": "Note B: ==--bravo text--==^[[GPT]]"
+	"A.md": "Note A: ==--[Claude]@@alpha text--==",
+	"B.md": "Note B: ==--[GPT]@@bravo text--=="
 };
 
 /** Reads resolve after a per-file delay, so completion order can be controlled. */

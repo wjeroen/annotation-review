@@ -1,4 +1,5 @@
 import { Annotation } from "./types";
+import { replyEntry } from "./compose";
 
 export type AnnotationAction = "approve" | "dismiss";
 
@@ -51,7 +52,7 @@ function replaceRange(content: string, from: number, to: number, replacement: st
 const NOT_FOUND = "This annotation's text couldn't be found anymore. Rescanning, please try again.";
 
 /**
- * Approving or dismissing replaces the whole annotation, entries included,
+ * Approving or dismissing replaces the whole annotation, replies included,
  * with the text that should remain. The texts are used exactly as written,
  * spaces and line breaks included, since an insertion of `is ` carries its
  * own trailing space and trimming it would run two words together.
@@ -85,12 +86,11 @@ export function computeMutation(content: string, annotation: Annotation, action:
 }
 
 /** A reply goes on the end, in the same channel as the entries already there. */
-export function computeAddReply(content: string, annotation: Annotation, replyText: string): MutationResult {
+export function computeAddReply(content: string, annotation: Annotation, author: string, text: string): MutationResult {
 	const matchStart = locateMatch(content, annotation.matchStart, annotation.fullMatch);
 	if (matchStart === null) return { ok: false, reason: NOT_FOUND };
 	const matchEnd = matchStart + annotation.fullMatch.length;
-	const entry = annotation.nextChannel === "brace" ? `{>>${replyText}<<}` : `^[${replyText}]`;
-	return replaceRange(content, matchEnd, matchEnd, entry);
+	return replaceRange(content, matchEnd, matchEnd, replyEntry(author, text, annotation.nextChannel));
 }
 
 /**

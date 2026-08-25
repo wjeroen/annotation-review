@@ -9,9 +9,9 @@ import { InsertContext, MetaChannel, Wrapper } from "./types";
  * annotation straight into the note and leave the caret wherever text still
  * needs typing, instead of asking for it in a dialog first.
  *
- * Only a comment opens an entry for typing, since its text is the point of
- * it. The other commands name the author when there is one and otherwise
- * write nothing after the wrapper. A reason is added by its own command.
+ * The author goes inside the wrapper, right after the opening operator marks,
+ * so every operation carries its own. Only a comment opens a reply for
+ * typing, since its text is the point of it.
  */
 
 export interface Composed {
@@ -27,60 +27,69 @@ function wrap(wrapper: Wrapper, inner: string): string {
 	return OPEN[wrapper] + inner + CLOSE[wrapper];
 }
 
-/** The opening and closing marks of an entry in the given channel. */
-function entryMarks(channel: MetaChannel): [string, string] {
+/**
+ * The author as it goes inside a wrapper: the CriticMarkup plugin's metadata
+ * in braces, so that plugin agrees on every author, and the lighter `[X]@@`
+ * elsewhere. Nothing at all when there is no author.
+ */
+export function authorPrefix(author: string, wrapper: Wrapper): string {
+	if (!author) return "";
+	return wrapper === "brace" ? JSON.stringify({ author }) + "@@" : `[${author}]@@`;
+}
+
+/** The author at the start of a reply: metadata in a brace comment, a label in a footnote. */
+export function replyAuthor(author: string, channel: MetaChannel): string {
+	if (!author) return "";
+	return channel === "brace" ? JSON.stringify({ author }) + "@@" : `[${author}] `;
+}
+
+function replyMarks(channel: MetaChannel): [string, string] {
 	return channel === "brace" ? ["{>>", "<<}"] : ["^[", "]"];
 }
 
-/** An author-only entry, or nothing when there is no author to name. */
-export function authorEntry(author: string, channel: MetaChannel): string {
-	if (!author) return "";
-	const [open, close] = entryMarks(channel);
-	return `${open}[${author}]${close}`;
+/** A finished reply in the given channel. */
+export function replyEntry(author: string, text: string, channel: MetaChannel): string {
+	const [open, close] = replyMarks(channel);
+	return open + replyAuthor(author, channel) + text + close;
 }
 
-/** An entry left open for typing, with the caret just before its closing marks. */
-export function openEntry(author: string, channel: MetaChannel): Composed {
-	const [open, close] = entryMarks(channel);
-	const head = open + (author ? `[${author}] ` : "");
+/** A reply left open for typing, with the caret just before its closing marks. */
+export function openReply(author: string, channel: MetaChannel): Composed {
+	const [open, close] = replyMarks(channel);
+	const head = open + replyAuthor(author, channel);
 	return { text: head + close, cursor: head.length };
 }
 
 /**
- * Caret inside the entry, ready for the comment. With braces the span is
- * marked as `{==text==}`, CriticMarkup's own form, since bare braces mean
- * nothing. Percent marks cannot carry a span comment, since the span would
- * be hidden, so they are written as a highlight.
+ * Caret inside the reply, ready for the comment. The span itself carries no
+ * author, since it was written by whoever wrote the note. With braces the
+ * span is marked as `{==text==}`, CriticMarkup's own form, since bare braces
+ * mean nothing. Percent marks cannot carry a span comment, since the span
+ * would be hidden, so they are written as a highlight.
  */
 export function composeComment(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
-	const w = wrapper === "percent" ? "highlight" : wrapper;
-	const body = wrap(w, w === "brace" ? `==${selected}==` : selected);
-	const entry = openEntry(author, channel);
-	return { text: body + entry.text, cursor: body.length + entry.cursor };
-}
-
-/**
- * A comment on a spot rather than a span, with the caret inside. CriticMarkup
- * has `{>>note<<}` for this, Obsidian has `%%note%%`, and the channel setting
- * says which style the note is written in.
- */
-export function composePointComment(author: string, channel: MetaChannel): Composed {
-	if (channel === "brace") return openEntry(author, "brace");
-	const head = "%%" + (author ? `[${author}] ` : "");
-	return { text: head + "%%", cursor: head.length };
+	const body = wrapper === "brace" ? `{==${selected}==}` : `==${selected}==`;
+	const reply = openReply(author, channel);
+	return { text: body + reply.text, cursor: body.length + reply.cursor };
 }
 
 /** Caret at the end. */
-export function composeDelete(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
-	const text = wrap(wrapper, `--${selected}--`) + authorEntry(author, channel);
+export function composeDelete(selected: string, author: string, wrapper: Wrapper): Composed {
+	const text = wrap(wrapper, `--${authorPrefix(author, wrapper)}${selected}--`);
 	return { text, cursor: text.length };
 }
 
-/** Caret after the arrow, ready for the replacement text. */
-export function composeReplace(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
-	const head = `${OPEN[wrapper]}--${selected}~>`;
-	const text = `${head}++${CLOSE[wrapper]}${authorEntry(author, channel)}`;
-	return { text, cursor: head.length };
+/**
+ * Caret after the arrow, ready for the replacement text. Braces take the
+ * CriticMarkup form, `{~~old~>new~~}`, which is the only one that plugin
+ * reads. Highlights and percent marks take `--old~>new++`, which reads better
+ * when the old half is red and the new half green.
+ */
+export function composeReplace(selected: string, author: string, wrapper: Wrapper): Composed {
+	const prefix = authorPrefix(author, wrapper);
+	const head = wrapper === "brace" ? `{~~${prefix}${selected}~>` : `${OPEN[wrapper]}--${prefix}${selected}~>`;
+	const tail = wrapper === "brace" ? "~~}" : `++${CLOSE[wrapper]}`;
+	return { text: head + tail, cursor: head.length };
 }
 
 /**
@@ -92,20 +101,24 @@ export function composeReplace(selected: string, author: string, wrapper: Wrappe
  * Percent marks do not render inside a fenced block, so `fallback` stands in
  * for them there.
  */
-export function composeInsert(
-	selected: string,
-	author: string,
-	context: InsertContext,
-	wrapper: Wrapper,
-	fallback: Wrapper,
-	channel: MetaChannel
-): Composed {
+export function composeInsert(selected: string, author: string, context: InsertContext, wrapper: Wrapper, fallback: Wrapper): Composed {
 	let text: string;
 	if (context.kind === "nested") {
-		text = `${context.marker}%%%%++${selected}++%%${authorEntry(author, channel)}%%${context.marker}`;
+		text = `${context.marker}%%%%++${authorPrefix(author, "percent")}${selected}++%%%%${context.marker}`;
 	} else {
 		const w = context.kind === "fenced" && wrapper === "percent" ? fallback : wrapper;
-		text = wrap(w, `++${selected}++`) + authorEntry(author, channel);
+		text = wrap(w, `++${authorPrefix(author, w)}${selected}++`);
 	}
 	return { text, cursor: text.length };
+}
+
+/**
+ * A comment on a spot rather than a span, with the caret inside. CriticMarkup
+ * has `{>>note<<}` for this, Obsidian has `%%note%%`, and the channel setting
+ * says which style the note is written in.
+ */
+export function composePointComment(author: string, channel: MetaChannel): Composed {
+	if (channel === "brace") return openReply(author, "brace");
+	const head = "%%" + (author ? `[${author}] ` : "");
+	return { text: head + "%%", cursor: head.length };
 }

@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, InsertPoint, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan } from "./types";
 import { AnnotationFilters } from "./settings";
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
@@ -15,19 +15,11 @@ const TYPE_LABELS: Record<AnnotationType, string> = {
 const NO_AUTHOR = "__none__";
 const ALL_VALUE = "";
 
-/** Anything with an author that can be set, changed or cleared. */
-interface AuthorTarget {
-	authorSpan?: TextSpan;
-	authorClearSpan?: TextSpan;
-	authorInsert?: InsertPoint;
-}
-
 interface EditableOptions {
 	inline?: boolean;
 	/**
 	 * Makes the field erasable: submitting it empty removes this wider range
-	 * instead, which is how a reason takes the space before it with it rather
-	 * than leaving a dangling gap. Without one, an empty submit just cancels.
+	 * instead. Without one, an empty submit just cancels.
 	 */
 	clearSpan?: TextSpan;
 	/** Save the text exactly as typed. Annotated text carries its own spaces. */
@@ -49,6 +41,22 @@ function authorHue(name: string): number {
 		h2 = (h2 * 37 + name.charCodeAt(i)) | 0;
 	}
 	return ((h1 ^ h2) >>> 0) % 360;
+}
+
+/**
+ * Rewrites an author mark in whatever spelling it already has: metadata stays
+ * metadata with its other fields intact, `[X]@@` stays `[X]@@`, and a label
+ * keeps the whitespace after it. An empty author removes the mark, unless
+ * metadata has other fields worth keeping.
+ */
+function rewriteAuthor(current: string, author: string, meta?: Record<string, unknown>): string {
+	if (current.startsWith("{")) {
+		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
+		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
+	}
+	if (!author) return "";
+	if (current.endsWith("@@")) return `[${author}]@@`;
+	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
 }
 
 export class AnnotationReviewView extends ItemView {
@@ -201,11 +209,11 @@ export class AnnotationReviewView extends ItemView {
 		if (this.activeTab === "annotations") {
 			const authors = new Set<string>();
 			let hasNoAuthor = false;
-			let hasReplies = false;
+			let hasMoreReplies = false;
 			for (const a of this.plugin.annotations) {
 				if (a.author) authors.add(a.author);
 				else hasNoAuthor = true;
-				if (a.replies.length > 0) hasReplies = true;
+				if (a.replies.length > 1) hasMoreReplies = true;
 			}
 			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
 			const currentLabel =
@@ -278,10 +286,12 @@ export class AnnotationReviewView extends ItemView {
 				menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 			});
 
-			if (hasReplies) {
+			// The first reply is always shown, so the toggle only matters once
+			// some annotation has more than one.
+			if (hasMoreReplies) {
 				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
 				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
-				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse all replies" : "Expand all replies");
+				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse replies" : "Expand replies");
 				expandBtn.addEventListener("click", () => {
 					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
 					void this.plugin.saveSettings();
@@ -424,22 +434,12 @@ export class AnnotationReviewView extends ItemView {
 		return el;
 	}
 
-	/**
-	 * Sets, changes or clears an author. Changing keeps whatever whitespace
-	 * followed the old label, and clearing the last thing in an entry takes
-	 * the entry with it.
-	 */
-	private saveAuthor(annotation: Annotation, target: AuthorTarget, newAuthor: string) {
+	/** Sets, changes or clears an author, in whatever spelling it already has. */
+	private saveAuthor(annotation: Annotation, target: Authored, newAuthor: string) {
 		if (target.authorSpan) {
-			if (!newAuthor) {
-				const clear = target.authorClearSpan ?? target.authorSpan;
-				this.plugin.replaceSpan(annotation, clear.start, clear.end, "");
-				return;
-			}
 			const current = annotation.fullMatch.slice(target.authorSpan.start, target.authorSpan.end);
-			const trailing = current.replace(/^\[[^\]]*\]/, "");
-			this.plugin.replaceSpan(annotation, target.authorSpan.start, target.authorSpan.end, `[${newAuthor}]${trailing}`);
-		} else if (newAuthor && target.authorInsert) {
+			this.plugin.replaceSpan(annotation, target.authorSpan.start, target.authorSpan.end, rewriteAuthor(current, newAuthor, target.authorMeta));
+		} else if (newAuthor) {
 			const p = target.authorInsert;
 			this.plugin.replaceSpan(annotation, p.at, p.at, `${p.prefix}${newAuthor}${p.suffix}`);
 		}
@@ -502,9 +502,9 @@ export class AnnotationReviewView extends ItemView {
 	}
 
 	/**
-	 * A hidden single-line form revealed by a toolbar button. Used for both
-	 * replies and reasons, which sit above the action buttons so the field has
-	 * the full card width and appears where its result will show up.
+	 * A hidden single-line form revealed by a toolbar button, for replies. It
+	 * sits above the action buttons so the field has the full card width and
+	 * appears where its result will show up.
 	 */
 	private createInlineForm(
 		container: Element,
@@ -527,7 +527,7 @@ export class AnnotationReviewView extends ItemView {
 			// Submitting an empty field, including one left at just its
 			// prefilled brackets, closes it. Otherwise there is no way to put
 			// away a field opened by mistake.
-			if (!text || text === "[]") {
+			if (!text || text === "[]" || /^\[[^\]]*\]$/.test(text)) {
 				input.value = "";
 				form.addClass("is-hidden");
 				return;
@@ -591,8 +591,8 @@ export class AnnotationReviewView extends ItemView {
 		card.dataset.id = annotation.id;
 		if (annotation.id === this.plugin.activeAnnotationId) card.addClass("is-active");
 
-		// Top to bottom: the text the annotation is about, then who and what
-		// with the line number at the far end, then the reason on its own line.
+		// Top to bottom: the text the annotation is about, then what and who
+		// with the line number at the far end, then the replies.
 		const body = card.createEl("div", { cls: "annotation-review-body" });
 		if (annotation.type === "insert" && annotation.bodySpan) {
 			this.renderEditableText(
@@ -625,49 +625,48 @@ export class AnnotationReviewView extends ItemView {
 
 		// The type leads: it is what varies from card to card, and the louder
 		// of the two chips. Same order as the syntax, operator then author.
+		// A comment on a span carries no author of its own, since the span was
+		// written by whoever wrote the note, so no chip there unless there is
+		// one. An operation without an author says so, since that is the
+		// proposal nobody has claimed.
 		const header = card.createEl("div", { cls: "annotation-review-header" });
 		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
+		if (annotation.author || annotation.type !== "comment") {
+			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
+		}
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 
-		if (annotation.reasonSpan) {
-			this.renderEditableText(card, "annotation-review-note", annotation, annotation.reasonSpan, annotation.reason ?? annotation.commentText ?? "", {
-				clearSpan: annotation.reasonClearSpan
-			});
+		// A comment on a spot: the note itself, on its own line.
+		if (annotation.commentSpan) {
+			this.renderEditableText(card, "annotation-review-note", annotation, annotation.commentSpan, annotation.commentText ?? "");
 		}
 
-		// Each form sits where its result will end up: a reason under the body
-		// where the reason renders, a reply under the replies list.
-		const reasonInsert = annotation.reasonInsert;
-		const reasonForm = reasonInsert
-			? this.createInlineForm(card, annotation.type === "comment" ? "Comment..." : "Reason...", text =>
-					this.plugin.replaceSpan(annotation, reasonInsert.at, reasonInsert.at, `${reasonInsert.prefix}${text}${reasonInsert.suffix}`)
-				)
-			: null;
-
+		// The first reply is always shown, since for a change it is the reason
+		// and for a comment on a span it is the comment. The rest fold away.
 		if (annotation.replies.length > 0) {
-			if (this.plugin.settings.repliesExpanded) {
-				const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
-				for (const reply of annotation.replies) {
-					const replyEl = this.renderAuthoredLine(
-						repliesEl,
-						"annotation-review-reply",
-						reply.author,
-						a => this.saveAuthor(annotation, reply, a),
-						row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
-					);
-					const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });
-					setIcon(removeBtn, "x");
-					setTooltip(removeBtn, "Dismiss this reply");
-					removeBtn.addEventListener("click", evt => {
-						evt.stopPropagation();
-						this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
-					});
-				}
-			} else {
-				card.createEl("div", {
+			const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
+			const shown = this.plugin.settings.repliesExpanded ? annotation.replies : annotation.replies.slice(0, 1);
+			for (const reply of shown) {
+				const replyEl = this.renderAuthoredLine(
+					repliesEl,
+					"annotation-review-reply",
+					reply.author,
+					a => this.saveAuthor(annotation, reply, a),
+					row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
+				);
+				const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });
+				setIcon(removeBtn, "x");
+				setTooltip(removeBtn, "Dismiss this reply");
+				removeBtn.addEventListener("click", evt => {
+					evt.stopPropagation();
+					this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
+				});
+			}
+			const hidden = annotation.replies.length - shown.length;
+			if (hidden > 0) {
+				repliesEl.createEl("div", {
 					cls: "annotation-review-replies-collapsed",
-					text: `${annotation.replies.length} ${annotation.replies.length === 1 ? "reply" : "replies"}`
+					text: `${hidden} more ${hidden === 1 ? "reply" : "replies"}`
 				});
 			}
 		}
@@ -718,15 +717,6 @@ export class AnnotationReviewView extends ItemView {
 		});
 
 		const trailing = actions.createEl("div", { cls: "annotation-review-trailing-actions" });
-		if (reasonForm) {
-			const addReasonBtn = trailing.createEl("button", { cls: "clickable-icon" });
-			setIcon(addReasonBtn, "plus");
-			setTooltip(addReasonBtn, annotation.type === "comment" ? "Add the comment" : "Add a reason");
-			addReasonBtn.addEventListener("click", evt => {
-				evt.stopPropagation();
-				reasonForm.toggle();
-			});
-		}
 		const replyBtn = trailing.createEl("button", { cls: "clickable-icon" });
 		setIcon(replyBtn, "reply");
 		setTooltip(replyBtn, "Reply");

@@ -6,10 +6,10 @@ The syntax follows [CriticMarkup](http://criticmarkup.com), with two additions: 
 
 ## The syntax
 
-An annotation is three independent choices:
+An annotation is a wrapper, an operator, an optional author, and any number of replies:
 
 ```
-<wrapper> <operator> text <operator> </wrapper> <entry>*
+<wrapper> <operator> <author>@@? text <operator> </wrapper> <reply>*
 ```
 
 **The wrapper decides how the note shows the text.** Any of the three works with any operation.
@@ -26,57 +26,69 @@ An annotation is three independent choices:
 | --- | --- | --- |
 | Delete | `--text--` | `This is ==--is --==a test.` |
 | Insert | `++text++` | `This {++is ++}a test.` |
-| Replace | `--old~>new++`, `--old--++new++`, or CriticMarkup's `~~old~>new~~` | `This ==--isn't~>is++== a test.` |
+| Replace | `~~old~>new~~` in braces. In a highlight or percent marks also `--old~>new++`, the default there, or `--old--++new++` | `This {~~isn't~>is~~} a test.` |
 | Comment | no operator | `==This is a test==^[What is it a test of?]` |
 
 Whitespace inside the markers is kept exactly as written, so `{++is ++}` inserts the word and the space after it. That is how CriticMarkup avoids having to select exact word boundaries.
 
-**The entries carry who and why.** An entry is a footnote `^[...]` or a CriticMarkup comment `{>>...<<}`, written directly after the wrapper with no space in between. The first entry holds the `[Author]` label and the reason, every entry after it is a reply.
+**The author goes inside the wrapper**, right after the opening operator marks, terminated by `@@` so the text after it keeps every space:
 
 ```
-This is {--is --}^[[Claude] The word is repeated.]^[[Alex] Agreed.]a test.
-This is {--is --}{>>[Claude] The word is repeated.<<}{>>[Alex] Agreed.<<}a test.
+{--{"author":"Claude"}@@is --}      the CriticMarkup plugin's metadata, written in braces
+==--[Claude]@@is --==               the lighter form, written in highlights and percent marks
+```
+
+Both spellings are read in every wrapper. From the metadata only `author` is used (`a` works too); other fields such as `time` are kept as written and ignored. An annotation is authored by the author inside its wrapper, or by nobody. That is the whole rule.
+
+**Every entry after the wrapper is a reply.** A footnote `^[...]` or a CriticMarkup comment `{>>...<<}`, written directly after the wrapper with no space in between, in any mix. There is no separate word for a reason: the reason for a change is simply its first reply, the way Google Docs does it. A reply's author is `{"author":"X"}@@` at the start, which is what the plugin writes in a brace comment, or `[X] `, which is what it writes in a footnote. `^[[Claude]]` is an empty reply by Claude and nothing more.
+
+```
+This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}{>>{"author":"Alex"}@@Agreed.<<}a test.
+This is ==--[Claude]@@is --==^[[Claude] The word is repeated.]^[[Alex] Agreed.]a test.
 ```
 
 A few rules that follow from this:
 
-- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span, and an Obsidian `%%comment%%` is exactly the same thing in native syntax: the hidden text is the remark, not a span anyone sees. Both may start with an `[Author]` label, since comment prose is trimmed anyway. They show up as comment cards with no text of their own.
-- A bare `==highlight==` is listed as a plain comment on that text, and a bare `%%note%%` as a plain comment on that spot, so nothing in a note goes unseen. The filter button hides both when a note is full of ordinary highlights and notes, and that choice is remembered.
-- There is no reply without a reason in front of it. `{--is --}^[[Alex] Agreed.]` is Alex's deletion, not a reply. To reply to an annotation that gave no reason, the author-only entry has to be there first: `^[[Claude]]^[[Alex] Agreed.]`.
+- A comment on a span needs no author inside the wrapper: the span was written by whoever wrote the note, and the person commenting signs their reply.
+- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span, and an Obsidian `%%comment%%` is exactly the same thing in native syntax: the hidden text is the remark. Both may start with an author, as `{"author":"X"}@@`, `[X]@@` or `[X] `.
+- A bare `==highlight==` is listed as a plain comment on that text, and a bare `%%note%%` as a plain comment on that spot, so nothing in a note goes unseen. The filter button hides both, and that choice is remembered.
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
 - Percent marks do not render inside any fenced block, admonitions included, so use highlights or braces there.
 - A highlight cannot cross a blank line, but braces and percent marks can, which is the only way to insert or delete a paragraph break: `{++\n\n++}`.
+
+### Compatibility with the CriticMarkup plugin
+
+Braces, the five CriticMarkup marks, `{~~old~>new~~}`, adjacent `{>>...<<}` comments as replies, and the `{"author":"..."}@@` author are all shared with [Fevol's obsidian-criticmarkup](https://github.com/Fevol/obsidian-criticmarkup), so a note annotated in braces reads the same in both. Highlights, percent marks, footnotes, `[Author]` labels, the `--old~>new++` form and annotations inside admonitions are this plugin's own.
 
 ## Creating annotations from the editor
 
 Select the text you want to annotate, then either right click it or run a command. None of the commands are bound to a hotkey by default, bind whichever you use most in Settings, Hotkeys.
 
-Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or replacement immediately and carry on. Out of the box everything is written as plain CriticMarkup, which is what the table shows.
+Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or replacement immediately and carry on. Out of the box everything is written as plain CriticMarkup, which is what the table shows, with Claude as the author.
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | On a selection, `{==text==}{>>[Author] <<}`. Inside an annotation, its reason, or a reply once it has one. With nothing selected, `{>>[Author] <<}` on that spot | Inside the entry, ready to type |
-| Delete | `{--text--}{>>[Author]<<}` | At the end |
-| Replace | `{--text~>++}{>>[Author]<<}` | After the arrow, ready for the replacement |
-| Insert | `{++text++}{>>[Author]<<}` | At the end, since the selection is already the inserted text |
+| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot | Inside the reply, ready to type |
+| Delete | `{--{"author":"Claude"}@@text--}` | At the end |
+| Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
+| Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
 | Choose type of annotation | Asks which of the four, then behaves the same | |
-| Set default author | Sets the `[Author]` label used for new annotations | |
+| Set default author | Sets the author written into new annotations | |
 
-A comment, a reason and a reply are the same thing in different places, so one command covers all three and the context decides. Selecting an annotation whole counts as being inside it, so Comment never wraps an annotation in a second one. Delete, Replace and Insert name the author when one is set and otherwise write nothing after the wrapper, so a reason is something you add on purpose rather than an empty slot every annotation carries.
+A comment, a reason and a reply are the same thing in different places, so one command covers all three and the context decides. Selecting an annotation whole counts as being inside it, so Comment never wraps an annotation in a second one. With no author set, nothing is written after the operator marks.
 
-The right click menu always shows Comment, named for what it will do there: Comment, Add reason, or Reply. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
+The right click menu always shows Comment, named Reply when the caret is inside an annotation. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
 
 Which wrapper each operation writes is a setting, per operation. Percent marks do not render inside fenced blocks, so a fallback wrapper stands in for them there, and inside an existing percent mark annotation the insert command writes the close-and-reopen form.
 
 ## Sidebar features
 
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, grey if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the reason or comment on its own line in grey. Text that goes away is red and text that arrives is green, the way a diff reads, with no strikethrough.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment; the rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text colour and with no strikethrough. A comment on a span shows no author chip unless it has one; an operation without an author says No author, since that is the proposal nobody has claimed.
 - **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and plain highlights and comments. Remembered across notes, unlike the author filter, which only means something within one note.
 - **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, grey for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.
 - **Editing in place**: click any text on a card to edit it inline, including the annotated text itself, the reason or comment, the replacement, the inserted text, and a reply. Click an author chip to set, change, or clear the author, on the annotation itself or on any reply. Everything saves straight back to the note, spaces and line breaks included.
-- **Adding and removing a reason**: annotations without a reason get a plus button next to the reply button, since there would otherwise be no field to click. It disappears once a reason exists. Clearing the reason field removes the reason again, along with the entry when that is all it carried.
 - **Replies**: the reply button opens a field above the buttons, where the reply itself will appear. The field is prefilled with an author bracket, since a reply's author is part of its own text, and the cursor lands inside the brackets when there's no default author to fill in. A reply is written in the same channel as the entries already there, footnote or brace comment. Each reply has its own dismiss button. Replies collapse to a count by default, with an expand/collapse-all toggle in the filter row once any annotation has one, and adding one expands them automatically. Whether replies are expanded is remembered across notes, separately from the admonition setting. A reply sits beside its author when it fits on one line, and moves below the author name when it needs more.
 - **Admonitions tab**: lists every `ad-*` block in the note (`ad-info`, `ad-c`, `ad-j`, anything), filterable by type. Each block is rendered live through Obsidian's own markdown pipeline, so if you have the Admonition plugin installed, it looks exactly like it does in your note, your custom colors, icons, and titles included. Without Admonition installed, it falls back to a plain rendered code block. A trash icon per block deletes that entire block in one action, also collapsing the blank line left behind so you don't end up with three blank lines where there should be one. An expand/collapse-all toggle sits in the filter row for reading full content instead of the clipped preview, and that choice is remembered across notes.
 - **Refresh button**: an icon-only button in the filter row forces a rescan of the active note if the list ever looks stale.
@@ -86,10 +98,10 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
 
-- **Author**: the `[Author]` label written into new annotations.
+- **Author**: written inside every new annotation and at the start of every reply.
 - **Wrappers**: braces, highlight, or percent marks, chosen separately for deletions, replacements and insertions. Comments offer braces or highlight only, since a comment cannot hide the text it is about.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Only shown while some operation uses percent marks.
-- **Reasons and replies**: CriticMarkup comment or footnote, for the author, reason and replies. An annotation that already has entries keeps using whatever it has, so a footnote chain stays a footnote chain even after switching. A comment on a spot follows the same choice: `{>>note<<}` with the first, an Obsidian `%%note%%` with the second.
+- **Replies**: CriticMarkup comment or footnote. An annotation that already has replies keeps using whatever it has, so a footnote chain stays a footnote chain even after switching. A comment on a spot follows the same choice: `{>>note<<}` with the first, an Obsidian `%%note%%` with the second.
 
 ## Code block handling
 

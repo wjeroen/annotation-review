@@ -4,7 +4,7 @@ import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./s
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, AnnotationType, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
-import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openEntry } from "./src/compose";
+import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openReply } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 
@@ -250,17 +250,19 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	/**
-	 * The reply field is prefilled with an author bracket, so its text already
-	 * carries whatever label the user wants. Empty brackets mean they left it
-	 * blank, so drop them rather than writing `^[[] text]`.
+	 * The reply field is prefilled with an author bracket, so the text typed
+	 * into it carries whatever label the user wants. The label is read back
+	 * off the front and written in the annotation's own channel.
 	 */
 	async addReply(annotation: Annotation, replyText: string) {
-		const cleaned = replyText.replace(/^\[\s*\]\s*/, "").trim();
-		if (!cleaned) return;
+		const m = /^\[([^\]]*)\]\s*/.exec(replyText);
+		const author = m ? m[1].trim() : "";
+		const text = (m ? replyText.slice(m[0].length) : replyText).trim();
+		if (!text) return;
 		const file = this.fileFor(annotation.filePath);
 		if (!file) return;
 		const content = await this.readContent(file);
-		await this.applyMutation(file, computeAddReply(content, annotation, cleaned));
+		await this.applyMutation(file, computeAddReply(content, annotation, author, text));
 	}
 
 	/** Replaces a span inside an annotation, or inserts when start equals end. */
@@ -322,13 +324,12 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 */
 	private annotationActions(): { id: AnnotationType; label: string; icon: string; description: string; run: (editor: Editor) => void }[] {
 		const author = () => this.settings.defaultAuthor;
-		const channel = () => this.settings.channel;
 		return [
 			{
 				id: "comment",
 				label: "Comment",
 				icon: "message-square",
-				description: "Comment on the selection, or add a reason or reply to the annotation under the caret",
+				description: "Comment on the selection, reply to the annotation under the caret, or leave a note on the spot",
 				run: editor => this.comment(editor)
 			},
 			{
@@ -336,14 +337,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 				label: "Delete",
 				icon: "strikethrough",
 				description: "Propose removing the selected text",
-				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperFor("delete", editor), channel()))
+				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperFor("delete", editor)))
 			},
 			{
 				id: "replace",
 				label: "Replace",
 				icon: "replace",
 				description: "Propose new wording for the selected text",
-				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperFor("replace", editor), channel()))
+				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperFor("replace", editor)))
 			},
 			{
 				id: "insert",
@@ -377,14 +378,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 		// The same actions on the editor's right click menu. setSection groups
 		// them together so Obsidian draws a divider around them, since the API
 		// has no submenus. Comment is always there and says what it will do,
-		// the other three need a selection.
+		// the other three need a selection outside any annotation.
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
 				const hasSelection = !!editor.getSelection();
 				const target = this.annotationAtCaret(editor);
 				for (const action of this.annotationActions()) {
 					if (action.id !== "comment" && (!hasSelection || target)) continue;
-					const title = action.id !== "comment" ? action.label : target ? (target.reasonSpan ? "Reply" : "Add reason") : "Comment";
+					const title = action.id !== "comment" ? action.label : target ? "Reply" : "Comment";
 					menu.addItem(item =>
 						item
 							.setSection("annotation-review")
@@ -435,8 +436,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const selection = this.requireSelection(editor);
 		if (selection === null) return;
 		const context = getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
-		const { wrappers, fencedFallback, channel, defaultAuthor } = this.settings;
-		this.annotate(editor, sel => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, channel));
+		const { wrappers, fencedFallback, defaultAuthor } = this.settings;
+		this.annotate(editor, sel => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback));
 	}
 
 	/**
@@ -450,7 +451,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return innermostAt(this.detect(editor.getValue(), path), from, to);
 	}
 
-	/** Writes `text` at the caret and puts the caret `cursor` characters into it. */
+	/** Writes `text` at `at` and puts the caret `cursor` characters into it. */
 	private insertAtCaret(editor: Editor, at: number, composed: Composed) {
 		const pos = editor.offsetToPos(at);
 		editor.replaceRange(composed.text, pos, pos);
@@ -461,26 +462,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 	/**
 	 * One command for every kind of remark, since a comment, a reason and a
 	 * reply are the same thing in different places. Inside an annotation it
-	 * adds the reason, or a reply once there is one. On a selection outside
-	 * any annotation it comments on that text. With nothing selected it
-	 * leaves a comment on that spot.
+	 * adds a reply. On a selection outside any annotation it comments on that
+	 * text. With nothing selected it leaves a comment on that spot.
 	 */
 	private comment(editor: Editor) {
 		const { defaultAuthor: author, channel } = this.settings;
 		const target = this.annotationAtCaret(editor);
 		if (target) {
-			if (target.reasonSpan) {
-				this.insertAtCaret(editor, target.matchEnd, openEntry(author, target.nextChannel));
-				return;
-			}
-			const point = target.reasonInsert;
-			if (!point) return;
-			// The author label goes in only when the annotation has none yet.
-			const label = !target.author && author ? `[${author}] ` : "";
-			this.insertAtCaret(editor, target.matchStart + point.at, {
-				text: point.prefix + label + point.suffix,
-				cursor: point.prefix.length + label.length
-			});
+			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel));
 			return;
 		}
 		if (editor.getSelection()) {

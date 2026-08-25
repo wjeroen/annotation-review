@@ -9,9 +9,9 @@ export type AnnotationType = "comment" | "delete" | "replace" | "insert";
 export type Wrapper = "brace" | "highlight" | "percent";
 
 /**
- * Where the author and reason are written. A footnote renders natively in
- * Obsidian, a brace comment stays readable in any CriticMarkup tool. Both
- * attach by sitting directly after the wrapper with no space in between.
+ * Where replies are written. A footnote renders natively in Obsidian, a brace
+ * comment stays readable in any CriticMarkup tool. Both attach by sitting
+ * directly after the wrapper with no space in between.
  */
 export type MetaChannel = "footnote" | "brace";
 
@@ -34,18 +34,29 @@ export interface InsertPoint {
 	suffix: string;
 }
 
-export interface AnnotationReply {
+/** Anything that carries an author: an annotation or one of its replies. */
+export interface Authored {
 	author?: string;
+	/**
+	 * The author as written, `{"author":"X"}@@`, `[X]@@` or `[X] `, so it can
+	 * be changed or removed in place.
+	 */
+	authorSpan?: TextSpan;
+	/** The other fields of a metadata object, kept so editing the author does not drop them. */
+	authorMeta?: Record<string, unknown>;
+	/** Where an author goes when there is none, and the syntax to wrap it in. */
+	authorInsert: InsertPoint;
+}
+
+export interface AnnotationReply extends Authored {
 	text: string;
 	channel: MetaChannel;
-	authorSpan?: TextSpan;
-	authorInsert: InsertPoint;
 	textSpan: TextSpan;
 	/** The whole entry, so a single reply can be removed. */
 	fullSpan: TextSpan;
 }
 
-export interface Annotation {
+export interface Annotation extends Authored {
 	id: string;
 	type: AnnotationType;
 	filePath: string;
@@ -54,46 +65,29 @@ export interface Annotation {
 	matchEnd: number;
 	fullMatch: string;
 	wrapper: Wrapper;
-	/** A bare `{>>...<<}` with nothing in front of it: a remark on a spot rather than a span. */
+	/** A comment on a spot rather than a span: `{>>note<<}` or `%%note%%`. Its text is its own. */
 	isPoint: boolean;
 	/**
-	 * An ordinary highlight or hidden comment with nothing attached. Listed as
-	 * a comment so nothing in the note goes unseen, and filterable, since a
-	 * note can be full of highlights that have nothing to do with review.
+	 * An ordinary highlight or hidden note with nothing attached and no author.
+	 * Listed so nothing in the note goes unseen, and filterable, since a note
+	 * can be full of highlights that have nothing to do with review.
 	 */
 	isPlain: boolean;
-	/** The annotated text for a comment or deletion, the old text for a replacement, empty for an insertion. */
+	/** The annotated text for a comment or deletion, the old text for a replacement, empty otherwise. */
 	originalText: string;
+	/** A comment on a spot: the note itself. */
 	commentText?: string;
-	author?: string;
-	reason?: string;
 	replacement?: string;
 	insertedText?: string;
 	insideAdBlock: boolean;
+	/** Every entry attached to the annotation. The reason for a change is simply the first one. */
 	replies: AnnotationReply[];
 
 	originalSpan?: TextSpan;
 	/** The inserted text. */
 	bodySpan?: TextSpan;
 	replacementSpan?: TextSpan;
-	authorSpan?: TextSpan;
-	/**
-	 * What to remove to clear the author. Wider than `authorSpan` when the
-	 * label is all the entry carries, so the empty entry goes with it.
-	 */
-	authorClearSpan?: TextSpan;
-	/** Set only when there is no author yet, so one can still be added. */
-	authorInsert?: InsertPoint;
-	/** The reason, or the comment text for a comment. */
-	reasonSpan?: TextSpan;
-	/**
-	 * What to remove to clear the reason. Wider than `reasonSpan`, since it
-	 * also takes the space after the author label, or the whole entry when the
-	 * reason is all it carried.
-	 */
-	reasonClearSpan?: TextSpan;
-	/** Set only when there is no reason yet, so one can still be added. */
-	reasonInsert?: InsertPoint;
+	commentSpan?: TextSpan;
 	/** The channel a new reply should use, matching whatever is already there. */
 	nextChannel: MetaChannel;
 }

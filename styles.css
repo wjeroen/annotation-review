@@ -255,14 +255,20 @@
 
 /* Diff colours: red for text that goes away, green for text that arrives,
    normal for text that stays. No strikethrough, it hurts reading anything
-   longer than a phrase and the badge already says what happens. */
+   longer than a phrase and the badge already says what happens. The colours
+   are mixed toward the text colour, since a whole paragraph in the theme's
+   full red or green is tiring to read. The plain declaration is the fallback
+   where color-mix is not supported. */
 .annotation-type-delete .annotation-review-text,
 .annotation-type-replace .annotation-review-text {
 	color: var(--color-red, var(--text-error));
+	color: color-mix(in srgb, var(--color-red, var(--text-error)) 65%, var(--text-normal));
 }
 
-.annotation-review-insert-text {
-	color: var(--text-success, var(--text-normal));
+.annotation-review-insert-text,
+.annotation-review-replacement {
+	color: var(--color-green, var(--text-success));
+	color: color-mix(in srgb, var(--color-green, var(--text-success)) 65%, var(--text-normal));
 }
 
 .annotation-review-arrow {
@@ -271,7 +277,6 @@
 }
 
 .annotation-review-replacement {
-	color: var(--text-success, var(--text-normal));
 	white-space: pre-wrap;
 	word-break: break-word;
 }

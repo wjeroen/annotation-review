@@ -3,16 +3,20 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
 /*
  * The grammar, in one line:
  *
- *     <wrapper> <op> text <op> </wrapper> <entry>*
+ *     <wrapper> <op> <author>@@? text <op> </wrapper> <reply>*
  *
  * The wrapper is `{...}`, `==...==` or `%%...%%` and only decides how the note
  * shows the text. The operator inside is `--` (delete), `++` (insert), or a
- * replacement written as `--old~>new++`, `--old--++new++` or `~~old~>new~~`.
- * No operator means a comment on the wrapped text. Each entry after the
- * wrapper is a footnote `^[...]` or a brace comment `{>>...<<}`, attached by
- * adjacency. The first entry carries `[Author]` and the reason, every entry
- * after it is a reply. A `{>>...<<}` with nothing in front of it is a comment
- * on that spot rather than on a span.
+ * replacement: `~~old~>new~~` everywhere, and `--old~>new++` or
+ * `--old--++new++` in highlights and percent marks as well. No operator means
+ * a comment on the wrapped text. Right after the opening operator marks an
+ * optional author, `{"author":"X"}@@` (the CriticMarkup plugin's metadata) or
+ * `[X]@@`, terminated by `@@` so the text after it keeps every space.
+ *
+ * Each entry after the wrapper is a footnote `^[...]` or a brace comment
+ * `{>>...<<}`, attached by adjacency, and every one of them is a reply with
+ * its own author. A `{>>...<<}` or `%%...%%` with nothing in front of it is a
+ * comment on that spot rather than on a span.
  */
 
 interface FenceRange extends ExcludedRange {
@@ -48,7 +52,10 @@ const PERCENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
 const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
 const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
-const AUTHOR_REGEX = /^\[([^\]]+)\]\s*/;
+/** An author terminated by `@@`, in either spelling. */
+const META_REGEX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
+/** A plain `[Author] ` label, only meaningful at the start of prose. */
+const LABEL_REGEX = /^\[([^\]]+)\]\s*/;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
 const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
@@ -93,27 +100,55 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 	return { start: s, end: e };
 }
 
+/** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
+function readMeta(raw: string): { author?: string; meta?: Record<string, unknown> } {
+	if (raw.startsWith("[")) return { author: raw.slice(1, -1) };
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		return { meta: {} };
+	}
+	if (!parsed || typeof parsed !== "object") return { meta: {} };
+	const fields = { ...(parsed as Record<string, unknown>) };
+	const value = fields.author ?? fields.a;
+	delete fields.author;
+	delete fields.a;
+	return { author: typeof value === "string" && value ? value : undefined, meta: fields };
+}
+
 interface AuthorParse {
 	author?: string;
-	/** The label plus the whitespace after it. */
 	authorSpan?: TextSpan;
-	/** Right after the label's closing bracket, before any whitespace. */
-	labelEnd: number;
+	authorMeta?: Record<string, unknown>;
+	/** Where the text after the author begins. */
 	restStart: number;
 }
 
-/** Reads a leading `[Author] ` label out of a segment of `text`. */
-function parseAuthorAt(text: string, contentStart: number, contentEnd: number): AuthorParse {
-	const m = AUTHOR_REGEX.exec(text.slice(contentStart, contentEnd));
+/**
+ * Reads an author from the start of [contentStart, contentEnd). The `@@`
+ * forms are read anywhere. The plain `[Author] ` label is only read in prose,
+ * since in annotated text the space after it would be ambiguous.
+ */
+function parseAuthorAt(text: string, contentStart: number, contentEnd: number, allowLabel: boolean): AuthorParse {
+	const segment = text.slice(contentStart, contentEnd);
+	const m = META_REGEX.exec(segment);
 	if (m) {
-		return {
-			author: m[1],
-			authorSpan: { start: contentStart, end: contentStart + m[0].length },
-			labelEnd: contentStart + m[1].length + 2,
-			restStart: contentStart + m[0].length
-		};
+		const { author, meta } = readMeta(m[1]);
+		return { author, authorMeta: meta, authorSpan: { start: contentStart, end: contentStart + m[0].length }, restStart: contentStart + m[0].length };
 	}
-	return { labelEnd: contentStart, restStart: contentStart };
+	if (allowLabel) {
+		const l = LABEL_REGEX.exec(segment);
+		if (l) return { author: l[1], authorSpan: { start: contentStart, end: contentStart + l[0].length }, restStart: contentStart + l[0].length };
+	}
+	return { restStart: contentStart };
+}
+
+/** How a new author is written at a spot: metadata in braces, the light form elsewhere, a label in prose. */
+function authorInsertFor(at: number, form: "brace" | "light" | "label"): InsertPoint {
+	if (form === "brace") return { at, prefix: '{"author":"', suffix: '"}@@' };
+	if (form === "light") return { at, prefix: "[", suffix: "]@@" };
+	return { at, prefix: "[", suffix: "] " };
 }
 
 function getFenceRanges(content: string): FenceRange[] {
@@ -205,67 +240,14 @@ function extractMeta(content: string, from: number): MetaEntry[] {
 	return entries;
 }
 
-interface FirstEntry {
-	author?: string;
-	authorSpan?: TextSpan;
-	authorClearSpan?: TextSpan;
-	authorInsert?: InsertPoint;
-	text: string;
-	reasonSpan?: TextSpan;
-	reasonClearSpan?: TextSpan;
-	reasonInsert?: InsertPoint;
-	nextChannel: MetaChannel;
-}
-
-/**
- * The first entry carries the author and the reason. Every field also records
- * how to add, change or remove it, since the sidebar edits them in place.
- * Without an entry at all, both get a whole new footnote.
- */
-function parseFirst(fullMatch: string, entry: MetaEntry | undefined, wrapperEnd: number, hasReplies: boolean, channel: MetaChannel): FirstEntry {
-	if (!entry) {
-		const [open, close] = channel === "brace" ? ["{>>", "<<}"] : ["^[", "]"];
-		return {
-			text: "",
-			authorInsert: { at: wrapperEnd, prefix: `${open}[`, suffix: `]${close}` },
-			reasonInsert: { at: wrapperEnd, prefix: open, suffix: close },
-			nextChannel: channel
-		};
-	}
-	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd);
-	const textSpan = trimmedSpan(fullMatch, a.restStart, entry.contentEnd);
-	const text = fullMatch.slice(textSpan.start, textSpan.end);
-	const hasText = text.length > 0;
-	const whole = { start: entry.fullStart, end: entry.fullEnd };
-	const out: FirstEntry = { author: a.author, authorSpan: a.authorSpan, text, nextChannel: entry.channel };
-
-	if (a.author) {
-		// Removing the last thing in an entry removes the entry, unless replies
-		// follow it, since the first entry is what makes them replies.
-		out.authorClearSpan = hasText || hasReplies ? a.authorSpan : whole;
-	} else {
-		out.authorInsert = { at: entry.contentStart, prefix: "[", suffix: hasText ? "] " : "]" };
-	}
-
-	if (hasText) {
-		out.reasonSpan = textSpan;
-		out.reasonClearSpan = a.author
-			? { start: a.labelEnd, end: entry.contentEnd }
-			: hasReplies ? { start: entry.contentStart, end: entry.contentEnd } : whole;
-	} else {
-		const needsSpace = !!a.author && a.labelEnd === entry.contentEnd;
-		out.reasonInsert = { at: entry.contentEnd, prefix: needsSpace ? " " : "", suffix: "" };
-	}
-	return out;
-}
-
 function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
-	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd);
+	const a = parseAuthorAt(fullMatch, entry.contentStart, entry.contentEnd, true);
 	const textSpan = trimmedSpan(fullMatch, a.restStart, entry.contentEnd);
 	return {
 		author: a.author,
 		authorSpan: a.authorSpan,
-		authorInsert: { at: entry.contentStart, prefix: "[", suffix: textSpan.end > textSpan.start ? "] " : "]" },
+		authorMeta: a.authorMeta,
+		authorInsert: authorInsertFor(entry.contentStart, entry.channel === "brace" ? "brace" : "label"),
 		text: fullMatch.slice(textSpan.start, textSpan.end),
 		textSpan,
 		fullSpan: { start: entry.fullStart, end: entry.fullEnd },
@@ -274,10 +256,11 @@ function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
 }
 
 /**
- * Works out the operation from the markers at both ends of the wrapped text.
- * `base` is where that text starts inside fullMatch, so the spans come out
- * relative to it. Whitespace is kept exactly as written, since `++is ++`
- * inserting its own trailing space is the whole point of the markers.
+ * Works out the operation from the markers at both ends of the wrapped text,
+ * for highlights and percent marks. `base` is where that text starts inside
+ * fullMatch, so the spans come out relative to it. Whitespace is kept exactly
+ * as written, since `++is ++` inserting its own trailing space is the whole
+ * point of the markers. The author, if any, is read off the spans afterwards.
  */
 function classifyInner(inner: string, base: number): Body {
 	const n = inner.length;
@@ -310,7 +293,7 @@ function classifyInner(inner: string, base: number): Body {
 interface BraceScan {
 	closeStart: number;
 	closeEnd: number;
-	/** The `~>` or `--++` dividing old text from new, for a replacement. */
+	/** The `~>` dividing old text from new, for a replacement. */
 	split?: TextSpan;
 }
 
@@ -318,7 +301,9 @@ interface BraceScan {
  * Finds the closer for the brace opener at `start`. Braces are the one wrapper
  * whose opening and closing marks differ, so they can nest, and the depth
  * count is what lets `{++a {++b++} c++}` close at the last `++}` rather than
- * the first. Anything in an excluded range is stepped over whole.
+ * the first. Anything in an excluded range is stepped over whole. Braces take
+ * CriticMarkup's forms only, so a replacement is `{~~old~>new~~}` and nothing
+ * else, since that is what the CriticMarkup plugin reads.
  */
 function scanBrace(content: string, start: number, excluded: ExcludedRange[]): BraceScan | null {
 	const op = content.slice(start + 1, start + 3);
@@ -344,25 +329,13 @@ function scanBrace(content: string, start: number, excluded: ExcludedRange[]): B
 				continue;
 			}
 			const closer = three.slice(0, 2);
-			const fits =
-				op === "--" ? closer === (split ? "++" : "--") :
-				op === "~~" ? closer === "~~" && !!split :
-				op === "++" ? closer === "++" :
-				op === "==" ? closer === "==" :
-				closer === "<<";
+			const fits = op === "~~" ? closer === "~~" && !!split : closer === op;
 			return fits ? { closeStart: i, closeEnd: i + 3, split } : null;
 		}
-		if (depth === 0 && !split) {
-			if ((op === "--" || op === "~~") && content.startsWith("~>", i)) {
-				split = { start: i, end: i + 2 };
-				i += 2;
-				continue;
-			}
-			if (op === "--" && content.startsWith("--++", i)) {
-				split = { start: i, end: i + 4 };
-				i += 4;
-				continue;
-			}
+		if (depth === 0 && !split && op === "~~" && content.startsWith("~>", i)) {
+			split = { start: i, end: i + 2 };
+			i += 2;
+			continue;
 		}
 		i++;
 	}
@@ -374,14 +347,14 @@ function braceBody(op: string, start: number, scan: BraceScan): Body | null {
 	const contentEnd = scan.closeStart - start;
 	if (op === "++") return { type: "insert", bodySpan: { start: 3, end: contentEnd } };
 	if (op === "==") return { type: "comment", originalSpan: { start: 3, end: contentEnd } };
-	if (scan.split) {
+	if (op === "--") return { type: "delete", originalSpan: { start: 3, end: contentEnd } };
+	if (op === "~~" && scan.split) {
 		return {
 			type: "replace",
 			originalSpan: { start: 3, end: scan.split.start - start },
 			replacementSpan: { start: scan.split.end - start, end: contentEnd }
 		};
 	}
-	if (op === "--") return { type: "delete", originalSpan: { start: 3, end: contentEnd } };
 	return null;
 }
 
@@ -402,8 +375,8 @@ function buildAnnotation(
 	insideAdBlock: boolean,
 	channel: MetaChannel,
 	/**
-	 * For a hidden comment, `%%note%%`, the wrapper's own content is the first
-	 * entry: the note itself, with its author. In fullMatch coordinates.
+	 * For a comment on a spot, `{>>note<<}` or `%%note%%`, the wrapper's own
+	 * content: the note itself, with its author. In fullMatch coordinates.
 	 */
 	selfEntry?: MetaEntry
 ): Built {
@@ -417,11 +390,44 @@ function buildAnnotation(
 		fullStart: e.fullStart - fullStart,
 		fullEnd: e.fullEnd - fullStart
 	}));
-	const replyEntries = selfEntry ? relative : relative.slice(1);
-	const replies = replyEntries.map(e => parseReply(fullMatch, e));
-	const first = parseFirst(fullMatch, selfEntry ?? relative[0], wrapperEnd - fullStart, replies.length > 0, channel);
-	const slice = (span?: TextSpan) => (span ? fullMatch.slice(span.start, span.end) : undefined);
+	const replies = relative.map(e => parseReply(fullMatch, e));
 
+	// Copies, since reading the author off the front shortens the span.
+	const originalSpan = body.originalSpan ? { ...body.originalSpan } : undefined;
+	const bodySpan = body.bodySpan ? { ...body.bodySpan } : undefined;
+	let author: string | undefined;
+	let authorSpan: TextSpan | undefined;
+	let authorMeta: Record<string, unknown> | undefined;
+	let authorInsert: InsertPoint;
+	let commentSpan: TextSpan | undefined;
+
+	if (selfEntry) {
+		// The note is prose, so a plain label counts as well as the @@ forms.
+		const a = parseAuthorAt(fullMatch, selfEntry.contentStart, selfEntry.contentEnd, true);
+		author = a.author;
+		authorSpan = a.authorSpan;
+		authorMeta = a.authorMeta;
+		commentSpan = trimmedSpan(fullMatch, a.restStart, selfEntry.contentEnd);
+		authorInsert = authorInsertFor(selfEntry.contentStart, wrapper === "brace" ? "brace" : "label");
+	} else {
+		// The author sits at the start of the annotated text, or of the old
+		// text for a replacement.
+		const lead = originalSpan ?? bodySpan;
+		if (lead) {
+			const a = parseAuthorAt(fullMatch, lead.start, lead.end, false);
+			if (a.authorSpan) {
+				author = a.author;
+				authorSpan = a.authorSpan;
+				authorMeta = a.authorMeta;
+				lead.start = a.restStart;
+			}
+			authorInsert = authorInsertFor(authorSpan ? authorSpan.start : lead.start, wrapper === "brace" ? "brace" : "light");
+		} else {
+			authorInsert = authorInsertFor(0, "light");
+		}
+	}
+
+	const slice = (span?: TextSpan) => (span ? fullMatch.slice(span.start, span.end) : undefined);
 	const annotation: Annotation = {
 		id: makeId(filePath, fullStart, fullMatch),
 		type: body.type,
@@ -432,34 +438,31 @@ function buildAnnotation(
 		fullMatch,
 		wrapper,
 		isPoint,
-		// A highlight with nothing attached, or a hidden note with no author
-		// and nothing attached, could be ordinary Obsidian markup.
-		isPlain: body.type === "comment" && entries.length === 0 && (selfEntry ? !first.author : !isPoint),
-		originalText: slice(body.originalSpan) ?? "",
-		insertedText: slice(body.bodySpan),
+		// A highlight or hidden note with nothing attached and nobody named
+		// could be ordinary Obsidian markup.
+		isPlain: body.type === "comment" && !author && replies.length === 0,
+		originalText: slice(originalSpan) ?? "",
+		commentText: slice(commentSpan),
+		insertedText: slice(bodySpan),
 		replacement: slice(body.replacementSpan),
-		commentText: body.type === "comment" && first.text ? first.text : undefined,
-		reason: body.type !== "comment" && first.text ? first.text : undefined,
-		author: first.author,
+		author,
+		authorSpan,
+		authorMeta,
+		authorInsert,
 		insideAdBlock,
 		replies,
-		originalSpan: body.originalSpan,
-		bodySpan: body.bodySpan,
+		originalSpan,
+		bodySpan,
 		replacementSpan: body.replacementSpan,
-		authorSpan: first.authorSpan,
-		authorClearSpan: first.authorClearSpan,
-		authorInsert: first.authorInsert,
-		reasonSpan: first.reasonSpan,
-		reasonClearSpan: first.reasonClearSpan,
-		reasonInsert: first.reasonInsert,
+		commentSpan,
 		// A reply goes after whatever is last, so it matches that one's channel.
-		nextChannel: relative.length ? relative[relative.length - 1].channel : first.nextChannel
+		nextChannel: relative.length ? relative[relative.length - 1].channel : channel
 	};
 	return { annotation, entries };
 }
 
 export interface DetectOptions {
-	/** Where a first entry goes when an annotation has none. Footnotes unless told otherwise. */
+	/** Where a first reply goes when an annotation has none. Footnotes unless told otherwise. */
 	channel?: MetaChannel;
 }
 
@@ -546,7 +549,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 
 	// Percent marks. With no operator inside, the hidden text is not a span
 	// anyone sees, it is the remark itself, so `%%note%%` is a comment on that
-	// spot, the same as `{>>note<<}`, and may carry `[Author]` the same way.
+	// spot, the same as `{>>note<<}`, and may carry an author the same way.
 	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
 	while ((m = percentRegex.exec(content)) !== null) {
 		const fullStart = m.index;
@@ -573,11 +576,15 @@ export function detectAnnotations(content: string, filePath: string, options: De
 	// Point comments: whatever {>>...<<} is left over once the ones attached to
 	// an annotation have been claimed.
 	const pointRegex = /\{>>/g;
+	const pointBody = new RegExp(BRACE_COMMENT_REGEX.source, "y");
 	while ((m = pointRegex.exec(content)) !== null) {
 		const start = m.index;
 		if (rangeAt(start, consumed) || rangeAt(start, pointExcluded)) continue;
-		const built = buildAnnotation(content, filePath, start, start, { type: "comment" }, "brace", true, isInsideAdBlock(start), channel);
-		if (built.entries.length === 0) continue;
+		pointBody.lastIndex = start;
+		const own = pointBody.exec(content);
+		if (!own) continue;
+		const self: MetaEntry = { channel: "brace", contentStart: 3, contentEnd: 3 + own[1].length, fullStart: 0, fullEnd: own[0].length };
+		const built = buildAnnotation(content, filePath, start, start + own[0].length, { type: "comment" }, "brace", true, isInsideAdBlock(start), channel, self);
 		publish(built);
 		pointRegex.lastIndex = built.annotation.matchEnd;
 	}

@@ -12,9 +12,17 @@
 - [ ] Anything in square brackets at the start of an entry is read as the author, so `^[[1] see the appendix]` gets the author "1". Accepted when square brackets were chosen over `{Author}`
 - [ ] Clearing the only author or reason on an entry that has replies after it leaves an empty `^[]` behind, since removing the entry would turn the first reply into the reason. Rare, and it parses, but it is ugly
 
+### Live preview rendering, next
+- [ ] Decorations through `registerEditorExtension`: hide wrapper, operator marks and author while the caret is outside, always reveal raw syntax when it is inside. Red and green text in highlights and braces, low-opacity red and green between visible percent marks. `~>` drawn as an arrow. Nothing inside backticks or code blocks, admonitions excepted. See the Live preview section of the vault's test note for what is decided and what is proposed
+- [ ] A diff gutter, red or green line down the left of changed lines, in live preview and source mode. Source mode keeps the text uncoloured
+- [ ] Reading view through a post processor
+- [ ] Comments: blue underline on the span, reply text inline in the comment colour, not dimmed, not behind an icon
+- [ ] Author chips in the editor, after an operation and before a reply, with a setting to hide them
+- [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
+
 ### Needs checking in Obsidian
 
-The changes in `0.6.0-beta.2` and `beta.1`. The checklist with fixtures is in the vault's Annotation Review Test note.
+The checklist with fixtures is in the vault's Annotation Review Test note.
 
 - [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
 - [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
@@ -66,6 +74,10 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] The author lives inside the wrapper now, `{--{"author":"Claude"}@@text--}` in braces (the CriticMarkup plugin's metadata, so that plugin agrees on every author) and `==--[Claude]@@text--==` elsewhere, terminated by `@@` so the text keeps every space. Every entry after the wrapper is a reply; there is no reason concept anymore, the first reply is shown prominently instead. An author-only footnote is an empty reply. Other metadata fields are kept and ignored (2026-08-25)
+- [x] Braces take only `{~~old~>new~~}` for a replacement, since the CriticMarkup plugin rejects the rest. Highlights and percent marks write `--old~>new++` and also read `--old--++new++` (2026-08-25)
+- [x] Comment inside an annotation always adds a reply. The plus button and reason field are gone. Comment cards show no author chip unless they have one, operations show No author, replies show it when unsigned (2026-08-25)
+- [x] Softer red and green on cards, mixed toward the text colour. The PauseAI note and the test note fixtures were converted to the author-inside form (2026-08-25)
 - [x] Fix: a hidden `%%note%%` was modelled as a comment on the hidden text, so the card showed the note as if it were selected text with no comment. It is now a comment on that spot, the Obsidian-native twin of `{>>note<<}`, with an optional `[Author]` inside and any entry after it read as a reply. Percent marks are no longer offered as the comment wrapper, since a comment cannot hide its span (2026-08-25)
 - [x] Add reason folded into Comment. A comment, a reason and a reply are the same thing in different places, so one command decides by context: wrap a selection, add the reason inside an annotation, add a reply once there is one, or leave a comment on the spot with nothing selected. Selecting an annotation whole counts as being inside it (2026-08-25)
 - [x] Defaults are plain CriticMarkup now, braces everywhere and `{>>...<<}` for entries, since that is the standard people arrive with. Wrappers are chosen per operation, a fallback for fenced blocks appears whenever percent marks are in use, and the channel for reasons and replies is a setting. Settings saved by the first two betas carry over as they were (2026-08-25)

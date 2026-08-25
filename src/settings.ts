@@ -127,9 +127,9 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 
 		addDropdown(
 			new Setting(containerEl)
-				.setName("Reasons and replies")
-				.setDesc("Where the author, reason and replies are written. An annotation that already has some keeps using whatever it has. A comment on a spot is written as {>>note<<} with the first, and as an Obsidian %%note%% with the second."),
-			{ brace: "CriticMarkup comment, {>>text<<}", footnote: "Footnote, ^[text]" },
+				.setName("Replies")
+				.setDesc("Where replies are written, the reason for a change being simply the first reply. An annotation that already has some keeps using whatever it has. A comment on a spot is written as {>>note<<} with the first, and as an Obsidian %%note%% with the second."),
+			{ brace: 'CriticMarkup comment, {>>{"author":"..."}@@text<<}', footnote: "Footnote, ^[[Author] text]" },
 			settings.channel,
 			async value => {
 				settings.channel = value as MetaChannel;
