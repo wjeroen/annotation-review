@@ -105,7 +105,9 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		if (a.originalSpan && a.type !== "comment") add(a.originalSpan, mark("arv-del" + faint));
 		if (a.bodySpan) add(a.bodySpan, mark("arv-ins" + faint));
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
-		if (a.commentSpan) add(a.commentSpan, mark("arv-comment"));
+		// A comment on a spot inside percent marks is toned down like the
+		// rest of what sits inside them. A reply after the wrapper is not.
+		if (a.commentSpan) add(a.commentSpan, mark("arv-comment" + faint));
 		for (const r of a.replies) {
 			// A footnote is drawn by Obsidian and already reads as a remark,
 			// and a genuine footnote must not turn blue, so only a brace
