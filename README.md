@@ -40,8 +40,8 @@ This is {--is --}{>>[Claude] The word is repeated.<<}{>>[Alex] Agreed.<<}a test.
 
 A few rules that follow from this:
 
-- A bare `==highlight==` or `%%comment%%` with nothing attached is listed as a plain comment with no author, so nothing in a note goes unseen. The filter button hides them when a note is full of ordinary highlights, and that choice is remembered.
-- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span. It shows up as a comment card with no text of its own.
+- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span, and an Obsidian `%%comment%%` is exactly the same thing in native syntax: the hidden text is the remark, not a span anyone sees. Both may start with an `[Author]` label, since comment prose is trimmed anyway. They show up as comment cards with no text of their own.
+- A bare `==highlight==` is listed as a plain comment on that text, and a bare `%%note%%` as a plain comment on that spot, so nothing in a note goes unseen. The filter button hides both when a note is full of ordinary highlights and notes, and that choice is remembered.
 - There is no reply without a reason in front of it. `{--is --}^[[Alex] Agreed.]` is Alex's deletion, not a reply. To reply to an annotation that gave no reason, the author-only entry has to be there first: `^[[Claude]]^[[Alex] Agreed.]`.
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
 - Percent marks do not render inside any fenced block, admonitions included, so use highlights or braces there.
@@ -55,17 +55,16 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | `{==text==}{>>[Author] <<}` | Inside the entry, ready for the comment |
+| Comment | On a selection, `{==text==}{>>[Author] <<}`. Inside an annotation, its reason, or a reply once it has one. With nothing selected, `{>>[Author] <<}` on that spot | Inside the entry, ready to type |
 | Delete | `{--text--}{>>[Author]<<}` | At the end |
 | Replace | `{--text~>++}{>>[Author]<<}` | After the arrow, ready for the replacement |
 | Insert | `{++text++}{>>[Author]<<}` | At the end, since the selection is already the inserted text |
-| Add reason | Opens an entry on the annotation under the caret, or puts the caret into the one it already has | Inside the entry, ready for the reason |
-| Choose type of annotation | Asks which of the first four, then behaves the same | |
+| Choose type of annotation | Asks which of the four, then behaves the same | |
 | Set default author | Sets the `[Author]` label used for new annotations | |
 
-Only Comment opens an entry for typing, since its text is the point of it. Delete, Replace and Insert name the author when one is set and otherwise write nothing after the wrapper, so a reason is something you add on purpose, with Add reason, rather than an empty slot every annotation carries.
+A comment, a reason and a reply are the same thing in different places, so one command covers all three and the context decides. Selecting an annotation whole counts as being inside it, so Comment never wraps an annotation in a second one. Delete, Replace and Insert name the author when one is set and otherwise write nothing after the wrapper, so a reason is something you add on purpose rather than an empty slot every annotation carries.
 
-The right click menu shows the four creating actions when text is selected and Add reason when the caret is inside an annotation, grouped under their own divider.
+The right click menu always shows Comment, named for what it will do there: Comment, Add reason, or Reply. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
 
 Which wrapper each operation writes is a setting, per operation. Percent marks do not render inside fenced blocks, so a fallback wrapper stands in for them there, and inside an existing percent mark annotation the insert command writes the close-and-reopen form.
 
@@ -88,9 +87,9 @@ Which wrapper each operation writes is a setting, per operation. Percent marks d
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
 
 - **Author**: the `[Author]` label written into new annotations.
-- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions.
+- **Wrappers**: braces, highlight, or percent marks, chosen separately for deletions, replacements and insertions. Comments offer braces or highlight only, since a comment cannot hide the text it is about.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Only shown while some operation uses percent marks.
-- **Reasons and replies**: CriticMarkup comment or footnote, for the author, reason and replies. An annotation that already has entries keeps using whatever it has, so a footnote chain stays a footnote chain even after switching.
+- **Reasons and replies**: CriticMarkup comment or footnote, for the author, reason and replies. An annotation that already has entries keeps using whatever it has, so a footnote chain stays a footnote chain even after switching. A comment on a spot follows the same choice: `{>>note<<}` with the first, an Obsidian `%%note%%` with the second.
 
 ## Code block handling
 

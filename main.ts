@@ -4,7 +4,7 @@ import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./s
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, AnnotationType, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
-import { Composed, composeComment, composeDelete, composeInsert, composeReplace } from "./src/compose";
+import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openEntry } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 
@@ -16,11 +16,15 @@ interface EditorWithCm extends Editor {
 	cm?: EditorView;
 }
 
-/** The annotation around `offset`, the innermost one when braces are nested. */
-function innermostAt(annotations: Annotation[], offset: number): Annotation | undefined {
+/**
+ * The annotation enclosing the range, the innermost one when braces are
+ * nested. A caret is a range of zero width, and selecting an annotation
+ * whole counts as being inside it.
+ */
+function innermostAt(annotations: Annotation[], from: number, to: number = from): Annotation | undefined {
 	let best: Annotation | undefined;
 	for (const a of annotations) {
-		if (offset < a.matchStart || offset > a.matchEnd) continue;
+		if (from < a.matchStart || to > a.matchEnd) continue;
 		if (!best || a.matchEnd - a.matchStart < best.matchEnd - best.matchStart) best = a;
 	}
 	return best;
@@ -97,6 +101,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.settings.channel = "footnote";
 			await this.saveSettings();
 		}
+		// A comment cannot hide its span, so percent marks are no longer offered for it.
+		if (this.settings.wrappers.comment === "percent") this.settings.wrappers.comment = "highlight";
 	}
 
 	async saveSettings() {
@@ -322,8 +328,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 				id: "comment",
 				label: "Comment",
 				icon: "message-square",
-				description: "Leave a remark on the selected text",
-				run: editor => this.annotate(editor, sel => composeComment(sel, author(), this.wrapperFor("comment", editor), channel()))
+				description: "Comment on the selection, or add a reason or reply to the annotation under the caret",
+				run: editor => this.comment(editor)
 			},
 			{
 				id: "delete",
@@ -358,11 +364,6 @@ export default class AnnotationReviewPlugin extends Plugin {
 			});
 		}
 		this.addCommand({
-			id: "annotate-reason",
-			name: "Add reason",
-			editorCallback: editor => this.addReasonAtCaret(editor)
-		});
-		this.addCommand({
 			id: "annotate-pick",
 			name: "Choose type of annotation",
 			editorCallback: editor => this.pickAnnotationType(editor)
@@ -375,28 +376,21 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 		// The same actions on the editor's right click menu. setSection groups
 		// them together so Obsidian draws a divider around them, since the API
-		// has no submenus. Creating needs a selection, adding a reason only
-		// needs the caret inside an annotation.
+		// has no submenus. Comment is always there and says what it will do,
+		// the other three need a selection.
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
-				if (editor.getSelection()) {
-					for (const action of this.annotationActions()) {
-						menu.addItem(item =>
-							item
-								.setSection("annotation-review")
-								.setTitle(action.label)
-								.setIcon(action.icon)
-								.onClick(() => action.run(editor))
-						);
-					}
-				}
-				if (this.annotationAtCaret(editor)) {
+				const hasSelection = !!editor.getSelection();
+				const target = this.annotationAtCaret(editor);
+				for (const action of this.annotationActions()) {
+					if (action.id !== "comment" && (!hasSelection || target)) continue;
+					const title = action.id !== "comment" ? action.label : target ? (target.reasonSpan ? "Reply" : "Add reason") : "Comment";
 					menu.addItem(item =>
 						item
 							.setSection("annotation-review")
-							.setTitle("Add reason")
-							.setIcon("list-plus")
-							.onClick(() => this.addReasonAtCaret(editor))
+							.setTitle(title)
+							.setIcon(action.icon)
+							.onClick(() => action.run(editor))
 					);
 				}
 			})
@@ -445,37 +439,55 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.annotate(editor, sel => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, channel));
 	}
 
-	/** The annotation the caret is in, parsed fresh since the list may be stale mid-edit. */
+	/**
+	 * The annotation the caret or selection is inside, parsed fresh since the
+	 * scanned list may be stale mid-edit.
+	 */
 	private annotationAtCaret(editor: Editor): Annotation | undefined {
 		const path = this.app.workspace.getActiveFile()?.path ?? "";
-		return innermostAt(this.detect(editor.getValue(), path), editor.posToOffset(editor.getCursor()));
+		const from = editor.posToOffset(editor.getCursor("from"));
+		const to = editor.posToOffset(editor.getCursor("to"));
+		return innermostAt(this.detect(editor.getValue(), path), from, to);
+	}
+
+	/** Writes `text` at the caret and puts the caret `cursor` characters into it. */
+	private insertAtCaret(editor: Editor, at: number, composed: Composed) {
+		const pos = editor.offsetToPos(at);
+		editor.replaceRange(composed.text, pos, pos);
+		editor.setCursor(editor.offsetToPos(at + composed.cursor));
+		editor.focus();
 	}
 
 	/**
-	 * Opens a reason on the annotation under the caret. With no entry yet a
-	 * new one is written in the chosen channel, with the author label when
-	 * there is one. With an entry that lacks a reason the caret goes into it.
-	 * With a reason already there the caret goes to its end.
+	 * One command for every kind of remark, since a comment, a reason and a
+	 * reply are the same thing in different places. Inside an annotation it
+	 * adds the reason, or a reply once there is one. On a selection outside
+	 * any annotation it comments on that text. With nothing selected it
+	 * leaves a comment on that spot.
 	 */
-	private addReasonAtCaret(editor: Editor) {
+	private comment(editor: Editor) {
+		const { defaultAuthor: author, channel } = this.settings;
 		const target = this.annotationAtCaret(editor);
-		if (!target) {
-			new Notice("Annotation Review: put the caret inside an annotation first.");
+		if (target) {
+			if (target.reasonSpan) {
+				this.insertAtCaret(editor, target.matchEnd, openEntry(author, target.nextChannel));
+				return;
+			}
+			const point = target.reasonInsert;
+			if (!point) return;
+			// The author label goes in only when the annotation has none yet.
+			const label = !target.author && author ? `[${author}] ` : "";
+			this.insertAtCaret(editor, target.matchStart + point.at, {
+				text: point.prefix + label + point.suffix,
+				cursor: point.prefix.length + label.length
+			});
 			return;
 		}
-		if (target.reasonSpan) {
-			editor.setCursor(editor.offsetToPos(target.matchStart + target.reasonSpan.end));
-			editor.focus();
+		if (editor.getSelection()) {
+			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel));
 			return;
 		}
-		const point = target.reasonInsert;
-		if (!point) return;
-		const label = !target.author && this.settings.defaultAuthor ? `[${this.settings.defaultAuthor}] ` : "";
-		const at = target.matchStart + point.at;
-		const pos = editor.offsetToPos(at);
-		editor.replaceRange(point.prefix + label + point.suffix, pos, pos);
-		editor.setCursor(editor.offsetToPos(at + point.prefix.length + label.length));
-		editor.focus();
+		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author, channel));
 	}
 
 	private pickAnnotationType(editor: Editor) {

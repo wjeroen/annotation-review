@@ -49,12 +49,25 @@ export function openEntry(author: string, channel: MetaChannel): Composed {
 /**
  * Caret inside the entry, ready for the comment. With braces the span is
  * marked as `{==text==}`, CriticMarkup's own form, since bare braces mean
- * nothing.
+ * nothing. Percent marks cannot carry a span comment, since the span would
+ * be hidden, so they are written as a highlight.
  */
 export function composeComment(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
-	const body = wrap(wrapper, wrapper === "brace" ? `==${selected}==` : selected);
+	const w = wrapper === "percent" ? "highlight" : wrapper;
+	const body = wrap(w, w === "brace" ? `==${selected}==` : selected);
 	const entry = openEntry(author, channel);
 	return { text: body + entry.text, cursor: body.length + entry.cursor };
+}
+
+/**
+ * A comment on a spot rather than a span, with the caret inside. CriticMarkup
+ * has `{>>note<<}` for this, Obsidian has `%%note%%`, and the channel setting
+ * says which style the note is written in.
+ */
+export function composePointComment(author: string, channel: MetaChannel): Composed {
+	if (channel === "brace") return openEntry(author, "brace");
+	const head = "%%" + (author ? `[${author}] ` : "");
+	return { text: head + "%%", cursor: head.length };
 }
 
 /** Caret at the end. */

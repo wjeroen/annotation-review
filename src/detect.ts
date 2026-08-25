@@ -400,7 +400,12 @@ function buildAnnotation(
 	wrapper: Wrapper,
 	isPoint: boolean,
 	insideAdBlock: boolean,
-	channel: MetaChannel
+	channel: MetaChannel,
+	/**
+	 * For a hidden comment, `%%note%%`, the wrapper's own content is the first
+	 * entry: the note itself, with its author. In fullMatch coordinates.
+	 */
+	selfEntry?: MetaEntry
 ): Built {
 	const entries = extractMeta(content, wrapperEnd);
 	const matchEnd = entries.length ? entries[entries.length - 1].fullEnd : wrapperEnd;
@@ -412,8 +417,9 @@ function buildAnnotation(
 		fullStart: e.fullStart - fullStart,
 		fullEnd: e.fullEnd - fullStart
 	}));
-	const replies = relative.slice(1).map(e => parseReply(fullMatch, e));
-	const first = parseFirst(fullMatch, relative[0], wrapperEnd - fullStart, replies.length > 0, channel);
+	const replyEntries = selfEntry ? relative : relative.slice(1);
+	const replies = replyEntries.map(e => parseReply(fullMatch, e));
+	const first = parseFirst(fullMatch, selfEntry ?? relative[0], wrapperEnd - fullStart, replies.length > 0, channel);
 	const slice = (span?: TextSpan) => (span ? fullMatch.slice(span.start, span.end) : undefined);
 
 	const annotation: Annotation = {
@@ -426,7 +432,9 @@ function buildAnnotation(
 		fullMatch,
 		wrapper,
 		isPoint,
-		isPlain: body.type === "comment" && entries.length === 0 && !isPoint,
+		// A highlight with nothing attached, or a hidden note with no author
+		// and nothing attached, could be ordinary Obsidian markup.
+		isPlain: body.type === "comment" && entries.length === 0 && (selfEntry ? !first.author : !isPoint),
 		originalText: slice(body.originalSpan) ?? "",
 		insertedText: slice(body.bodySpan),
 		replacement: slice(body.replacementSpan),
@@ -536,8 +544,9 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}
 
-	// Percent marks. An ordinary hidden comment with nothing attached counts
-	// as a plain comment, the same as a bare highlight.
+	// Percent marks. With no operator inside, the hidden text is not a span
+	// anyone sees, it is the remark itself, so `%%note%%` is a comment on that
+	// spot, the same as `{>>note<<}`, and may carry `[Author]` the same way.
 	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
 	while ((m = percentRegex.exec(content)) !== null) {
 		const fullStart = m.index;
@@ -548,8 +557,15 @@ export function detectAnnotations(content: string, filePath: string, options: De
 			percentRegex.lastIndex = fullStart + delim;
 			continue;
 		}
-		const body = classifyInner(doubled ? m[1] : m[2], delim);
-		const built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false, channel);
+		const inner = doubled ? m[1] : m[2];
+		const body = classifyInner(inner, delim);
+		let built: Built;
+		if (body.type === "comment") {
+			const self: MetaEntry = { channel, contentStart: delim, contentEnd: delim + inner.length, fullStart: 0, fullEnd: m[0].length };
+			built = buildAnnotation(content, filePath, fullStart, end, { type: "comment" }, "percent", true, false, channel, self);
+		} else {
+			built = buildAnnotation(content, filePath, fullStart, end, body, "percent", false, false, channel);
+		}
 		publish(built);
 		percentRegex.lastIndex = built.annotation.matchEnd;
 	}

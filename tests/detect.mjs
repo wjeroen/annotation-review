@@ -6,7 +6,7 @@ const built = await esbuild.build({
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
 			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
-			export { composeComment, composeDelete, composeReplace, composeInsert, openEntry } from "./src/compose";
+			export { composeComment, composeDelete, composeReplace, composeInsert, composePointComment, openEntry } from "./src/compose";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -35,6 +35,7 @@ const {
 	composeDelete,
 	composeReplace,
 	composeInsert,
+	composePointComment,
 	openEntry
 } = mod.exports;
 
@@ -68,9 +69,13 @@ for (const w of [
 }
 check("comment, brace highlight on its own", shape(one(`{==This is a test==}`)), ["comment", null, "This is a test", null, null, null]);
 check("comment, highlight with a footnote", shape(one(`==This is a test==^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
-check("comment, percent with a footnote", shape(one(`%%This is a test%%^[What?]`)), ["comment", null, "This is a test", null, null, "What?"]);
 check("a plain highlight is a comment with nothing attached", [one(`==plain==`).type, one(`==plain==`).isPlain], ["comment", true]);
-check("so is a plain hidden comment", [one(`%%hidden%%`).type, one(`%%hidden%%`).isPlain], ["comment", true]);
+check("a hidden note is a comment on a spot, its text being the comment", [one(`%%hidden%%`).type, one(`%%hidden%%`).isPoint, one(`%%hidden%%`).originalText, one(`%%hidden%%`).commentText], ["comment", true, "", "hidden"]);
+check("with no author and nothing attached it is plain", one(`%%hidden%%`).isPlain, true);
+check("a hidden note carries its author the way a brace comment does", shape(one(`%%[Claude] hidden%%`)), ["comment", "Claude", "", null, null, "hidden"]);
+check("and is not plain then", one(`%%[Claude] hidden%%`).isPlain, false);
+check("an entry after a hidden note is a reply", one(`%%What?%%^[[Joe] A test.]`).replies.map(r => [r.author, r.text]), [["Joe", "A test."]]);
+check("the doubled form works the same", shape(one(`%%%%[C] hidden%%%%`)), ["comment", "C", "", null, null, "hidden"]);
 check("and a brace highlight", one(`{==plain==}`).isPlain, true);
 check("an attached entry makes it not plain", one(`==x==^[note]`).isPlain, false);
 check("a point comment is not plain either", one(`A{>>x<<}`).isPlain, false);
@@ -151,6 +156,8 @@ check("unless replies follow it", setAuthor(`==--T--==^[[C]]^[[A] r]`, null, "")
 check("add to an entry that has a reason", setAuthor(`==--T--==^[why]`, null, "C"), `==--T--==^[[C] why]`);
 check("add to a brace entry", setAuthor(`{--T--}{>>why<<}`, null, "C"), `{--T--}{>>[C] why<<}`);
 check("add where there is no entry at all", setAuthor(`==--T--==`, null, "C"), `==--T--==^[[C]]`);
+check("add to a hidden note, inside it", setAuthor(`%%note%%`, null, "C"), `%%[C] note%%`);
+check("clear from a hidden note", setAuthor(`%%[C] note%%`, null, ""), `%%note%%`);
 const withReply = `{--T--}^[[C] why]^[r]`;
 check("add to a reply", setAuthor(withReply, one(withReply).replies[0], "A"), `{--T--}^[[C] why]^[[A] r]`);
 
@@ -193,7 +200,7 @@ check("approve tilde replace", approve(`{~~isn't~>is~~}`), "is");
 check("approve insert", approve(`%%++New.++%%^[[C]]`), "New.");
 check("dismiss insert", dismiss(`%%++New.++%%^[[C]]`), "");
 check("dismiss brace comment span", dismiss(`{==T==}{>>note<<}`), "T");
-check("dismiss hidden comment span", dismiss(`%%T%%^[note]`), "T");
+check("dismiss a hidden note removes it whole", dismiss(`A %%T%%^[note] B`), "A  B");
 check("comments cannot be approved", computeMutation(`==T==^[note]`, one(`==T==^[note]`), "approve").ok, false);
 
 console.log("\n=== Code, links and stray delimiters ===");
@@ -233,7 +240,11 @@ const FENCED = { kind: "fenced" };
 check("comment, CriticMarkup throughout", composeComment("Sel.", "C", "brace", "brace").text, `{==Sel.==}{>>[C] <<}`);
 check("and it reads back", shape(one(fill(composeComment("Sel.", "C", "brace", "brace"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
 check("comment, highlight and footnote", shape(one(fill(composeComment("Sel.", "C", "highlight", "footnote"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
-check("comment, percent marks", shape(one(fill(composeComment("Sel.", "C", "percent", "footnote"), "My note."))), ["comment", "C", "Sel.", null, null, "My note."]);
+check("comment cannot hide its span, so percent marks become a highlight", composeComment("Sel.", "C", "percent", "footnote").text, `==Sel.==^[[C] ]`);
+check("a comment on a spot, CriticMarkup", composePointComment("C", "brace"), { text: "{>>[C] <<}", cursor: 7 });
+check("a comment on a spot, Obsidian style", composePointComment("C", "footnote"), { text: "%%[C] %%", cursor: 6 });
+check("and without an author", composePointComment("", "footnote"), { text: "%%%%", cursor: 2 });
+check("both read back as the same thing", [one(fill(composePointComment("C", "brace"), "hm")).commentText, one(fill(composePointComment("C", "footnote"), "hm")).commentText], ["hm", "hm"]);
 check("a comment opens an entry even without an author", shape(one(fill(composeComment("Sel.", "", "brace", "brace"), "note"))), ["comment", null, "Sel.", null, null, "note"]);
 check("delete writes nothing after the wrapper without an author", composeDelete("Sel.", "", "brace", "brace").text, `{--Sel.--}`);
 check("delete names the author when there is one", composeDelete("Sel.", "C", "brace", "brace").text, `{--Sel.--}{>>[C]<<}`);

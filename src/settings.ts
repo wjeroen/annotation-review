@@ -60,10 +60,10 @@ const OPERATION_LABELS: Record<AnnotationType, string> = {
 	insert: "Insertions"
 };
 
-function addDropdown<T extends string>(setting: Setting, options: Record<T, string>, value: T, onChange: (value: T) => Promise<void>) {
+function addDropdown(setting: Setting, options: Record<string, string>, value: string, onChange: (value: string) => Promise<void>) {
 	setting.addDropdown(dropdown => {
-		for (const key of Object.keys(options) as T[]) dropdown.addOption(key, options[key]);
-		dropdown.setValue(value).onChange(v => onChange(v as T));
+		for (const key of Object.keys(options)) dropdown.addOption(key, options[key]);
+		dropdown.setValue(value).onChange(v => onChange(v));
 	});
 }
 
@@ -98,9 +98,13 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			.setDesc("How the note shows the annotated text. Braces show it as it is, which is standard CriticMarkup. A highlight shows it highlighted. Percent marks hide it.")
 			.setHeading();
 
+		// A comment cannot hide its span, so percent marks are not on offer there.
+		const spanOnly = { brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight };
 		for (const type of Object.keys(OPERATION_LABELS) as AnnotationType[]) {
-			addDropdown(new Setting(containerEl).setName(OPERATION_LABELS[type]), WRAPPER_LABELS, settings.wrappers[type], async value => {
-				settings.wrappers[type] = value;
+			const setting = new Setting(containerEl).setName(OPERATION_LABELS[type]);
+			if (type === "comment") setting.setDesc("A comment on a spot rather than a span follows the Reasons and replies setting below.");
+			addDropdown(setting, type === "comment" ? spanOnly : WRAPPER_LABELS, settings.wrappers[type], async value => {
+				settings.wrappers[type] = value as Wrapper;
 				await this.plugin.saveSettings();
 				// The fallback setting only applies while percent marks are in use.
 				this.display();
@@ -115,7 +119,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				{ brace: WRAPPER_LABELS.brace, highlight: WRAPPER_LABELS.highlight },
 				settings.fencedFallback,
 				async value => {
-					settings.fencedFallback = value;
+					settings.fencedFallback = value as "brace" | "highlight";
 					await this.plugin.saveSettings();
 				}
 			);
@@ -124,11 +128,11 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		addDropdown(
 			new Setting(containerEl)
 				.setName("Reasons and replies")
-				.setDesc("Where the author, reason and replies are written. An annotation that already has some keeps using whatever it has."),
+				.setDesc("Where the author, reason and replies are written. An annotation that already has some keeps using whatever it has. A comment on a spot is written as {>>note<<} with the first, and as an Obsidian %%note%% with the second."),
 			{ brace: "CriticMarkup comment, {>>text<<}", footnote: "Footnote, ^[text]" },
 			settings.channel,
 			async value => {
-				settings.channel = value;
+				settings.channel = value as MetaChannel;
 				await this.plugin.saveSettings();
 			}
 		);

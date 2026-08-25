@@ -18,8 +18,9 @@ The changes in `0.6.0-beta.2` and `beta.1`. The checklist with fixtures is in th
 
 - [ ] Fresh install defaults are plain CriticMarkup. Existing settings from beta.1 and beta.2 (one wrapper for three operations, one for insertions, footnotes) carry over unchanged
 - [ ] The settings tab: four wrapper dropdowns, the fenced block fallback appearing only while some operation uses percent marks, and the reasons and replies channel
+- [ ] A hidden `%%note%%` shows as a comment card with no text row, just the badge, author chip and line number, then the note in grey
 - [ ] Delete, Replace and Insert write nothing after the wrapper when no author is set. Comment still opens an entry
-- [ ] The Add reason command and right click item, on an annotation with no entry, with an author-only entry, and with a reason already there
+- [ ] Comment by context: wraps a selection outside any annotation, adds the reason with the caret or selection inside one, adds a reply once there is a reason, and leaves a `{>>...<<}` or `%%...%%` on the spot with nothing selected. The right click item is named for what it will do
 - [ ] Deleted and replaced text in red without strikethrough, inserted and replacement text in green
 - [ ] Card layout: text, then type badge and author chip with the line number at the far end, then the reason on its own line in grey
 - [ ] The filter button and its menu, and that the choices survive switching notes and restarting
@@ -65,6 +66,8 @@ Decisions taken along the way:
 - Recommended forms: highlights with footnotes for everything, `==--old~>new++==` for replacements, percent marks for insertions outside fenced blocks. All of it is a setting.
 
 ## Completed Recently
+- [x] Fix: a hidden `%%note%%` was modelled as a comment on the hidden text, so the card showed the note as if it were selected text with no comment. It is now a comment on that spot, the Obsidian-native twin of `{>>note<<}`, with an optional `[Author]` inside and any entry after it read as a reply. Percent marks are no longer offered as the comment wrapper, since a comment cannot hide its span (2026-08-25)
+- [x] Add reason folded into Comment. A comment, a reason and a reply are the same thing in different places, so one command decides by context: wrap a selection, add the reason inside an annotation, add a reply once there is one, or leave a comment on the spot with nothing selected. Selecting an annotation whole counts as being inside it (2026-08-25)
 - [x] Defaults are plain CriticMarkup now, braces everywhere and `{>>...<<}` for entries, since that is the standard people arrive with. Wrappers are chosen per operation, a fallback for fenced blocks appears whenever percent marks are in use, and the channel for reasons and replies is a setting. Settings saved by the first two betas carry over as they were (2026-08-25)
 - [x] Delete, Replace and Insert no longer open an empty entry. They name the author when one is set and otherwise stop at the wrapper. A reason is added with the new Add reason command, also on the right click menu whenever the caret is inside an annotation, which replaces the "Insert with a reason" and "Insert (highlight form)" commands (2026-08-25)
 - [x] Diff colours on cards: deleted and replaced text in red, no strikethrough, inserted and replacement text in green. Type badge before the author chip, since the type is what varies from card to card and the louder chip should lead (2026-08-25)
