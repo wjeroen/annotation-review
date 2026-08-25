@@ -27,7 +27,8 @@ An annotation is a wrapper, an operator, an optional author, and any number of r
 | Delete | `--text--` | `This is ==--is --==a test.` |
 | Insert | `++text++` | `This {++is ++}a test.` |
 | Replace | `~~old~>new~~` in braces. In a highlight or percent marks also `--old~>new++`, the default there, or `--old--++new++` | `This {~~isn't~>is~~} a test.` |
-| Comment | no operator | `==This is a test==^[What is it a test of?]` |
+| Comment on a span | no operator | `==This is a test==^[What is it a test of?]` |
+| Comment on a spot | `>>note<<` | `This is a test.{>>What is it a test of?<<}` |
 
 Whitespace inside the markers is kept exactly as written, so `{++is ++}` inserts the word and the space after it. That is how CriticMarkup avoids having to select exact word boundaries.
 
@@ -50,7 +51,7 @@ This is ==--[Claude]@@is --==^[[Claude] The word is repeated.]^[[Alex] Agreed.]a
 A few rules that follow from this:
 
 - A comment on a span needs no author inside the wrapper: the span was written by whoever wrote the note, and the person commenting signs their reply.
-- A `{>>comment<<}` with nothing in front of it is a comment on that spot rather than on a span. It may start with an author, as `{"author":"X"}@@` or `[X] `.
+- `>>` is an operator like the others, so a comment on a spot exists in every wrapper: `{>>note<<}`, `==>>note<<==`, `%%>>note<<%%`. A `{>>...<<}` directly after another annotation is a reply to it instead.
 - A commented `%%hidden span%%` shows its reply while the span stays hidden, which is the accepted cost of hiding it.
 - A bare `==highlight==` or `%%hidden text%%` is listed as a plain comment on that text, so nothing in a note goes unseen. The filter button hides both, and that choice is remembered.
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
@@ -69,7 +70,7 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a `{>>comment<<}` on that spot | Inside the reply, ready to type |
+| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot, `{>>...<<}` in the chosen wrapper | Inside the reply, ready to type |
 | Delete | `{--{"author":"Claude"}@@text--}` | At the end |
 | Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
 | Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
@@ -117,7 +118,7 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors in the editor** (underline, chip, or none), **Show the diff gutter**: the three parts of the editor rendering, each its own setting. The first two apply to reading view as well.
-- **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style. A comment on a spot is always a `{>>note<<}`.
+- **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
 
 ## Code block handling
 

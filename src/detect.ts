@@ -6,17 +6,18 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  *     <wrapper> <op> <author>@@? text <op> </wrapper> <reply>*
  *
  * The wrapper is `{...}`, `==...==` or `%%...%%` and only decides how the note
- * shows the text. The operator inside is `--` (delete), `++` (insert), or a
- * replacement: `~~old~>new~~` everywhere, and `--old~>new++` or
- * `--old--++new++` in highlights and percent marks as well. No operator means
- * a comment on the wrapped text. Right after the opening operator marks an
+ * shows the text. The operator inside is `--` (delete), `++` (insert), `>>`
+ * (a comment on that spot, the text being the remark), or a replacement:
+ * `~~old~>new~~` everywhere, and `--old~>new++` or `--old--++new++` in
+ * highlights and percent marks as well. No operator means a comment on the
+ * wrapped text. Right after the opening operator marks an
  * optional author, `{"author":"X"}@@` (the CriticMarkup plugin's metadata) or
  * `[X]@@`, terminated by `@@` so the text after it keeps every space.
  *
  * Each entry after the wrapper is a footnote `^[...]` or a brace comment
  * `{>>...<<}`, attached by adjacency, and every one of them is a reply with
  * its own author. A `{>>...<<}` with nothing in front of it is a comment on
- * that spot rather than on a span.
+ * that spot rather than a reply.
  */
 
 interface FenceRange extends ExcludedRange {
@@ -44,6 +45,8 @@ interface Body {
 	originalSpan?: TextSpan;
 	bodySpan?: TextSpan;
 	replacementSpan?: TextSpan;
+	/** A comment on a spot: the remark itself, between `>>` and `<<`. */
+	pointSpan?: TextSpan;
 }
 
 const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
@@ -285,6 +288,8 @@ function classifyInner(inner: string, base: number): Body {
 			return { type: "delete", originalSpan: { start: base + 2, end: base + n - 2 } };
 		} else if (head === "++" && tail === "++") {
 			return { type: "insert", bodySpan: { start: base + 2, end: base + n - 2 } };
+		} else if (head === ">>" && tail === "<<") {
+			return { type: "comment", pointSpan: { start: base + 2, end: base + n - 2 } };
 		}
 	}
 	return { type: "comment", originalSpan: { start: base, end: base + n } };
@@ -462,6 +467,24 @@ function buildAnnotation(
 	return { annotation, entries };
 }
 
+/** A highlight or percent mark annotation, which is a comment on a spot when its operator is `>>`. */
+function buildWrapped(
+	content: string,
+	filePath: string,
+	fullStart: number,
+	wrapperEnd: number,
+	body: Body,
+	wrapper: Wrapper,
+	insideAdBlock: boolean,
+	channel: MetaChannel
+): Built {
+	if (body.pointSpan) {
+		const self: MetaEntry = { channel, contentStart: body.pointSpan.start, contentEnd: body.pointSpan.end, fullStart: 0, fullEnd: wrapperEnd - fullStart };
+		return buildAnnotation(content, filePath, fullStart, wrapperEnd, { type: "comment" }, wrapper, true, insideAdBlock, channel, self);
+	}
+	return buildAnnotation(content, filePath, fullStart, wrapperEnd, body, wrapper, false, insideAdBlock, channel);
+}
+
 export interface DetectOptions {
 	/** Where a first reply goes when an annotation has none. Footnotes unless told otherwise. */
 	channel?: MetaChannel;
@@ -542,8 +565,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		}
 		// An ordinary highlight with nothing attached counts too, as a plain
 		// comment, so the sidebar can list it or filter it out.
-		const body = classifyInner(m[1], 2);
-		const built = buildAnnotation(content, filePath, fullStart, highlightEnd, body, "highlight", false, isInsideAdBlock(fullStart), channel);
+		const built = buildWrapped(content, filePath, fullStart, highlightEnd, classifyInner(m[1], 2), "highlight", isInsideAdBlock(fullStart), channel);
 		publish(built);
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}
@@ -561,7 +583,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 			percentRegex.lastIndex = fullStart + delim;
 			continue;
 		}
-		const built = buildAnnotation(content, filePath, fullStart, end, classifyInner(doubled ? m[1] : m[2], delim), "percent", false, false, channel);
+		const built = buildWrapped(content, filePath, fullStart, end, classifyInner(doubled ? m[1] : m[2], delim), "percent", false, channel);
 		publish(built);
 		percentRegex.lastIndex = built.annotation.matchEnd;
 	}

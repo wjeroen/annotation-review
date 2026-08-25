@@ -106,8 +106,8 @@ function render(inner: string, style: AuthorStyle, isProse: boolean): DocumentFr
 			return out;
 		}
 	}
-	if (isProse) {
-		const { author, rest } = splitAuthor(inner, true);
+	if (isProse || (n >= 4 && head === ">>" && tail === "<<")) {
+		const { author, rest } = splitAuthor(isProse ? inner : inner.slice(2, -2), true);
 		withAuthor("arv-comment", rest, author);
 		return out;
 	}

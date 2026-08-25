@@ -26,6 +26,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] `>>` is an operator, so a comment on a spot exists in every wrapper: `{>>note<<}`, `==>>note<<==`, `%%>>note<<%%`. A wrapper with no operator is always a comment on its span. That is what makes `%%note%%` unambiguous (2026-08-25)
 - [x] Percent marks are an ordinary comment wrapper again: `%%span%%^[reply]` is a comment on the hidden span, the reply showing being the accepted cost. A comment on a spot is only ever `{>>note<<}`. The strikethrough on a braced replacement and the yellow under a braced comment span are removed through `:has()` on the parent span, which is where Obsidian puts those classes (2026-08-25)
 - [x] Fix: braced replacements still had Obsidian's strikethrough in live preview, since Obsidian sets it from a more specific selector. Footnote replies no longer get the blue background, so a genuine footnote is never touched; being a footnote already reads as a remark, and an author underline shows when there is one (2026-08-25)
 - [x] Reading view styled through a post processor with the same classes as live preview: brace syntax in text nodes, operator marks inside a highlight, braced replacements Obsidian rendered as strikethrough, and footnote labels at the bottom (2026-08-25)

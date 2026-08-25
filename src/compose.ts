@@ -112,7 +112,13 @@ export function composeInsert(selected: string, author: string, context: InsertC
 	return { text, cursor: text.length };
 }
 
-/** A comment on a spot rather than a span, with the caret inside. Always CriticMarkup's `{>>note<<}`. */
-export function composePointComment(author: string): Composed {
-	return openReply(author, "brace");
+/**
+ * A comment on a spot rather than a span, with the caret inside. The `>>`
+ * operator in whichever wrapper is chosen: `{>>note<<}`, `==>>note<<==` or
+ * `%%>>note<<%%`, the author written the way it is for any other operation.
+ */
+export function composePointComment(author: string, wrapper: Wrapper): Composed {
+	if (wrapper === "brace") return openReply(author, "brace");
+	const head = `${OPEN[wrapper]}>>${authorPrefix(author, wrapper)}`;
+	return { text: `${head}<<${CLOSE[wrapper]}`, cursor: head.length };
 }
