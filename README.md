@@ -39,7 +39,7 @@ Whitespace inside the markers is kept exactly as written, so `{++is ++}` inserts
 ==--[Claude]@@is --==               the lighter form, written in highlights and percent marks
 ```
 
-Both spellings are read in every wrapper. From the metadata only `author` is used (`a` works too); other fields such as `time` are kept as written and ignored. An annotation is authored by the author inside its wrapper, or by nobody. That is the whole rule.
+Both spellings are read in every wrapper. From the metadata only `author` is used (`a` works too). Other fields such as `time` are kept as written and ignored. An annotation is authored by the author inside its wrapper, or by nobody. That is the whole rule.
 
 **Every entry after the wrapper is a reply.** A footnote `^[...]` or a CriticMarkup comment `{>>...<<}`, written directly after the wrapper with no space in between, in any mix. There is no separate word for a reason: the reason for a change is simply its first reply, the way Google Docs does it. A reply's author is `{"author":"X"}@@` at the start, which is what the plugin writes in a brace comment, or `[X] `, which is what it writes in a footnote. `^[[Claude]]` is an empty reply by Claude and nothing more.
 
@@ -89,7 +89,7 @@ In live preview the syntax is hidden and the text is colored the way a diff read
 
 Comments and replies sit on a blue background: a `{>>comment<<}` on a spot and a `{>>reply<<}`, with their markers hidden. A `^[reply]` is left to Obsidian, which draws it as a footnote, and gets nothing added, so a genuine footnote is never touched. The span a comment is about gets no color of its own: a `==highlight==` and a `{==braced span==}` keep Obsidian's yellow, and a hidden `%%span%%` is already fainter. So a plain yellow highlight reads as a comment and nothing else does.
 
-The author is shown one of three ways, chosen in settings: a line under the text in the author's color, the same color as their chip in the sidebar, with the name in a tooltip; the name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote; or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
+The author is shown one of three ways, chosen in settings. A line under the text in the author's color, the same color as their chip in the sidebar, with the name in a tooltip. The name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote. Or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
 The moment the caret or the selection touches an annotation, all of its syntax comes back, the way Obsidian reveals its own `==` and `**`. Nothing inside backticks or a code block is ever styled, admonitions excepted.
 
@@ -100,7 +100,7 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 ## Sidebar features
 
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, gray if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment; the rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either; only an unsigned reply says No author.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment. The rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either. Only an unsigned reply says No author.
 - **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and plain highlights and comments. Remembered across notes, unlike the author filter, which only means something within one note.
 - **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, gray for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.

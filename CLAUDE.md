@@ -4,7 +4,7 @@ An Obsidian plugin that finds text annotations in a note, lists them in a sideba
 
 ## Where things are
 
-`ARCHITECTURE.md` has the codebase map, how the pieces fit, the reasoning behind the syntax, and how the rendering works. Read it before grepping. The one contract to keep in mind: `detect.ts` reads the syntax and `compose.ts` writes it, and the round-trip tests in `tests/detect.mjs` fail if they disagree. The skill in `skills/annotation-review/SKILL.md` is maintained outside this repo and copied in; do not edit it here.
+`ARCHITECTURE.md` has the codebase map, how the pieces fit, the reasoning behind the syntax, and how the rendering works. Read it before grepping. The one contract to keep in mind: `detect.ts` reads the syntax and `compose.ts` writes it, and the round-trip tests in `tests/detect.mjs` fail if they disagree. The skill in `skills/annotation-review/SKILL.md` is maintained outside this repo and copied in. Do not edit it here.
 
 ## Commands
 
@@ -50,7 +50,7 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 
 **Obsidian's strikethrough and highlight classes sit on a parent span.** A text decoration or background on a parent cannot be undone from a child span, so the rule that removes the line from a `{~~replacement~~}` targets the parent with `:has()`. A rule on our own span, however specific, never reaches it. Do not try to recolor a `{==commented span==}` either: blue on Obsidian's yellow came out green, which is why the span keeps the yellow.
 
-**The author lives inside the wrapper, terminated by `@@`.** `{--{"author":"X"}@@text--}` is the CriticMarkup plugin's metadata and `==--[X]@@text--==` the lighter form; both are read everywhere, and the plugin writes the first in braces and the second elsewhere. The `@@` is what makes the text after it unambiguous, spaces included, which a plain `[X] ` label inside operator marks could never be. Every entry after the wrapper is a reply, each with its own author, and there is no reason concept in the data at all: the sidebar just shows the first reply prominently. An author-only footnote `^[[X]]` is an empty reply by X, never the author of the operation. Metadata fields other than `author` are carried in `authorMeta` and written back untouched when the author is edited.
+**The author lives inside the wrapper, terminated by `@@`.** `{--{"author":"X"}@@text--}` is the CriticMarkup plugin's metadata and `==--[X]@@text--==` the lighter form. Both are read everywhere, and the plugin writes the first in braces and the second elsewhere. The `@@` is what makes the text after it unambiguous, spaces included, which a plain `[X] ` label inside operator marks could never be. Every entry after the wrapper is a reply, each with its own author, and there is no reason concept in the data at all: the sidebar just shows the first reply prominently. An author-only footnote `^[[X]]` is an empty reply by X, never the author of the operation. Metadata fields other than `author` are carried in `authorMeta` and written back untouched when the author is edited.
 
 **Entries attach by adjacency, and a brace comment is two things.** `{>>...<<}` directly after a wrapper is a reply to that annotation. The same thing after a space, or after plain text, is a comment on that spot. The scanners claim the attached ones first and whatever is left becomes a point comment. Reordering the scans breaks this.
 
@@ -83,6 +83,6 @@ When adding a test for a bug, confirm it fails against the unfixed code first. A
 Part of finishing a change, not an afterthought:
 
 - `README.md` for anything user facing: syntax, commands, sidebar behavior.
-- `TODO.md` for what is done and what is outstanding. Tasks only, one line each; explanations go in `ARCHITECTURE.md` or the README.
+- `TODO.md` for what is done and what is outstanding. Tasks only, one line each. Explanations go in `ARCHITECTURE.md` or the README.
 - `ARCHITECTURE.md` when the structure or a design decision changes, this file when the workflow does.
 - Not the skill. That is owned outside the repo and copied in on request.
