@@ -368,6 +368,25 @@ export class AnnotationReviewView extends ItemView {
 	}
 
 	/** A text field that turns into an inline editor on click. */
+	/** The text with every annotation nested inside it cut out. Spans are relative to the annotation, the list is absolute. */
+	private withoutNested(annotation: Annotation, span: TextSpan, text: string): string {
+		const start = annotation.matchStart + span.start;
+		const end = annotation.matchStart + span.end;
+		const cuts = this.plugin.annotations
+			.filter(n => n !== annotation && n.matchStart >= start && n.matchEnd <= end && n.matchEnd > n.matchStart)
+			.map(n => ({ from: n.matchStart - start, to: n.matchEnd - start }))
+			.sort((a, b) => a.from - b.from);
+		if (cuts.length === 0) return text;
+		let out = "";
+		let pos = 0;
+		for (const cut of cuts) {
+			if (cut.from < pos) continue;
+			out += text.slice(pos, cut.from);
+			pos = cut.to;
+		}
+		return out + text.slice(pos);
+	}
+
 	private renderEditableText(
 		container: Element,
 		cls: string,
@@ -378,16 +397,20 @@ export class AnnotationReviewView extends ItemView {
 	): HTMLElement {
 		const el = container.createEl(options.inline ? "span" : "div", { cls: `${cls} annotation-review-editable` });
 
+		// An annotation nested inside this text has a card of its own, so the
+		// display leaves it out, syntax and all. The edit box keeps the raw
+		// text, so what you edit is exactly what is in the note.
+		const shown = this.withoutNested(annotation, span, text);
 		const showDisplay = () => {
 			el.empty();
 			el.removeClass("annotation-review-whitespace");
 			// Text that is nothing but spaces or line breaks would show as an
 			// empty box, so say what it is instead.
-			if (text.length > 0 && text.trim().length === 0) {
-				el.setText(text.includes("\n") ? "(blank line)" : "(space)");
+			if (shown.length > 0 && shown.trim().length === 0) {
+				el.setText(shown.includes("\n") ? "(blank line)" : "(space)");
 				el.addClass("annotation-review-whitespace");
 			} else {
-				el.setText(text);
+				el.setText(shown);
 			}
 		};
 		showDisplay();
