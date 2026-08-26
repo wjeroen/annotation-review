@@ -74,7 +74,8 @@ class ChipWidget extends WidgetType {
 	}
 	toDOM() {
 		const el = document.createElement("span");
-		el.className = "arv-chip";
+		// The gap in front, so a chip never touches the word before it.
+		el.className = "arv-chip arv-attached";
 		el.textContent = this.author;
 		applyChipColor(el, this.author, this.colors);
 		return el;
@@ -149,8 +150,8 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
 		// A comment on a spot inside percent marks is toned down like the
 		// rest of what sits inside them. A reply after the wrapper is not.
-		// Text right after a comment gets the same small gap as text before a reply.
-		if (a.commentSpan) add(a.commentSpan, mark("arv-comment arv-gap-after" + faint));
+		// A comment on a spot gets the small gap on both sides, like a reply.
+		if (a.commentSpan) add(a.commentSpan, mark("arv-comment arv-attached arv-gap-after" + faint));
 		for (const r of a.replies) {
 			// A footnote is drawn by Obsidian and already reads as a remark,
 			// and a genuine footnote must not turn blue, so only a brace

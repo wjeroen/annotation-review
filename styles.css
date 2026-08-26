@@ -642,15 +642,15 @@
 	color: rgb(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((r * 0.245 + g * 0.715 + b * 0.04 - 163.5) * -infinity) calc((r * 0.245 + g * 0.715 + b * 0.04 - 163.5) * -infinity) calc((r * 0.245 + g * 0.715 + b * 0.04 - 163.5) * -infinity));
 }
 
-/* A brace reply sits right against the text it follows. Its first part, the
-   chip or the text, gets a gap smaller than a space in front of it. */
+/* A brace comment sits right against the text around it. Its first part,
+   the chip or the text, gets a gap in front, and its last part one after:
+   the two pixels a chip keeps from its text, clearly less than a space. */
 .arv-attached {
-	margin-left: 0.25em;
+	margin-left: 2px;
 }
 
-/* And the same gap after a comment, for text that follows it directly. */
 .arv-gap-after {
-	margin-right: 0.25em;
+	margin-right: 2px;
 }
 
 /* Reading view uses the same classes. A replacement rendered by Obsidian as
@@ -739,12 +739,15 @@ del.arv-replace {
 	text-overflow: ellipsis;
 }
 
+/* Square, whatever height Obsidian gives a button on the phone. */
 .arv-color-swatch {
-	width: 48px;
-	height: 36px;
-	min-height: 36px;
-	flex: 0 0 auto;
-	padding: 0;
+	width: 40px !important;
+	height: 40px !important;
+	min-width: 40px;
+	min-height: 40px !important;
+	max-height: 40px;
+	flex: 0 0 40px;
+	padding: 0 !important;
 	border-radius: 8px;
 	border: 1px solid var(--background-modifier-border);
 	box-shadow: none;

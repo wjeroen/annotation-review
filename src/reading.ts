@@ -78,10 +78,10 @@ function chip(author: string): HTMLElement {
 
 /**
  * The styled replacement for one annotation's inner text, markers included.
- * A prose entry is a `{>>...<<}` in running text. When it is attached to
- * something it is a reply and gets a small gap in front, as in the editor.
+ * A prose entry is a `{>>...<<}` in running text, a reply or a comment on
+ * a spot, and gets the small gap on both sides, as in the editor.
  */
-function render(inner: string, isProse: boolean, attached = false): DocumentFragment | null {
+function render(inner: string, isProse: boolean): DocumentFragment | null {
 	const out = document.createDocumentFragment();
 	const style = changeStyle;
 	const withAuthor = (cls: string, text: string, author: string | undefined, s: AuthorStyle) => {
@@ -114,7 +114,7 @@ function render(inner: string, isProse: boolean, attached = false): DocumentFrag
 	if (isProse || (n >= 4 && head === ">>" && tail === "<<")) {
 		const { author, rest } = splitAuthor(isProse ? inner : inner.slice(2, -2), true);
 		withAuthor("arv-comment", rest, author, commentStyle);
-		if (isProse && attached && out.firstElementChild) out.firstElementChild.classList.add("arv-attached");
+		if (isProse && out.firstElementChild) out.firstElementChild.classList.add("arv-attached");
 		if (out.lastElementChild) out.lastElementChild.classList.add("arv-gap-after");
 		return out;
 	}
@@ -231,9 +231,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		let m: RegExpExecArray | null;
 		while ((m = pattern.exec(data)) !== null) {
 			fragment.appendChild(document.createTextNode(data.slice(last, m.index)));
-			// Attached means right after a wrapper: a closing brace, or an element such as a <mark> or <del> this text node follows.
-			const attached = m.index === 0 ? node.previousSibling !== null : data[m.index - 1] === "}";
-			const styled = m[1] !== undefined ? render(m[0].slice(1, -1), false) : render(m[4], true, attached);
+			const styled = m[1] !== undefined ? render(m[0].slice(1, -1), false) : render(m[4], true);
 			if (styled) fragment.appendChild(styled);
 			else fragment.appendChild(document.createTextNode(m[0]));
 			last = m.index + m[0].length;

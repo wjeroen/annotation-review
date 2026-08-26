@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] A comment on a spot gets the gap in front as well, the gaps are two pixels like the chip gap, and the mobile swatch is square (2026-08-26)
 - [x] A change's own author's first comment shows under the text as the reason, with no chip. A comment by someone else, or on an unauthored change, stays a comment with a chip. A brace comment gets the small gap after it too, for text that follows directly (2026-08-26)
 - [x] The black-or-white text rule is fitted by eye: black starts reading better than white on orange at 80% opacity, green 78%, red 57%, blue 55% over a light page, one rule for chips and badges (2026-08-26)
 - [x] A nested annotation is left out of the outer card's text in the sidebar, since it has its own card. Editing the text shows the raw text with the nested syntax, so what is edited is what is in the note (2026-08-26)
