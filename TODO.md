@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The black-or-white text rule is fitted by eye: black starts reading better than white on orange at 80% opacity, green 78%, red 57%, blue 55% over a light page, one rule for chips and badges (2026-08-26)
 - [x] A nested annotation is left out of the outer card's text in the sidebar, since it has its own card. Editing the text shows the raw text with the nested syntax, so what is edited is what is in the note (2026-08-26)
 - [x] An author color row on mobile keeps the name field, the full chip, the picker and the trash button on one line. Obsidian had stretched the name field to the full width (2026-08-26)
 - [x] One black-or-white bar for chips and badges, YIQ 150, in place of the split that made the two disagree (2026-08-26)
