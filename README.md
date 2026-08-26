@@ -79,7 +79,7 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 A comment, a reason and a reply are the same thing in different places, so one command covers all three and the context decides. Selecting an annotation whole counts as being inside it, so Comment never wraps an annotation in a second one. With no author set, nothing is written after the operator marks.
 
-The right click menu always shows Comment, named Reply when the caret is inside an annotation. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
+The right click menu always shows Comment, named Reply when the caret is inside an annotation that already has a comment or a reply. On a bare selection it stays Comment. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
 
 Which wrapper each operation writes is a setting, per operation. Percent marks do not render inside fenced blocks, so a fallback wrapper stands in for them there, and inside an existing percent mark annotation the insert command writes the close-and-reopen form.
 
@@ -91,7 +91,7 @@ Comments and replies sit on a blue background: a `{>>comment<<}` on a spot and a
 
 The author is shown one of three ways, chosen in settings. A line under the text in the author's color, the same color as their chip in the sidebar, with the name in a tooltip. The name itself as a chip, sized by whatever it sits in, so it shrinks inside a footnote. Or not at all. The `[Author]` labels and `{"author":"..."}@@` metadata are hidden either way.
 
-The moment the caret or the selection touches an annotation, all of its syntax comes back, the way Obsidian reveals its own `==` and `**`. Nothing inside backticks or a code block is ever styled, admonitions excepted.
+The moment the caret or the selection touches an annotation, all of its syntax comes back, the way Obsidian reveals its own `==` and `**`. Inside braces, which nest, revealing the outer annotation reveals everything nested in it, and when authors are chips the outer author's chip returns after each nested annotation, so the text that follows is not mistaken for the inner author's. Nothing inside backticks or a code block is ever styled, admonitions excepted.
 
 Reading view is styled the same way, from the rendered HTML: brace syntax in the text, operator marks inside a highlight, and a `{~~replacement~~}` Obsidian rendered as a strikethrough. Percent marks are dropped by Obsidian in reading view, which is right for text that is hidden until approved. Footnote labels at the bottom of the page become the author. An annotation whose text carries its own inline formatting is left as it is rather than half styled.
 
