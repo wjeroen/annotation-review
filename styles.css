@@ -199,10 +199,8 @@
 }
 
 /* The badge fill follows the opacity setting through a variable on the
-   body. The text is black or white by the same YIQ sum as on the chips, but
-   with the bar at 170 rather than 128: a badge at full strength is an accent
-   color and gets Obsidian's white-on-accent look, orange included, and only
-   a badge faded toward the page turns black. */
+   body. The text is black or white by the same rule as on the chips, one
+   bar for both, so a badge and a chip of the same fill always agree. */
 .annotation-review-badge {
 	--arv-badge-color: var(--background-modifier-border);
 	background-color: color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), transparent);
@@ -213,7 +211,7 @@
 .annotation-type-replace .annotation-review-badge,
 .annotation-type-insert .annotation-review-badge {
 	color: var(--text-on-accent);
-	color: rgb(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity));
+	color: rgb(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity));
 }
 
 .annotation-type-comment .annotation-review-badge {
@@ -631,14 +629,15 @@
 
 /* Black or white text on a chip, whichever reads against the fill as it
    actually shows: the author's color at its opacity over the page. The
-   choice is the YIQ rule, perceived brightness above 128 of 255 gets black,
-   which weights green lightly enough that a saturated green keeps white
-   text. Relative color syntax does the sum from that mix and pushes each
-   channel to 0 or 255. A browser without it keeps the normal text color
-   declared above. */
+   choice is the YIQ sum, perceived brightness out of 255, with the bar at
+   150 for chips and badges alike: every theme accent at full strength,
+   orange included, keeps white text, and a fill has to be clearly light
+   before the text goes black. Relative color syntax does the sum from that
+   mix and pushes each channel to 0 or 255. A browser without it keeps the
+   normal text color declared above. */
 .arv-chip,
 .annotation-review-author:not(.annotation-review-author-none) {
-	color: rgb(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity));
+	color: rgb(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 150) * -infinity));
 }
 
 /* A brace reply sits right against the text it follows. Its first part, the
