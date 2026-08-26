@@ -7,6 +7,7 @@
 - [ ] Anything in square brackets followed by a space at the start of a reply is read as the author, so `^[[1] see the appendix]` gets the author "1"
 
 ### Rendering, known limits
+- [ ] With underlines, an empty insertion or an empty comment has no text to underline and is invisible in the editor until the caret touches it. It still shows in the sidebar. Accepted as the cost of underlines
 - [ ] Reading view leaves an annotation alone when its text carries inline formatting of its own, since Obsidian splits that across elements. Handling that means reassembling text across siblings
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
@@ -23,6 +24,9 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The sidebar's reply button is a Comment button beside Approve and Dismiss, in the icon-button style with the message-square-plus icon, the line number at the far end of that row. Labels drop as the card narrows, Comment first. Nothing in the sidebar is called a reply anymore (2026-08-26)
+- [x] A new author color row gets its picker once the name is committed, starting at that name's computed color. Setting the native picker from code fired its change and froze the first letter's color (2026-08-26)
+- [x] Black or white text on chips and badges by the YIQ brightness rule instead of LCH lightness, so a saturated green keeps white text. Bare selections get no gutter line. The comments line in a card matches the muted text (2026-08-26)
 - [x] Text on author chips and type badges is black or white, whichever reads against the fill as it shows at the chosen opacity, never grey. One solid author color feeds the chip, the underline and the picker, so adding an author with the offered color changes nothing on screen (2026-08-26)
 - [x] Insert with nothing selected writes an empty insertion with the caret inside, from the command and the right click menu, like a comment on a spot (2026-08-26)
 - [x] An unsigned comment on a selection shows no author chip. Only a reply says No author (2026-08-26)

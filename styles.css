@@ -211,7 +211,7 @@
 .annotation-type-replace .annotation-review-badge,
 .annotation-type-insert .annotation-review-badge {
 	color: var(--text-on-accent);
-	color: lch(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((50 - l) * infinity) 0 0);
+	color: rgb(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity));
 }
 
 .annotation-type-comment .annotation-review-badge {
@@ -335,7 +335,7 @@
 .annotation-review-replies {
 	margin-top: 6px;
 	padding-left: 10px;
-	border-left: 2px solid var(--background-modifier-border);
+	border-left: 2px solid var(--text-muted);
 }
 
 /* Normal inline flow, so a short reply sits beside its author chip. When the
@@ -439,15 +439,28 @@
 	line-height: 1.4;
 }
 
-.annotation-review-trailing-actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	margin-left: auto;
+/* The Comment button keeps the quiet icon-button look, with a label. When
+   the card gets narrow the labels go, this one first, then Approve and
+   Dismiss, so the row never wraps. The card is the container measured. */
+.annotation-review-annotation-card {
+	container-type: inline-size;
 }
 
-.annotation-review-trailing-actions button {
-	padding: 2px 4px;
+.annotation-review-actions button.annotation-review-comment {
+	padding: 2px 6px;
+	color: var(--text-muted);
+}
+
+@container (max-width: 340px) {
+	.annotation-review-comment-label {
+		display: none;
+	}
+}
+
+@container (max-width: 270px) {
+	.annotation-review-action-label {
+		display: none;
+	}
 }
 
 .annotation-review-action-icon {
@@ -613,12 +626,15 @@
 }
 
 /* Black or white text on a chip, whichever reads against the fill as it
-   actually shows: the author's color at its opacity over the page. Relative
-   color syntax takes the lightness of that mix and pushes it to 0 or 100.
-   A browser without it keeps the normal text color declared above. */
+   actually shows: the author's color at its opacity over the page. The
+   choice is the YIQ rule, perceived brightness above 128 of 255 gets black,
+   which weights green lightly enough that a saturated green keeps white
+   text. Relative color syntax does the sum from that mix and pushes each
+   channel to 0 or 255. A browser without it keeps the normal text color
+   declared above. */
 .arv-chip,
 .annotation-review-author:not(.annotation-review-author-none) {
-	color: lch(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((50 - l) * infinity) 0 0);
+	color: rgb(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity));
 }
 
 /* A brace reply sits right against the text it follows. Its first part, the
@@ -682,7 +698,13 @@ del.arv-replace {
    modal with a preview chip, three gradient sliders and a hex field. The
    widths are forced, since Obsidian's mobile styling clamps range inputs. */
 
-/* The chip preview in an author color row. */
+/* The chip preview in an author color row, and the slot the picker mounts
+   into once the name is committed. */
+.arv-color-slot {
+	display: flex;
+	align-items: center;
+}
+
 .arv-settings-chip {
 	align-self: center;
 	max-width: 10em;

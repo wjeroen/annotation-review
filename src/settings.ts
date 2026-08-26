@@ -1,4 +1,4 @@
-import { App, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, ColorComponent, Platform, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
 import { AuthorColors, applyChipColor, defaultColorHex } from "./authors";
@@ -235,11 +235,11 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		// be retyped without losing its color. A new row's picker follows the
 		// name until the color is touched, so it starts where the name would
 		// land on its own and adjusting is a nudge rather than a search.
-		const rows = Object.entries(settings.authorColors).map(([name, color]) => ({ name, color, touched: true }));
+		const rows = Object.entries(settings.authorColors).map(([name, color]) => ({ name, color, named: true }));
 		const list = containerEl.createDiv();
 		const save = async () => {
 			settings.authorColors = {};
-			for (const row of rows) if (row.name) settings.authorColors[row.name] = row.color;
+			for (const row of rows) if (row.named && row.name) settings.authorColors[row.name] = row.color;
 			await this.plugin.saveSettings();
 			this.plugin.applyEditorSettings();
 			this.plugin.refreshViews();
@@ -247,40 +247,61 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		const draw = () => {
 			list.empty();
 			for (const row of rows) {
-				let picker: { setValue(hex: string): unknown } | null = null;
-				// The chip as it will look, between the name and the picker.
+				const setting = new Setting(list);
+				const control = setting.controlEl;
 				let preview: HTMLElement | null = null;
+				let slot: HTMLElement | null = null;
 				const showPreview = () => {
 					if (!preview) return;
 					preview.setText(row.name || "Author");
 					applyChipColor(preview, row.name, { [row.name]: row.color });
 				};
-				const setting = new Setting(list).addText(text =>
-					text
-						.setPlaceholder("Author")
-						.setValue(row.name)
-						.onChange(async value => {
-							row.name = value.trim();
-							if (!row.touched && row.name) {
-								row.color = defaultColorHex(row.name);
-								picker?.setValue(row.color);
-							}
-							showPreview();
-							await save();
-						})
-				);
-				preview = setting.controlEl.createSpan({ cls: "arv-chip arv-settings-chip" });
-				showPreview();
 				const pick = async (value: string) => {
 					row.color = value;
-					row.touched = true;
 					showPreview();
 					await save();
 				};
 				// The native picker is a good dialog on desktop and a poor one
 				// on mobile, so mobile gets the plugin's own sliders.
-				if (Platform.isMobile) picker = new MobileColorPicker(this.app, setting.controlEl, () => row.name, row.color, pick);
-				else setting.addColorPicker(component => (picker = component.setValue(row.color).onChange(pick)));
+				const mountPicker = (into: HTMLElement) => {
+					if (Platform.isMobile) new MobileColorPicker(this.app, into, () => row.name, row.color, pick);
+					else new ColorComponent(into).setValue(row.color).onChange(pick);
+				};
+				// A new row has no picker until its name is in, on Enter or on
+				// leaving the field. Until then the chip follows the typed name
+				// live and nothing is saved. The picker then starts at that
+				// name's computed color. Setting a native picker from code fires
+				// its change, which is what used to freeze the first letter's
+				// color, so it is never set from code at all.
+				const commitName = async () => {
+					if (row.named || !row.name) return;
+					row.named = true;
+					row.color = defaultColorHex(row.name);
+					showPreview();
+					if (slot) mountPicker(slot);
+					await save();
+				};
+				setting.addText(text => {
+					text
+						.setPlaceholder("Author")
+						.setValue(row.name)
+						.onChange(async value => {
+							row.name = value.trim();
+							if (!row.named) row.color = defaultColorHex(row.name);
+							showPreview();
+							if (row.named) await save();
+						});
+					text.inputEl.addEventListener("blur", () => void commitName());
+					text.inputEl.addEventListener("keydown", evt => {
+						if (evt.key !== "Enter") return;
+						evt.preventDefault();
+						void commitName();
+					});
+				});
+				preview = control.createSpan({ cls: "arv-chip arv-settings-chip" });
+				showPreview();
+				slot = control.createSpan({ cls: "arv-color-slot" });
+				if (row.named) mountPicker(slot);
 				setting.addExtraButton(button =>
 					button
 						.setIcon("trash")
@@ -294,9 +315,15 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			}
 		};
 		draw();
+							await save();
+						})
+				);
+			}
+		};
+		draw();
 		new Setting(containerEl).addButton(button =>
 			button.setButtonText("Add author").onClick(() => {
-				rows.push({ name: "", color: "#888888", touched: false });
+				rows.push({ name: "", color: "#888888", named: false });
 				draw();
 			})
 		);

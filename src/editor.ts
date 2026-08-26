@@ -253,7 +253,9 @@ const diffGutter = gutter({
 	lineMarker(view, line) {
 		let kind: string | null = null;
 		for (const a of view.state.field(annotationsField)) {
-			if (a.matchEnd < line.from || a.matchStart > line.to) continue;
+			// A bare selection is not a change and not known to be a comment,
+			// so it gets no line.
+			if (a.isPlain || a.matchEnd < line.from || a.matchStart > line.to) continue;
 			if (kind === null || (kind === "comment" && a.type !== "comment")) kind = a.type;
 		}
 		return kind ? MARKERS[kind] : null;

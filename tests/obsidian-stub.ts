@@ -70,6 +70,15 @@ export class Setting {
 		return this;
 	}
 }
+export class ColorComponent {
+	constructor(_el: any) {}
+	setValue() {
+		return this;
+	}
+	onChange() {
+		return this;
+	}
+}
 export class Notice {
 	constructor(_msg: string) {}
 }

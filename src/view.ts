@@ -291,7 +291,7 @@ export class AnnotationReviewView extends ItemView {
 			if (hasMoreReplies) {
 				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
 				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
-				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse replies" : "Expand replies");
+				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse comments" : "Expand comments");
 				expandBtn.addEventListener("click", () => {
 					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
 					this.plugin.saveLocalState();
@@ -650,7 +650,6 @@ export class AnnotationReviewView extends ItemView {
 		} else if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		}
-		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 
 		// The comment itself, on its own line: a comment on a spot carries it
 		// inside, a comment on a selection in its first reply.
@@ -675,7 +674,7 @@ export class AnnotationReviewView extends ItemView {
 				);
 				const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });
 				setIcon(removeBtn, "x");
-				setTooltip(removeBtn, "Dismiss this reply");
+				setTooltip(removeBtn, "Dismiss this comment");
 				removeBtn.addEventListener("click", evt => {
 					evt.stopPropagation();
 					this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
@@ -685,7 +684,7 @@ export class AnnotationReviewView extends ItemView {
 			if (hidden > 0) {
 				repliesEl.createEl("div", {
 					cls: "annotation-review-replies-collapsed",
-					text: `${hidden} more ${hidden === 1 ? "reply" : "replies"}`
+					text: `${hidden} more ${hidden === 1 ? "comment" : "comments"}`
 				});
 			}
 		}
@@ -699,7 +698,7 @@ export class AnnotationReviewView extends ItemView {
 			: { value: "[] ", cursor: 1 };
 		const replyForm = this.createInlineForm(
 			card,
-			"Reply...",
+			"Comment...",
 			text => {
 				// Show the replies, otherwise a new one lands under a collapsed
 				// count and looks like nothing happened.
@@ -720,7 +719,7 @@ export class AnnotationReviewView extends ItemView {
 			const approveBtn = actions.createEl("button", { cls: "annotation-review-approve" });
 			const approveIcon = approveBtn.createEl("span", { cls: "annotation-review-action-icon" });
 			setIcon(approveIcon, "check");
-			approveBtn.createEl("span", { text: "Approve" });
+			approveBtn.createEl("span", { cls: "annotation-review-action-label", text: "Approve" });
 			approveBtn.addEventListener("click", evt => {
 				evt.stopPropagation();
 				this.plugin.applyAction(annotation, "approve");
@@ -729,20 +728,27 @@ export class AnnotationReviewView extends ItemView {
 		const dismissBtn = actions.createEl("button", { cls: "annotation-review-dismiss" });
 		const dismissIcon = dismissBtn.createEl("span", { cls: "annotation-review-action-icon" });
 		setIcon(dismissIcon, "x");
-		dismissBtn.createEl("span", { text: "Dismiss" });
+		dismissBtn.createEl("span", { cls: "annotation-review-action-label", text: "Dismiss" });
 		dismissBtn.addEventListener("click", evt => {
 			evt.stopPropagation();
 			this.plugin.applyAction(annotation, "dismiss");
 		});
 
-		const trailing = actions.createEl("div", { cls: "annotation-review-trailing-actions" });
-		const replyBtn = trailing.createEl("button", { cls: "clickable-icon" });
-		setIcon(replyBtn, "reply");
-		setTooltip(replyBtn, "Reply");
-		replyBtn.addEventListener("click", evt => {
+		// A comment goes on anything, so the button sits with the other two,
+		// kept in the quiet icon-button style so it reads as a different kind
+		// of action. Nothing in the sidebar is called a reply: the syntax has
+		// replies, the user just has comments. The line number moves to the
+		// far end of this row.
+		const commentBtn = actions.createEl("button", { cls: "clickable-icon annotation-review-comment" });
+		const commentIcon = commentBtn.createEl("span", { cls: "annotation-review-action-icon" });
+		setIcon(commentIcon, "message-square-plus");
+		commentBtn.createEl("span", { cls: "annotation-review-comment-label", text: "Comment" });
+		setTooltip(commentBtn, "Comment");
+		commentBtn.addEventListener("click", evt => {
 			evt.stopPropagation();
 			replyForm.toggle();
 		});
+		actions.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 	}
 
 	private renderAdmonitionsList(container: Element) {
