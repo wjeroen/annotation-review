@@ -315,12 +315,6 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			}
 		};
 		draw();
-							await save();
-						})
-				);
-			}
-		};
-		draw();
 		new Setting(containerEl).addButton(button =>
 			button.setButtonText("Add author").onClick(() => {
 				rows.push({ name: "", color: "#888888", named: false });

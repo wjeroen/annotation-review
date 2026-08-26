@@ -15,7 +15,7 @@ npm test          # parsing, rewriting, and note-switching tests
 npm run dev       # rebuild on save
 ```
 
-Run `npm test` before proposing a release. It is fast and needs no Obsidian.
+Run `npm test` before proposing a release. It is fast and needs no Obsidian. Check the build's own exit status, never through a pipe: `npm run build | tail` reports tail's status, and a failed build then ships the previous `main.js` under a new version, which happened once.
 
 ## Releases
 
