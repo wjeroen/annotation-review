@@ -556,9 +556,17 @@ export function detectAnnotations(content: string, filePath: string, options: De
 			retry();
 			continue;
 		}
-		// An ordinary highlight with nothing attached counts too, as a plain
-		// comment, so the sidebar can list it or filter it out.
-		const built = buildWrapped(content, filePath, fullStart, highlightEnd, classifyInner(m[1], 2), "highlight", isInsideAdBlock(fullStart), channel);
+		// Obsidian never opens a highlight whose first character is >, so a
+		// ==>>note<<== cannot render there. It is skipped whole, both marks,
+		// rather than letting its closing == pair with the next highlight.
+		const body = classifyInner(m[1], 2);
+		if (body.pointSpan) {
+			highlightRegex.lastIndex = highlightEnd;
+			continue;
+		}
+		// An ordinary highlight with nothing attached counts too, as a bare
+		// selection, so the sidebar can list it or filter it out.
+		const built = buildWrapped(content, filePath, fullStart, highlightEnd, body, "highlight", isInsideAdBlock(fullStart), channel);
 		publish(built);
 		highlightRegex.lastIndex = built.annotation.matchEnd;
 	}

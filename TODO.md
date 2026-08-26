@@ -23,6 +23,13 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Nested braces: putting the caret in the outer annotation reveals the nested ones too, and with chips the outer author's chip returns after each nested annotation, so the rest of the outer text is not read as the inner author's (2026-08-26)
+- [x] A comment on a spot is braces or percent marks, chosen in its own setting under Wrappers. Obsidian never opens a highlight that starts with `>`, so `==>>note<<==` cannot render, is no longer read, and is skipped whole. The Comment command falls back to braces where needed (2026-08-26)
+- [x] Sidebar: a comment on a selection reads like a comment on a spot with the selected text above it, its first reply being the comment and that reply's author in the header. A bare selection shows no badge, and the filter calls them bare selections (2026-08-26)
+- [x] The right click menu says Comment, not Reply, on a selection that has no comment yet (2026-08-26)
+- [x] A brace reply gets a gap smaller than a space in front of its chip or text, in live preview and reading view, so it no longer touches the text it follows (2026-08-26)
+- [x] Authors on comments and replies is one setting covering comments on a selection, on a spot, and replies. Authors on changes covers the three operations (2026-08-26)
+- [x] Opacity settings for author chips and type badges, applied everywhere through CSS variables on the body, and a chip preview in each author color row between the name and the picker (2026-08-26)
 - [x] The mobile color picker is a modal: a preview chip with the name and a square of the plain color beside it, three full-width gradient sliders with labels and a thumb showing the current color, a hex field and Done. The first version sat loose between the settings cards with sliders clamped to a third of the width (2026-08-26)
 - [x] A slider color picker on mobile, hue, saturation and lightness with a swatch and a hex field, in place of the system color input there. Desktop keeps the native picker (2026-08-25)
 - [x] On mobile, tapping a card scrolls the note to the annotation without selecting it or moving the caret, so the keyboard stays down. Closing the drawer as well was tried in beta.6 and dropped (2026-08-25)

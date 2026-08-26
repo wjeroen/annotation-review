@@ -25,14 +25,16 @@ export function defaultColorHex(name: string): string {
 	return hslToHex(authorHue(name), 55, 50);
 }
 
-/** The translucent fill behind a chip. */
+/**
+ * The fill behind a chip: the author's color at the opacity chosen in
+ * settings. The opacity is a CSS variable on the body, so every chip in the
+ * sidebar, the editor and reading view follows a change at once, with no
+ * redraw. Underlines are drawn from authorColor and stay solid, since a thin
+ * line needs its full color to be seen.
+ */
 export function authorBackground(name: string, colors?: AuthorColors): string {
-	const chosen = colors?.[name];
-	if (chosen) {
-		const [r, g, b] = hexToRgb(chosen);
-		return `rgba(${r}, ${g}, ${b}, 0.45)`;
-	}
-	return `hsla(${authorHue(name)}, 55%, 45%, 0.45)`;
+	const solid = colors?.[name] ?? `hsl(${authorHue(name)}, 55%, 45%)`;
+	return `color-mix(in srgb, ${solid} calc(var(--arv-chip-alpha, 0.45) * 100%), transparent)`;
 }
 
 /** The solid color of the underline in the editor. */

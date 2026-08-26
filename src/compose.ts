@@ -111,7 +111,9 @@ export function composeInsert(selected: string, author: string, context: InsertC
  * `%%>>note<<%%`, the author written the way it is for any other operation.
  */
 export function composePointComment(author: string, wrapper: Wrapper): Composed {
-	if (wrapper === "brace") return openReply(author, "brace");
+	// A highlight cannot hold one, Obsidian never opens a highlight that
+	// starts with >, so anything but percent marks means braces.
+	if (wrapper !== "percent") return openReply(author, "brace");
 	const head = `${OPEN[wrapper]}>>${authorPrefix(author, wrapper)}`;
 	return { text: `${head}<<${CLOSE[wrapper]}`, cursor: head.length };
 }

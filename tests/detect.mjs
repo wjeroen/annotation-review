@@ -112,15 +112,17 @@ check("dismissing one reply", computeSpanReplace(threaded, t, t.replies[0].fullS
 check("approving takes the replies with it", approve(threaded), "");
 
 console.log("\n=== Comments on a spot ===");
-for (const w of ["{>>What?<<}", "==>>What?<<==", "%%>>What?<<%%"]) {
+for (const w of ["{>>What?<<}", "%%>>What?<<%%"]) {
 	check(`>> is an operator, ${w}`, [one(`This is a test${w}.`).type, one(`This is a test${w}.`).isPoint, one(`This is a test${w}.`).commentText], ["comment", true, "What?"]);
 	check(`and unsigned it is still deliberate, ${w}`, one(`This is a test${w}.`).isPlain, false);
 }
-check("a highlighted comment on a spot with an author", shape(one(`Text==>>[Claude]@@What?<<==`)), ["comment", "Claude", "", null, null, []]);
+// Obsidian never opens a highlight that starts with >, so this form is not read, and it is skipped whole.
+check("a highlighted comment on a spot is not an annotation", all(`Text==>>[Claude]@@What?<<==`).length, 0);
+check("and its closing marks do not pair with the next highlight", all(`A ==>>x<<== B ==real== C`).map(a => a.originalText), ["real"]);
 check("a hidden comment on a spot with an author", one(`Text%%>>[Claude]@@What?<<%%`).commentText, "What?");
 check("it can carry replies", one(`Text%%>>What?<<%%^[[Joe] A test.]`).replies.length, 1);
-check("dismissing removes it whole", dismiss(`A ==>>x<<== B`), "A  B");
-check("the wrapper is still recorded", all(`{>>a<<} ==>>b<<== %%>>c<<%%`).map(a => a.wrapper), ["brace", "highlight", "percent"]);
+check("dismissing removes it whole", dismiss(`A %%>>x<<%% B`), "A  B");
+check("the wrapper is still recorded", all(`{>>a<<} %%>>c<<%%`).map(a => a.wrapper), ["brace", "percent"]);
 const point = `This is a test{>>What?<<}.`;
 check("a bare brace comment is a comment on a spot", [one(point).type, one(point).isPoint, one(point).originalText, one(point).commentText], ["comment", true, "", "What?"]);
 check("with a label", one(`Text{>>[C] What?<<}`).author, "C");
@@ -275,7 +277,7 @@ check("an open reply, footnote", openReply("C", "footnote"), { text: "^[[C] ]", 
 check("an open reply without an author", openReply("", "footnote"), { text: "^[]", cursor: 2 });
 check("a finished reply", replyEntry("Claude", "ok", "brace"), `{>>${C}ok<<}`);
 check("a comment on a spot, braces", composePointComment("Claude", "brace"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
-check("a comment on a spot, highlight", composePointComment("Claude", "highlight"), { text: "==>>[Claude]@@<<==", cursor: 14 });
+check("a comment on a spot, highlight falls back to braces", composePointComment("Claude", "highlight"), { text: `{>>${C}<<}`, cursor: 3 + C.length });
 check("a comment on a spot, percent marks", composePointComment("", "percent"), { text: "%%>><<%%", cursor: 4 });
 check("all three read back the same", ["brace", "highlight", "percent"].map(w => one(fill(composePointComment("Claude", w), "hm")).commentText), ["hm", "hm", "hm"]);
 // A nested insert only makes sense written into a surrounding one, so check

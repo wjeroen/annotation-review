@@ -21,7 +21,7 @@ An annotation is a wrapper, an operator, an optional author, and any number of r
 ```
 
 - The wrapper decides how the note shows the text: `{...}` shows it as it is, which is plain CriticMarkup, `==...==` highlights it, `%%...%%` hides it until approved.
-- The operator decides the operation: `--text--` deletes, `++text++` inserts, `~~old~>new~~` replaces, `>>note<<` is a comment on that spot. No operator means a comment on the text inside the wrapper.
+- The operator decides the operation: `--text--` deletes, `++text++` inserts, `~~old~>new~~` replaces, `>>note<<` is a comment on that spot. The latter doesn't work with `==` highlight operators.
 - The author goes right after the opening operator marks, ended by `@@`. Inside braces write `{"author":"Claude"}@@`, so other CriticMarkup tools read it too. Inside highlights and percent marks write `[Claude]@@`. Everything after `@@` is the text, spaces included.
 - Replies are footnotes `^[...]` or CriticMarkup comments `{>>...<<}` placed directly after the wrapper, with no space in between. Sign a footnote with `[Claude]` followed by a space at its start, and a CriticMarkup comment with `{"author":"Claude"}@@`.
 
@@ -29,37 +29,43 @@ An annotation is authored by the author inside its wrapper, or by nobody. Every 
 
 Before you start, ask the user which wrapper they want and whether you should label yourself. Without an answer, use plain CriticMarkup, braces with `{>>...<<}` replies, since that is what other CriticMarkup tools read, and label yourself.
 
-# Annotation examples
-
-Each group shows the same thing in all three wrappers.
+# Annotations
 
 ## Comments
 
-A comment on a span is a wrapper around the text with no operator inside. What you want to say goes in a signed reply after it. The wrapper itself carries no author, because the text inside it is the user's, not yours.
+A comment is on a selection or on a spot.
 
-No author, nothing said. The same as an ordinary highlight or hidden text:
-{==This is a test==}
-==This is a test==
-%%This is a test%%
+### On a selection
 
-With the comment as a signed reply:
+Wrap the selected text with no operator inside. That only marks the selection, so what you want to say goes in a signed reply right after it. Sign the reply, not the selected text's wrapper. An author inside the wrapper only records who made the selection, and says nothing.
+
+With author:
 {==This is a test==}{>>{"author":"Claude"}@@What is it a test of?<<}
 ==This is a test==^[[ChatGPT] What is it a test of?]
 %%This is a test%%^[[Gemini] What is it a test of?]
 
-Unsigned:
+No author:
 {==This is a test==}{>>What is it a test of?<<}
 ==This is a test==^[What is it a test of?]
 
-A comment on a spot rather than a span uses the `>>` operator, the author goes inside like any other operation:
-This is a test.{>>{"author":"Claude"}@@Consider a transition here.<<}
-This is a test.==>>[ChatGPT]@@Consider a transition here.<<==
-This is a test.%%>>[Gemini]@@Consider a transition here.<<%%
+### On a spot
 
-An unsigned comment on a spot:
-This is a test.{>>Consider a transition here.<<}
-This is a test.==>>Consider a transition here.<<==
-This is a test.%%>>Consider a transition here.<<%%
+Nothing selected. The `>>` operator, with the author inside like any other operation:
+This is a test. {>>{"author":"Claude"}@@Consider a transition here.<<}
+This is a test. %%>>[Gemini]@@Consider a transition here.<<%%
+
+No author:
+This is a test. {>>Consider a transition here.<<}
+This is a test. %%>>Consider a transition here.<<%%
+
+Obsidian never opens a highlight that starts with `>`, so comments on a spot can't be written with `==` highlights. Check whether the user prefers to use percent marks or braces instead.
+
+### Bare selections
+
+A selection with nothing attached. Nothing is known beyond the selection itself. It may be a highlight the user made for themselves, hidden text, or a comment nobody finished. The plugin lists it so it is not overlooked. Leave it alone unless the user asks about it:
+{==This is a test==}
+==This is a test==
+%%This is a test%%
 
 ## Delete text
 
@@ -81,6 +87,7 @@ This is %%--[Gemini]@@is --%%^[[Gemini] The word is repeated.]a test.
 No author, signed reply. Nothing says who did the operation:
 This is {--is --}{>>{"author":"Joe"}@@The word is repeated.<<}a test.
 This is ==--is --==^[[Joe] The word is repeated.]a test.
+This is %%--is --%%^[[Gemini] The word is repeated.]a test.
 
 ## Replace text
 
@@ -96,9 +103,10 @@ This {~~{"author":"Claude"}@@isn't~>is~~} a test.
 This ==~~[ChatGPT]@@isn't~>is~~== a test.
 This %%~~[Gemini]@@isn't~>is~~%% a test.
 
-With author and a reply:
+With author and a reply giving the reason:
 This {~~{"author":"Claude"}@@isn't~>is~~}{>>{"author":"Claude"}@@Wrong, this is in fact a test.<<} a test.
 This ==~~[ChatGPT]@@isn't~>is~~==^[[ChatGPT] Wrong, this is in fact a test.] a test.
+This %%~~[Gemini]@@isn't~>is~~%%^[[Gemini] Wrong, this is in fact a test.] a test.
 
 ## Insert text
 
@@ -114,16 +122,19 @@ This {++{"author":"Claude"}@@is ++}a test.
 This ==++[ChatGPT]@@is ++==a test.
 This %%++[Gemini]@@is ++%%a test.
 
-With author and a reply:
+With author and a reply giving the reason:
 This {++{"author":"Claude"}@@is ++}{>>{"author":"Claude"}@@The word was missing.<<}a test.
 This ==++[ChatGPT]@@is ++==^[[ChatGPT] The word was missing.]a test.
 This %%++[Gemini]@@is ++%%^[[Gemini] The word was missing.]a test.
 
 Braces nest, so an insertion inside an insertion works there:
-{++{"author":"Claude"}@@I went to my grandma's house. {++{"author":"ChatGPT"}@@She has been living there for over 5 decades.++} She's been thinking of moving out.++}
+{++{"author":"Claude"}@@I went to my grandma's house. {++{"author":"ChatGPT"}@@She has been living there for over 5 decades. ++}She's been thinking of moving out.++}
 
 Highlights and percent marks cannot nest. To insert inside text that is already inside percent marks, close and reopen them, operator included. This reads as three insertions in a row:
-%%++I went to my grandma's house.++%%%%++[ChatGPT]@@ She has been living there for over 5 decades.++%%%%++ She's been thinking of moving out.++%%
+%%++[Claude]@@I went to my grandma's house. ++%%%%++[ChatGPT]@@She has been living there for over 5 decades. ++%%%%++[Claude]@@She's been thinking of moving out.++%%
+
+With highlights, two pairs of equal signs in a row do not render properly in Obsidian. So pay special intention to spaces. Here, the spacing renders exactly as the above two examples:
+==++[Claude]@@I went to my grandma's house.++== ==++[ChatGPT]@@She has been living there for over 5 decades.++== ==++[Claude]@@She's been thinking of moving out.++==
 
 ## Replies
 
@@ -131,8 +142,13 @@ Replies follow one another with no space in between, and there can be any number
 
 The old plan was ==--[Claude]@@to launch in Q1--==^[[Claude] Timeline slipped.]^[[Alex] Q1 still works if we cut scope.]^[[Claude] Fair, restoring the reasoning below.] and that's final.
 
+This is a test. %%>>[Alex]@@Consider a transition here.<<%%^[[Jack] Seems like a poor moment for a transition.]^[[Alex] You're right.] 
+
 Plain CriticMarkup:
 {--{"author":"Gemini"}@@Drop this.--}{>>{"author":"Gemini"}@@It repeats the intro.<<}{>>{"author":"Joe"}@@Agreed.<<}
+
+CriticMarkup with footnote replies is also allowed:
+{--{"author":"Gemini"}@@Drop this.--}^[[Gemini] It repeats the intro.]^[[Joe] Agreed.]
 
 Approving or dismissing takes the replies with it, since they belong to the annotation rather than standing on their own. Replies always sit outside the wrapper: a footnote inside a percent or highlight wrapper breaks rendering.
 
@@ -153,7 +169,8 @@ Subject: Greeting
 
 This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
 This ==++[ChatGPT]@@is ++==a test.
-==Hello, this is a comment.==^[[Alex M] On text inside an admonition.]
+==Hello, this is highlighted text.==^[[Alex] This is a reply.]
+This {~~{"author":"Claude"}@@isn't~>is~~}^[[Claude] Wrong, this is in fact a test.] a test.
 ```
 
 An annotation inside any other fenced block, a python one for instance, is ignored completely by the plugin, and so is anything between backticks.

@@ -78,8 +78,8 @@ function chip(author: string): HTMLElement {
 
 /**
  * The styled replacement for one annotation's inner text, markers included.
- * A prose entry is a `{>>...<<}` in running text, which is a reply when it
- * is attached to something and a comment on a spot otherwise.
+ * A prose entry is a `{>>...<<}` in running text. When it is attached to
+ * something it is a reply and gets a small gap in front, as in the editor.
  */
 function render(inner: string, isProse: boolean, attached = false): DocumentFragment | null {
 	const out = document.createDocumentFragment();
@@ -113,7 +113,8 @@ function render(inner: string, isProse: boolean, attached = false): DocumentFrag
 	}
 	if (isProse || (n >= 4 && head === ">>" && tail === "<<")) {
 		const { author, rest } = splitAuthor(isProse ? inner : inner.slice(2, -2), true);
-		withAuthor("arv-comment", rest, author, isProse && attached ? commentStyle : style);
+		withAuthor("arv-comment", rest, author, commentStyle);
+		if (isProse && attached && out.firstElementChild) out.firstElementChild.classList.add("arv-attached");
 		return out;
 	}
 	return null;

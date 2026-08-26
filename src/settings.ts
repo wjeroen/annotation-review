@@ -1,7 +1,7 @@
 import { App, Platform, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
-import { AuthorColors, defaultColorHex } from "./authors";
+import { AuthorColors, authorBackground, defaultColorHex } from "./authors";
 import { MobileColorPicker } from "./colorpicker";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
@@ -33,8 +33,10 @@ export interface AnnotationReviewSettings {
 	 */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
-	/** The wrapper the commands write, per operation. */
+	/** The wrapper the commands write, per operation. For comments this is the comment on a selection. */
 	wrappers: Record<AnnotationType, Wrapper>;
+	/** A comment on a spot has two choices: Obsidian never opens a highlight that starts with >. */
+	pointCommentWrapper: "brace" | "percent";
 	/** Stands in for percent marks inside fenced blocks, where they do not render. */
 	fencedFallback: "brace" | "highlight";
 	/** How replies are written when an annotation has none yet. */
@@ -44,10 +46,8 @@ export interface AnnotationReviewSettings {
 	renderInEditor: boolean;
 	/**
 	 * How an author is shown in live preview and reading view, on changes
-	 * and on comments separately. A comment on a spot counts as a change:
-	 * it sits among the operators, so its author is shown like theirs.
-	 * Comments on a span and replies are the other group. A line under text
-	 * that is already red or green gets busy, while it stays compact under a
+	 * and on comments and replies separately. A line under text that is
+	 * already red or green gets busy, while it stays compact under a
 	 * comment, hence the two defaults.
 	 */
 	changeAuthorStyle: AuthorStyle;
@@ -56,6 +56,9 @@ export interface AnnotationReviewSettings {
 	showGutter: boolean;
 	/** Colors chosen per author, winning over the one computed from the name. */
 	authorColors: AuthorColors;
+	/** Strength of the fill behind author chips and type badges, 0 to 1. */
+	authorChipOpacity: number;
+	typeBadgeOpacity: number;
 }
 
 /** Plain CriticMarkup out of the box, since that is the standard. */
@@ -64,6 +67,7 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	repliesExpanded: false,
 	admonitionsExpanded: false,
 	wrappers: { comment: "brace", delete: "brace", replace: "brace", insert: "brace" },
+	pointCommentWrapper: "brace",
 	fencedFallback: "brace",
 	channel: "brace",
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
@@ -71,7 +75,9 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	changeAuthorStyle: "chip",
 	commentAuthorStyle: "underline",
 	showGutter: true,
-	authorColors: {}
+	authorColors: {},
+	authorChipOpacity: 0.45,
+	typeBadgeOpacity: 1
 };
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
@@ -81,7 +87,7 @@ const WRAPPER_LABELS: Record<Wrapper, string> = {
 };
 
 const OPERATION_LABELS: Record<AnnotationType, string> = {
-	comment: "Comments",
+	comment: "Comments on a selection",
 	delete: "Deletions",
 	replace: "Replacements",
 	insert: "Insertions"
@@ -129,7 +135,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		// It is greyed out rather than removed, so changing a wrapper does not
 		// rebuild the page and lose the scroll position.
 		let fenced: Setting | null = null;
-		const anyPercent = () => Object.values(settings.wrappers).includes("percent");
+		const anyPercent = () => Object.values(settings.wrappers).includes("percent") || settings.pointCommentWrapper === "percent";
 
 		for (const type of Object.keys(OPERATION_LABELS) as AnnotationType[]) {
 			const setting = new Setting(containerEl).setName(OPERATION_LABELS[type]);
@@ -138,6 +144,19 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 				fenced?.setDisabled(!anyPercent());
 			});
+			if (type !== "comment") continue;
+			// Obsidian never opens a highlight that starts with >, so a comment
+			// on a spot has two wrappers to choose from.
+			addDropdown(
+				new Setting(containerEl).setName("Comments on a spot"),
+				{ brace: WRAPPER_LABELS.brace, percent: WRAPPER_LABELS.percent },
+				settings.pointCommentWrapper,
+				async value => {
+					settings.pointCommentWrapper = value as "brace" | "percent";
+					await this.plugin.saveSettings();
+					fenced?.setDisabled(!anyPercent());
+				}
+			);
 		}
 
 		fenced = new Setting(containerEl)
@@ -174,15 +193,38 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				);
 
 		toggle("Style annotations in live preview", "Hide the syntax and color the text. It comes back while the caret is inside an annotation.", "renderInEditor");
-		const authorStyle = (name: string, desc: string, key: "changeAuthorStyle" | "commentAuthorStyle") =>
-			addDropdown(new Setting(containerEl).setName(name).setDesc(desc), { underline: "Colored underline", chip: "Chip", none: "Not shown" }, settings[key], async value => {
+		const authorStyle = (name: string, desc: string, key: "changeAuthorStyle" | "commentAuthorStyle") => {
+			const setting = new Setting(containerEl).setName(name);
+			if (desc) setting.setDesc(desc);
+			addDropdown(setting, { underline: "Colored underline", chip: "Chip", none: "Not shown" }, settings[key], async value => {
 				settings[key] = value as AuthorStyle;
 				await this.plugin.saveSettings();
 				this.plugin.applyEditorSettings();
 			});
-		authorStyle("Authors on changes", "Deletions, insertions, replacements and comments on a spot, in live preview and reading view.", "changeAuthorStyle");
-		authorStyle("Authors on comments", "Comments on a span, and replies.", "commentAuthorStyle");
+		};
+		authorStyle("Authors on changes", "Deletions, insertions and replacements, in live preview and reading view.", "changeAuthorStyle");
+		authorStyle("Authors on comments and replies", "", "commentAuthorStyle");
 		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
+
+		new Setting(containerEl).setName("Chips").setHeading();
+
+		const opacity = (name: string, desc: string, key: "authorChipOpacity" | "typeBadgeOpacity") =>
+			new Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addSlider(slider =>
+					slider
+						.setLimits(10, 100, 5)
+						.setValue(Math.round(settings[key] * 100))
+						.setDynamicTooltip()
+						.onChange(async value => {
+							settings[key] = value / 100;
+							await this.plugin.saveSettings();
+							this.plugin.applyEditorSettings();
+						})
+				);
+		opacity("Author chip opacity", "In the sidebar, the editor and reading view. Underlines stay solid.", "authorChipOpacity");
+		opacity("Type badge opacity", "The Comment, Delete, Replace and Insert badges on the cards.", "typeBadgeOpacity");
 
 		new Setting(containerEl)
 			.setName("Author colors")
@@ -206,10 +248,12 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			list.empty();
 			for (const row of rows) {
 				let picker: { setValue(hex: string): unknown } | null = null;
-				const pick = async (value: string) => {
-					row.color = value;
-					row.touched = true;
-					await save();
+				// The chip as it will look, between the name and the picker.
+				let preview: HTMLElement | null = null;
+				const showPreview = () => {
+					if (!preview) return;
+					preview.setText(row.name || "Author");
+					preview.style.backgroundColor = authorBackground(row.name, { [row.name]: row.color });
 				};
 				const setting = new Setting(list).addText(text =>
 					text
@@ -221,9 +265,18 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 								row.color = defaultColorHex(row.name);
 								picker?.setValue(row.color);
 							}
+							showPreview();
 							await save();
 						})
 				);
+				preview = setting.controlEl.createSpan({ cls: "arv-chip arv-settings-chip" });
+				showPreview();
+				const pick = async (value: string) => {
+					row.color = value;
+					row.touched = true;
+					showPreview();
+					await save();
+				};
 				// The native picker is a good dialog on desktop and a poor one
 				// on mobile, so mobile gets the plugin's own sliders.
 				if (Platform.isMobile) picker = new MobileColorPicker(this.app, setting.controlEl, () => row.name, row.color, pick);

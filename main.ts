@@ -56,6 +56,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.applyChipStyle();
 
 		this.registerView(VIEW_TYPE_ANNOTATION_REVIEW, leaf => new AnnotationReviewView(leaf, this));
 		this.addSettingTab(new AnnotationReviewSettingTab(this.app, this));
@@ -111,6 +112,9 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.settings.filters = { ...DEFAULT_SETTINGS.filters, ...(saved.filters ?? {}) };
 		this.settings.wrappers = { ...DEFAULT_SETTINGS.wrappers, ...(saved.wrappers ?? {}) };
 		this.settings.authorColors = { ...(saved.authorColors ?? {}) };
+		// Before 0.6.2 a comment on a spot took the comment wrapper. Percent
+		// marks carry over, a highlight cannot, so that becomes braces.
+		if (saved.pointCommentWrapper === undefined && saved.wrappers?.comment === "percent") this.settings.pointCommentWrapper = "percent";
 		// Sidebar state is per device. Whatever data.json still carries from
 		// before 0.6.2 seeds it, and the local copy wins once there is one.
 		const local = (this.app.loadLocalStorage?.(LOCAL_STATE_KEY) ?? null) as Partial<LocalState> | null;
@@ -182,7 +186,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	/** Swaps the editor extensions for ones built from the current settings, in every open editor. */
+	/**
+	 * The chip and badge opacities, as CSS variables on the body, so every
+	 * chip in the sidebar, the editor and reading view follows the setting
+	 * without a redraw.
+	 */
+	applyChipStyle() {
+		document.body.style.setProperty("--arv-chip-alpha", String(this.settings.authorChipOpacity));
+		document.body.style.setProperty("--arv-badge-alpha", String(this.settings.typeBadgeOpacity));
+	}
+
 	applyEditorSettings() {
+		this.applyChipStyle();
 		this.editorExtensionSlot.length = 0;
 		this.editorExtensionSlot.push(...editorExtensions(this.settings));
 		this.app.workspace.updateOptions();
@@ -474,7 +489,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 				const target = this.annotationAtCaret(editor);
 				for (const action of this.annotationActions()) {
 					if (action.id !== "comment" && (!hasSelection || target)) continue;
-					const title = action.id !== "comment" ? action.label : target ? "Reply" : "Comment";
+					// On a selection that has no comment yet, a bare one or one
+					// that only names who selected it, the first entry is the
+					// comment itself, not a reply.
+					const uncommented = target && target.type === "comment" && !target.isPoint && target.replies.length === 0;
+					const title = action.id !== "comment" ? action.label : target && !uncommented ? "Reply" : "Comment";
 					menu.addItem(item =>
 						item
 							.setSection("annotation-review")
@@ -565,7 +584,12 @@ export default class AnnotationReviewPlugin extends Plugin {
 			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel));
 			return;
 		}
-		this.insertAtCaret(editor, editor.posToOffset(editor.getCursor()), composePointComment(author, this.settings.wrappers.comment));
+		// Percent marks do not render inside a fenced block, and a highlight
+		// cannot hold a comment on a spot, so the fallback there is braces.
+		const at = editor.posToOffset(editor.getCursor());
+		const chosen = this.settings.pointCommentWrapper;
+		const wrapper: Wrapper = chosen === "percent" && getInsertContext(editor.getValue(), at).kind === "fenced" ? "brace" : chosen;
+		this.insertAtCaret(editor, at, composePointComment(author, wrapper));
 	}
 
 	private pickAnnotationType(editor: Editor) {

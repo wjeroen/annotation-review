@@ -28,7 +28,7 @@ An annotation is a wrapper, an operator, an optional author, and any number of r
 | Insert | `++text++` | `This {++is ++}a test.` |
 | Replace | `~~old~>new~~` | `This {~~isn't~>is~~} a test.` |
 | Comment on a span | no operator | `==This is a test==^[What is it a test of?]` |
-| Comment on a spot | `>>note<<` | `This is a test.{>>What is it a test of?<<}` |
+| Comment on a spot | `>>note<<`, braces or percent marks only | `This is a test.{>>What is it a test of?<<}` |
 
 Whitespace inside the markers is kept exactly as written, so `{++is ++}` inserts the word and the space after it. That is how CriticMarkup avoids having to select exact word boundaries.
 
@@ -51,9 +51,9 @@ This is ==--[Claude]@@is --==^[[Claude] The word is repeated.]^[[Alex] Agreed.]a
 A few rules that follow from this:
 
 - A comment on a span needs no author inside the wrapper: the span was written by whoever wrote the note, and the person commenting signs their reply.
-- `>>` is an operator like the others, so a comment on a spot exists in every wrapper: `{>>note<<}`, `==>>note<<==`, `%%>>note<<%%`. A `{>>...<<}` directly after another annotation is a reply to it instead.
+- `>>` is an operator like the others, so a comment on a spot is `{>>note<<}` or `%%>>note<<%%`. Not `==>>note<<==`: Obsidian never opens a highlight that starts with `>`, so that form cannot render, and the plugin does not read it. A `{>>...<<}` directly after another annotation is a reply to it instead.
 - A commented `%%hidden span%%` shows its reply while the span stays hidden, which is the accepted cost of hiding it.
-- A bare `==highlight==` or `%%hidden text%%` is listed as a plain comment on that text, so nothing in a note goes unseen. The filter button hides both, and that choice is remembered.
+- A bare `==highlight==` or `%%hidden text%%` is listed as a bare selection, since nothing says it is a comment, so nothing in a note goes unseen. The filter button hides those, and that choice is remembered.
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
 - Percent marks do not render inside any fenced block, admonitions included, so use highlights or braces there.
 - A highlight cannot cross a blank line, but braces and percent marks can, which is the only way to insert or delete a paragraph break: `{++\n\n++}`.
@@ -70,7 +70,7 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
-| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot, `{>>...<<}` in the chosen wrapper | Inside the reply, ready to type |
+| Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot, `{>>...<<}` in the chosen wrapper, braces or percent marks | Inside the reply, ready to type |
 | Delete | `{--{"author":"Claude"}@@text--}` | At the end |
 | Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
 | Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
@@ -100,8 +100,8 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 ## Sidebar features
 
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, gray if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. The first reply is always shown, since for a change it is the reason and for a comment on a span it is the comment. The rest fold behind the expand toggle. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either. Only an unsigned reply says No author.
-- **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and plain highlights and comments. Remembered across notes, unlike the author filter, which only means something within one note.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. For a change the first reply is the reason and is always shown, the rest fold behind the expand toggle. A comment on a selection reads like a comment on a spot with the selected text above it: its first reply is the comment itself, with that reply's author in the header. A bare selection shows no badge, since nothing says it is a comment. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either. Only an unsigned reply says No author.
+- **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and bare selections. Remembered across notes, unlike the author filter, which only means something within one note.
 - **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, gray for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.
 - **Editing in place**: click any text on a card to edit it inline, including the annotated text itself, the reason or comment, the replacement, the inserted text, and a reply. Click an author chip to set, change, or clear the author, on the annotation itself or on any reply. Everything saves straight back to the note, spaces and line breaks included.
@@ -115,11 +115,12 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
 
 - **Author**: written inside every new annotation and at the start of every reply.
-- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments, deletions, replacements and insertions.
+- **Wrappers**: braces, highlight, or percent marks, chosen separately for comments on a selection, deletions, replacements and insertions. Comments on a spot choose between braces and percent marks, since Obsidian cannot draw one as a highlight.
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
-- **Style annotations in live preview**, **Authors on changes**, **Authors on comments**, **Show the diff gutter**: the parts of the editor rendering, each its own setting. Authors are shown as a colored underline, a chip, or not at all, chosen separately for changes (deletions, insertions, replacements and comments on a spot) and for comments on a span and replies, since a line under text that is already red or green gets busy while it stays compact under a comment. All but the gutter apply to reading view as well.
+- **Style annotations in live preview**, **Authors on changes**, **Authors on comments and replies**, **Show the diff gutter**: the parts of the editor rendering, each its own setting. Authors are shown as a colored underline, a chip, or not at all, chosen separately for changes (deletions, insertions and replacements) and for comments and replies, since a line under text that is already red or green gets busy while it stays compact under a comment. All but the gutter apply to reading view as well.
 - **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
-- **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search. On a phone or tablet, tapping the color opens the plugin's own picker, since the system one there is poor: a preview chip, three sliders for hue, saturation and lightness, and a hex field.
+- **Author chip opacity** and **Type badge opacity**: how strong the fills behind the author chips and the type badges are, everywhere they appear. Underlines stay solid, since a thin line needs its full color to be seen.
+- **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. Each row shows the chip as it will look. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search. On a phone or tablet, tapping the color opens the plugin's own picker, since the system one there is poor: a preview chip, three sliders for hue, saturation and lightness, and a hex field.
 
 Everything above follows the vault through sync, and is picked up the moment it arrives, no restart needed. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.
 

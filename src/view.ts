@@ -211,7 +211,9 @@ export class AnnotationReviewView extends ItemView {
 			for (const a of this.plugin.annotations) {
 				if (a.author) authors.add(a.author);
 				else hasNoAuthor = true;
-				if (a.replies.length > 1) hasMoreReplies = true;
+				// A comment on a selection spends its first reply on the comment itself.
+				const extra = a.type === "comment" && !a.isPoint ? a.replies.length - 1 : a.replies.length;
+				if (extra > 1) hasMoreReplies = true;
 			}
 			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
 			const currentLabel =
@@ -279,7 +281,7 @@ export class AnnotationReviewView extends ItemView {
 				toggle("Replacements", "replace");
 				menu.addSeparator();
 				toggle("No author", "noAuthor");
-				toggle("Plain highlights and comments", "plain");
+				toggle("Bare selections", "plain");
 				const rect = filterBtn.getBoundingClientRect();
 				menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 			});
@@ -629,27 +631,40 @@ export class AnnotationReviewView extends ItemView {
 			);
 		}
 
+		// A comment on a selection reads like a comment on a spot with the
+		// selected text above it: its first reply is the comment itself, that
+		// reply's author goes in the header, and only later replies are
+		// replies. A bare selection has no first reply, and no badge either,
+		// since nothing says it is a comment.
+		const note = annotation.type === "comment" && !annotation.isPoint ? annotation.replies[0] : undefined;
+		const replies = note ? annotation.replies.slice(1) : annotation.replies;
+
 		// The type leads: it is what varies from card to card, and the louder
 		// of the two chips. Same order as the syntax, operator then author.
 		// No chip at all without an author: the note does not say who did it,
 		// so the card does not either. Only replies say "No author".
 		const header = card.createEl("div", { cls: "annotation-review-header" });
-		header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		if (annotation.author) {
+		if (!annotation.isPlain) header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
+		if (note) {
+			this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
+		} else if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		}
 		header.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
 
-		// A comment on a spot: the note itself, on its own line.
+		// The comment itself, on its own line: a comment on a spot carries it
+		// inside, a comment on a selection in its first reply.
 		if (annotation.commentSpan) {
 			this.renderEditableText(card, "annotation-review-note", annotation, annotation.commentSpan, annotation.commentText ?? "");
+		} else if (note) {
+			this.renderEditableText(card, "annotation-review-note", annotation, note.textSpan, note.text);
 		}
 
-		// The first reply is always shown, since for a change it is the reason
-		// and for a comment on a span it is the comment. The rest fold away.
-		if (annotation.replies.length > 0) {
+		// The first reply is always shown, since for a change it is the
+		// reason. The rest fold away.
+		if (replies.length > 0) {
 			const repliesEl = card.createEl("div", { cls: "annotation-review-replies" });
-			const shown = this.plugin.settings.repliesExpanded ? annotation.replies : annotation.replies.slice(0, 1);
+			const shown = this.plugin.settings.repliesExpanded ? replies : replies.slice(0, 1);
 			for (const reply of shown) {
 				const replyEl = this.renderAuthoredLine(
 					repliesEl,
@@ -666,7 +681,7 @@ export class AnnotationReviewView extends ItemView {
 					this.plugin.replaceSpan(annotation, reply.fullSpan.start, reply.fullSpan.end, "");
 				});
 			}
-			const hidden = annotation.replies.length - shown.length;
+			const hidden = replies.length - shown.length;
 			if (hidden > 0) {
 				repliesEl.createEl("div", {
 					cls: "annotation-review-replies-collapsed",

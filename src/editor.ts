@@ -46,9 +46,9 @@ const authorLine = (author: string, colors: AuthorColors) =>
 		class: "arv-author",
 		attributes: { style: `text-decoration-color: ${authorColor(author, colors)}`, title: author }
 	});
-const authorChip = (author: string, colors: AuthorColors) =>
+const authorChip = (author: string, colors: AuthorColors, attached = false) =>
 	Decoration.mark({
-		class: "arv-chip",
+		class: attached ? "arv-chip arv-attached" : "arv-chip",
 		attributes: { style: `background-color: ${authorBackground(author, colors)}` }
 	});
 
@@ -99,7 +99,12 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		const add = (span: TextSpan, deco: Decoration) => {
 			if (span.end > span.start) ranges.push(deco.range(base + span.start, base + span.end));
 		};
-		const revealed = selection.from <= a.matchEnd && selection.to >= a.matchStart;
+		// Revealed when the selection touches it, or touches an annotation it
+		// is nested in. Raw syntax for the outer one with the inner still
+		// drawn would be half a picture.
+		const touches = (x: Annotation) => selection.from <= x.matchEnd && selection.to >= x.matchStart;
+		const within = (inner: Annotation, outer: Annotation) => inner !== outer && outer.matchStart <= inner.matchStart && inner.matchEnd <= outer.matchEnd;
+		const revealed = touches(a) || annotations.some(o => within(a, o) && touches(o));
 		// Red and green inside percent marks are toned down to the grey
 		// Obsidian gives hidden text. Never opacity: that stacks on the grey.
 		const faint = a.wrapper === "percent" ? " arv-faint" : "";
@@ -110,7 +115,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		 * sits where the syntax puts it and takes the size of its
 		 * surroundings, shrinking inside a footnote.
 		 */
-		const author = (who: Authored, textSpans: TextSpan[], style: AuthorStyle, before?: number) => {
+		const author = (who: Authored, textSpans: TextSpan[], style: AuthorStyle, before?: number, attached = false) => {
 			if (!who.authorSpan) return;
 			if (style === "underline" && who.author) {
 				for (const span of textSpans) add(span, authorLine(who.author, settings.authorColors));
@@ -130,7 +135,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 				return;
 			}
 			add({ start: s.start, end: s.start + at }, hide);
-			add({ start: s.start + at, end: s.start + at + who.author!.length }, authorChip(who.author!, settings.authorColors));
+			add({ start: s.start + at, end: s.start + at + who.author!.length }, authorChip(who.author!, settings.authorColors, attached));
 			add({ start: s.start + at + who.author!.length, end: s.end }, hide);
 		};
 
@@ -148,15 +153,32 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		for (const r of a.replies) {
 			// A footnote is drawn by Obsidian and already reads as a remark,
 			// and a genuine footnote must not turn blue, so only a brace
-			// comment gets the background.
-			if (r.channel === "brace") add(r.textSpan, mark("arv-comment"));
+			// comment gets the background. A brace reply sits right against
+			// the text it follows, so whichever of its parts comes first, the
+			// chip or the text, gets a small gap in front of it.
+			if (r.channel !== "brace") continue;
+			const chipFirst = settings.commentAuthorStyle === "chip" && !!r.author;
+			add(r.textSpan, mark(chipFirst ? "arv-comment" : "arv-comment arv-attached"));
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
-		// A comment on a spot sits among the operators, so it follows them.
-		author(a, contentSpans, a.type === "comment" && !a.isPoint ? settings.commentAuthorStyle : settings.changeAuthorStyle, 0);
+		const ownStyle = a.type === "comment" ? settings.commentAuthorStyle : settings.changeAuthorStyle;
+		author(a, contentSpans, ownStyle, 0);
+		// With chips, a nested annotation's chip takes over visually until the
+		// outer text ends, so the outer author's chip returns after each
+		// directly nested annotation that still has outer text behind it.
+		// Underlines need none of this, since they color the text itself.
+		if (!revealed && ownStyle === "chip" && a.author && contentSpans.length > 0) {
+			const contentEnd = base + Math.max(...contentSpans.map(s => s.end));
+			for (const n of annotations) {
+				if (!within(n, a) || n.matchEnd >= contentEnd) continue;
+				if (annotations.some(m => within(n, m) && within(m, a))) continue;
+				const widget = new ChipWidget(a.author, authorBackground(a.author, settings.authorColors));
+				ranges.push(Decoration.widget({ widget, side: 1 }).range(n.matchEnd));
+			}
+		}
 		// A footnote reply's line runs over its square brackets, not the ^, so
 		// an empty signed reply still shows who left it.
-		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan], settings.commentAuthorStyle);
+		for (const r of a.replies) author(r, [r.channel === "footnote" ? { start: r.fullSpan.start + 1, end: r.fullSpan.end } : r.textSpan], settings.commentAuthorStyle, undefined, r.channel === "brace");
 
 		if (revealed) continue;
 
