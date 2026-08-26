@@ -199,8 +199,10 @@
 }
 
 /* The badge fill follows the opacity setting through a variable on the
-   body. The text is black or white, whichever reads against the fill as it
-   actually shows, the same way as on the chips. */
+   body. The text is black or white by the same YIQ sum as on the chips, but
+   with the bar at 170 rather than 128: a badge at full strength is an accent
+   color and gets Obsidian's white-on-accent look, orange included, and only
+   a badge faded toward the page turns black. */
 .annotation-review-badge {
 	--arv-badge-color: var(--background-modifier-border);
 	background-color: color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), transparent);
@@ -211,7 +213,7 @@
 .annotation-type-replace .annotation-review-badge,
 .annotation-type-insert .annotation-review-badge {
 	color: var(--text-on-accent);
-	color: rgb(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 128) * -infinity));
+	color: rgb(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity) calc((r * 0.299 + g * 0.587 + b * 0.114 - 170) * -infinity));
 }
 
 .annotation-type-comment .annotation-review-badge {
@@ -335,7 +337,9 @@
 .annotation-review-replies {
 	margin-top: 6px;
 	padding-left: 10px;
-	border-left: 2px solid var(--text-muted);
+	/* Between the border color, which vanished under a hovered or selected
+	   card, and the muted text color, which at two pixels read as black. */
+	border-left: 2px solid var(--text-faint);
 }
 
 /* Normal inline flow, so a short reply sits beside its author chip. When the

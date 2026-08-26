@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Badge text stays white at full strength, orange included, turning black only once the badge fades toward the page. The comments line on a card is the faint text color, visible on a hovered card without reading as black (2026-08-26)
 - [x] The sidebar's reply button is a Comment button beside Approve and Dismiss, in the icon-button style with the message-square-plus icon, the line number at the far end of that row. Labels drop as the card narrows, Comment first. Nothing in the sidebar is called a reply anymore (2026-08-26)
 - [x] A new author color row gets its picker once the name is committed, starting at that name's computed color. Setting the native picker from code fired its change and froze the first letter's color (2026-08-26)
 - [x] Black or white text on chips and badges by the YIQ brightness rule instead of LCH lightness, so a saturated green keeps white text. Bare selections get no gutter line. The comments line in a card matches the muted text (2026-08-26)
