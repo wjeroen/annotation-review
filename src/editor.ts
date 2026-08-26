@@ -149,7 +149,8 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		if (a.replacementSpan) add(a.replacementSpan, mark("arv-ins" + faint));
 		// A comment on a spot inside percent marks is toned down like the
 		// rest of what sits inside them. A reply after the wrapper is not.
-		if (a.commentSpan) add(a.commentSpan, mark("arv-comment" + faint));
+		// Text right after a comment gets the same small gap as text before a reply.
+		if (a.commentSpan) add(a.commentSpan, mark("arv-comment arv-gap-after" + faint));
 		for (const r of a.replies) {
 			// A footnote is drawn by Obsidian and already reads as a remark,
 			// and a genuine footnote must not turn blue, so only a brace
@@ -158,7 +159,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			// chip or the text, gets a small gap in front of it.
 			if (r.channel !== "brace") continue;
 			const chipFirst = settings.commentAuthorStyle === "chip" && !!r.author;
-			add(r.textSpan, mark(chipFirst ? "arv-comment" : "arv-comment arv-attached"));
+			add(r.textSpan, mark(chipFirst ? "arv-comment arv-gap-after" : "arv-comment arv-attached arv-gap-after"));
 		}
 		const contentSpans = [a.originalSpan, a.replacementSpan, a.bodySpan, a.commentSpan].filter((s): s is TextSpan => !!s);
 		const ownStyle = a.type === "comment" ? settings.commentAuthorStyle : settings.changeAuthorStyle;

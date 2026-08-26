@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan, AnnotationReply } from "./types";
 import { AnnotationFilters } from "./settings";
 import { applyChipColor } from "./authors";
 
@@ -211,8 +211,7 @@ export class AnnotationReviewView extends ItemView {
 			for (const a of this.plugin.annotations) {
 				if (a.author) authors.add(a.author);
 				else hasNoAuthor = true;
-				// A comment on a selection spends its first reply on the comment itself.
-				const extra = a.type === "comment" && !a.isPoint ? a.replies.length - 1 : a.replies.length;
+				const extra = a.replies.length - (this.noteOf(a) ? 1 : 0);
 				if (extra > 1) hasMoreReplies = true;
 			}
 			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
@@ -614,6 +613,20 @@ export class AnnotationReviewView extends ItemView {
 		return row;
 	}
 
+	/**
+	 * The entry shown as the annotation's own text rather than as a comment
+	 * on it. For a comment on a selection that is the first reply, which is
+	 * the comment itself. For a change it is the first reply when the
+	 * change's author wrote it, since that is the reason for the change. A
+	 * reply by someone else, or on an unauthored change, is a comment.
+	 */
+	private noteOf(annotation: Annotation): AnnotationReply | undefined {
+		const first = annotation.replies[0];
+		if (!first) return undefined;
+		if (annotation.type === "comment" && !annotation.isPoint) return first;
+		return annotation.author && first.author === annotation.author ? first : undefined;
+	}
+
 	private renderAnnotationItem(container: Element, annotation: Annotation) {
 		const card = container.createEl("div", {
 			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type} annotation-wrapper-${annotation.wrapper}`
@@ -658,8 +671,9 @@ export class AnnotationReviewView extends ItemView {
 		// reply's author goes in the header, and only later replies are
 		// replies. A bare selection has no first reply, and no badge either,
 		// since nothing says it is a comment.
-		const note = annotation.type === "comment" && !annotation.isPoint ? annotation.replies[0] : undefined;
+		const note = this.noteOf(annotation);
 		const replies = note ? annotation.replies.slice(1) : annotation.replies;
+		const isSelectionComment = annotation.type === "comment" && !annotation.isPoint;
 
 		// The type leads: it is what varies from card to card, and the louder
 		// of the two chips. Same order as the syntax, operator then author.
@@ -667,9 +681,9 @@ export class AnnotationReviewView extends ItemView {
 		// so the card does not either. Only replies say "No author".
 		const header = card.createEl("div", { cls: "annotation-review-header" });
 		if (!annotation.isPlain) header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
-		if (note) {
+		if (isSelectionComment) {
 			// An unsigned comment shows no chip. Only a reply says No author.
-			if (note.author) this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
+			if (note?.author) this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
 		} else if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		}

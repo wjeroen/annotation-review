@@ -648,6 +648,11 @@
 	margin-left: 0.25em;
 }
 
+/* And the same gap after a comment, for text that follows it directly. */
+.arv-gap-after {
+	margin-right: 0.25em;
+}
+
 /* Reading view uses the same classes. A replacement rendered by Obsidian as
    a <del> loses its line. */
 del.arv-replace {

@@ -115,6 +115,7 @@ function render(inner: string, isProse: boolean, attached = false): DocumentFrag
 		const { author, rest } = splitAuthor(isProse ? inner : inner.slice(2, -2), true);
 		withAuthor("arv-comment", rest, author, commentStyle);
 		if (isProse && attached && out.firstElementChild) out.firstElementChild.classList.add("arv-attached");
+		if (out.lastElementChild) out.lastElementChild.classList.add("arv-gap-after");
 		return out;
 	}
 	return null;

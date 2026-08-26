@@ -169,7 +169,7 @@ Subject: Greeting
 
 This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
 This ==++[ChatGPT]@@is ++==a test.
-==Hello, this is highlighted text.==^[[Alex] This is a reply.]
+==Hello, this is highlighted text.==^[[Alex] This is a comment.]
 This {~~{"author":"Claude"}@@isn't~>is~~}^[[Claude] Wrong, this is in fact a test.] a test.
 ```
 
