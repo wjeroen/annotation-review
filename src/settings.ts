@@ -247,7 +247,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		const draw = () => {
 			list.empty();
 			for (const row of rows) {
-				const setting = new Setting(list);
+				const setting = new Setting(list).setClass("arv-author-row");
 				const control = setting.controlEl;
 				let preview: HTMLElement | null = null;
 				let slot: HTMLElement | null = null;

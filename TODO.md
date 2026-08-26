@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] An author color row on mobile keeps the name field, the full chip, the picker and the trash button on one line. Obsidian had stretched the name field to the full width (2026-08-26)
 - [x] One black-or-white bar for chips and badges, YIQ 150, in place of the split that made the two disagree (2026-08-26)
 - [x] Badge text stays white at full strength, orange included, turning black only once the badge fades toward the page. The comments line on a card is the faint text color, visible on a hovered card without reading as black (2026-08-26)
 - [x] The sidebar's reply button is a Comment button beside Approve and Dismiss, in the icon-button style with the message-square-plus icon, the line number at the far end of that row. Labels drop as the card narrows, Comment first. Nothing in the sidebar is called a reply anymore (2026-08-26)

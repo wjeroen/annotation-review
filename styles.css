@@ -701,6 +701,20 @@ del.arv-replace {
    modal with a preview chip, three gradient sliders and a hex field. The
    widths are forced, since Obsidian's mobile styling clamps range inputs. */
 
+/* An author color row. On mobile Obsidian stretches a text input to the
+   full width of the row, which left the chip cut off and the picker
+   squeezed, so the name field gets a flex basis and yields to the rest. */
+.arv-author-row .setting-item-control {
+	flex-wrap: nowrap;
+	gap: 8px;
+}
+
+.arv-author-row input[type="text"] {
+	flex: 1 1 6em !important;
+	width: auto !important;
+	min-width: 4em;
+}
+
 /* The chip preview in an author color row, and the slot the picker mounts
    into once the name is committed. */
 .arv-color-slot {
@@ -719,8 +733,10 @@ del.arv-replace {
 }
 
 .arv-color-swatch {
-	width: 64px;
+	width: 48px;
 	height: 36px;
+	min-height: 36px;
+	flex: 0 0 auto;
 	padding: 0;
 	border-radius: 8px;
 	border: 1px solid var(--background-modifier-border);
