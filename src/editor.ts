@@ -151,7 +151,12 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 		// A comment on a spot inside percent marks is toned down like the
 		// rest of what sits inside them. A reply after the wrapper is not.
 		// A comment on a spot gets the small gap on both sides, like a reply.
-		if (a.commentSpan) add(a.commentSpan, mark("arv-comment arv-attached arv-gap-after" + faint));
+		// When its chip is drawn in front, the chip carries the gap, and the
+		// text gets none of its own, or the two would stack.
+		if (a.commentSpan) {
+			const chipFirst = settings.commentAuthorStyle === "chip" && !!a.author;
+			add(a.commentSpan, mark((chipFirst ? "arv-comment arv-gap-after" : "arv-comment arv-attached arv-gap-after") + faint));
+		}
 		for (const r of a.replies) {
 			// A footnote is drawn by Obsidian and already reads as a remark,
 			// and a genuine footnote must not turn blue, so only a brace

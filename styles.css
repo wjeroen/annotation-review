@@ -619,9 +619,15 @@
 
 /* A chip is the author's name itself, styled in place, so it takes the size
    of whatever it sits in and shrinks inside a footnote. */
+/* The gap between a chip and its text, and around a brace comment, is one
+   value everywhere: 0.19em of the surrounding text, three pixels at the
+   default size and three quarters of a space, so it scales with headings
+   and the phone but never reads as a space. A chip is 0.85em of its
+   surroundings, so its own margins are divided by that to land on the same
+   length as the gaps set on the text. */
 .arv-chip {
 	padding: 0 4px;
-	margin-right: 2px;
+	margin-right: calc(0.19em / 0.85);
 	border-radius: 4px;
 	font-size: 0.85em;
 	color: var(--text-normal);
@@ -643,14 +649,23 @@
 }
 
 /* A brace comment sits right against the text around it. Its first part,
-   the chip or the text, gets a gap in front, and its last part one after:
-   the two pixels a chip keeps from its text, clearly less than a space. */
+   the chip or the text, gets a gap in front, and its last part one after,
+   the same length a chip keeps from its text. On a chip the value is scaled
+   by its smaller font, see .arv-chip. */
 .arv-attached {
-	margin-left: 2px;
+	margin-left: 0.19em;
 }
 
 .arv-gap-after {
-	margin-right: 2px;
+	margin-right: 0.19em;
+}
+
+.arv-chip.arv-attached {
+	margin-left: calc(0.19em / 0.85);
+}
+
+.arv-chip.arv-gap-after {
+	margin-right: calc(0.19em / 0.85);
 }
 
 /* Reading view uses the same classes. A replacement rendered by Obsidian as
