@@ -488,7 +488,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 				const hasSelection = !!editor.getSelection();
 				const target = this.annotationAtCaret(editor);
 				for (const action of this.annotationActions()) {
-					if (action.id !== "comment" && (!hasSelection || target)) continue;
+					// Delete and Replace need a selection outside any annotation.
+					// Insert works on a selection or at the caret, but not inside
+					// an annotation, where the menu offers a reply instead.
+					if (action.id === "insert" ? !!target : action.id !== "comment" && (!hasSelection || target)) continue;
 					// On a selection that has no comment yet, a bare one or one
 					// that only names who selected it, the first entry is the
 					// comment itself, not a reply.
@@ -541,11 +544,17 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	private annotateInsert(editor: Editor) {
-		const selection = this.requireSelection(editor);
-		if (selection === null) return;
-		const context = getInsertContext(editor.getValue(), editor.posToOffset(selection.from));
+		const at = editor.posToOffset(editor.getCursor("from"));
+		const context = getInsertContext(editor.getValue(), at);
 		const { wrappers, fencedFallback, defaultAuthor } = this.settings;
-		this.annotate(editor, sel => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback));
+		const build = (sel: string) => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback);
+		// With nothing selected the insertion is empty and the caret lands
+		// inside it, ready to type, the way a comment on a spot works.
+		if (!editor.getSelection()) {
+			this.insertAtCaret(editor, at, build(""));
+			return;
+		}
+		this.annotate(editor, build);
 	}
 
 	/**

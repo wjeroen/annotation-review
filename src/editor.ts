@@ -3,7 +3,7 @@ import { Decoration, DecorationSet, EditorView, GutterMarker, WidgetType, gutter
 import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
 import { Annotation, Authored, TextSpan } from "./types";
-import { AuthorColors, authorBackground, authorColor } from "./authors";
+import { AuthorColors, applyChipColor, authorColor, chipStyle } from "./authors";
 import { AuthorStyle } from "./settings";
 
 /*
@@ -49,7 +49,7 @@ const authorLine = (author: string, colors: AuthorColors) =>
 const authorChip = (author: string, colors: AuthorColors, attached = false) =>
 	Decoration.mark({
 		class: attached ? "arv-chip arv-attached" : "arv-chip",
-		attributes: { style: `background-color: ${authorBackground(author, colors)}` }
+		attributes: { style: chipStyle(author, colors) }
 	});
 
 /**
@@ -65,18 +65,18 @@ const authorChip = (author: string, colors: AuthorColors, attached = false) =>
 class ChipWidget extends WidgetType {
 	constructor(
 		readonly author: string,
-		readonly color: string
+		readonly colors: AuthorColors
 	) {
 		super();
 	}
 	eq(other: ChipWidget) {
-		return other.author === this.author && other.color === this.color;
+		return other.author === this.author && other.colors[this.author] === this.colors[this.author];
 	}
 	toDOM() {
 		const el = document.createElement("span");
 		el.className = "arv-chip";
 		el.textContent = this.author;
-		el.style.backgroundColor = this.color;
+		applyChipColor(el, this.author, this.colors);
 		return el;
 	}
 }
@@ -124,7 +124,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			const s = who.authorSpan;
 			if (style === "chip" && who.author && before !== undefined) {
 				add(s, hide);
-				const widget = new ChipWidget(who.author, authorBackground(who.author, settings.authorColors));
+				const widget = new ChipWidget(who.author, settings.authorColors);
 				ranges.push(Decoration.widget({ widget, side: -1 }).range(base + before));
 				return;
 			}
@@ -172,7 +172,7 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 			for (const n of annotations) {
 				if (!within(n, a) || n.matchEnd >= contentEnd) continue;
 				if (annotations.some(m => within(n, m) && within(m, a))) continue;
-				const widget = new ChipWidget(a.author, authorBackground(a.author, settings.authorColors));
+				const widget = new ChipWidget(a.author, settings.authorColors);
 				ranges.push(Decoration.widget({ widget, side: 1 }).range(n.matchEnd));
 			}
 		}

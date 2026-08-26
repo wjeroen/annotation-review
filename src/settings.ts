@@ -1,7 +1,7 @@
 import { App, Platform, PluginSettingTab, Setting } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
-import { AuthorColors, authorBackground, defaultColorHex } from "./authors";
+import { AuthorColors, applyChipColor, defaultColorHex } from "./authors";
 import { MobileColorPicker } from "./colorpicker";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
@@ -253,7 +253,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				const showPreview = () => {
 					if (!preview) return;
 					preview.setText(row.name || "Author");
-					preview.style.backgroundColor = authorBackground(row.name, { [row.name]: row.color });
+					applyChipColor(preview, row.name, { [row.name]: row.color });
 				};
 				const setting = new Setting(list).addText(text =>
 					text

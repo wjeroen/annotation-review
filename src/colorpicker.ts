@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { authorBackground, hexToHsl, hslToHex } from "./authors";
+import { applyChipColor, hexToHsl, hslToHex } from "./authors";
 
 /**
  * A color picker for mobile, where the native <input type="color"> is a poor
@@ -105,7 +105,7 @@ class ColorModal extends Modal {
 		// track and thumb are pseudo elements and inline styles cannot reach them.
 		const update = () => {
 			this.hex = hslToHex(h, s, l);
-			chip.style.backgroundColor = authorBackground(this.name, { [this.name]: this.hex });
+			applyChipColor(chip, this.name, { [this.name]: this.hex });
 			square.style.backgroundColor = this.hex;
 			hexInput.value = this.hex;
 			sliders.h.value = String(h);

@@ -1,6 +1,6 @@
 # Annotation Review
 
-An Obsidian plugin that finds text annotations in a note (comments, insertions, deletions, replacements) and lets you approve or dismiss each one from a sidebar, rewriting the note automatically. Annotations can be written by anyone, the syntax is just designed to be easy for AI tools to produce. Inspired by [trevware/obsidian-sidebar-highlights](https://github.com/trevware/obsidian-sidebar-highlights).
+An Obsidian plugin that finds text annotations in a note (comments, insertions, deletions, replacements) and lets you approve or dismiss each one from a sidebar, rewriting the note automatically. Annotations can be written by anyone, the syntax is just designed to be easy for AI tools to produce. It grew out of two plugins: [Sidebar Highlights](https://github.com/trevware/obsidian-sidebar-highlights) by trevware, for reviewing marks from a sidebar with footnote comments, and [Fevol's CriticMarkup plugin](https://github.com/Fevol/obsidian-criticmarkup), for the syntax, the author metadata and the way changes are drawn in the editor.
 
 The syntax follows [CriticMarkup](http://criticmarkup.com), with two additions: the same markers can be wrapped in Obsidian's own highlight or comment delimiters instead of braces, and an author and reason can be attached to any change.
 
@@ -73,13 +73,13 @@ Nothing opens a dialog. Each one writes the annotation straight into the note an
 | Comment | On a selection, `{==text==}{>>{"author":"Claude"}@@ <<}`. Inside an annotation, a reply. With nothing selected, a comment on that spot, `{>>...<<}` in the chosen wrapper, braces or percent marks | Inside the reply, ready to type |
 | Delete | `{--{"author":"Claude"}@@text--}` | At the end |
 | Replace | `{~~{"author":"Claude"}@@text~>~~}` | After the arrow, ready for the replacement |
-| Insert | `{++{"author":"Claude"}@@text++}` | At the end, since the selection is already the inserted text |
+| Insert | `{++{"author":"Claude"}@@text++}`, or an empty insertion with nothing selected | At the end when text was selected, inside when not |
 | Choose type of annotation | Asks which of the four, then behaves the same | |
 | Set default author | Sets the author written into new annotations | |
 
 A comment, a reason and a reply are the same thing in different places, so one command covers all three and the context decides. Selecting an annotation whole counts as being inside it, so Comment never wraps an annotation in a second one. With no author set, nothing is written after the operator marks.
 
-The right click menu always shows Comment, named Reply when the caret is inside an annotation that already has a comment or a reply. On a bare selection it stays Comment. The other three appear when text is selected outside any annotation. All of them sit under their own divider.
+The right click menu always shows Comment, named Reply when the caret is inside an annotation that already has a comment or a reply. On a bare selection it stays Comment. Delete and Replace appear when text is selected outside any annotation, Insert whenever the caret is outside one, with or without a selection. All of them sit under their own divider.
 
 Which wrapper each operation writes is a setting, per operation. Percent marks do not render inside fenced blocks, so a fallback wrapper stands in for them there, and inside an existing percent mark annotation the insert command writes the close-and-reopen form.
 
@@ -100,7 +100,7 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 ## Sidebar features
 
 - **Annotations tab**: lists every detected annotation with Approve/Dismiss buttons, filterable by author via an Obsidian-native menu, not a native `<select>`, which renders as an ugly OS popup on mobile. Each author gets a consistent, hashed color badge, gray if unlabeled, distinct even for similar names.
-- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. For a change the first reply is the reason and is always shown, the rest fold behind the expand toggle. A comment on a selection reads like a comment on a spot with the selected text above it: its first reply is the comment itself, with that reply's author in the header. A bare selection shows no badge, since nothing says it is a comment. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either. Only an unsigned reply says No author.
+- **Card layout**: the annotated text first, then the type badge and author chip with the line number at the far end, then the replies. For a change the first reply is the reason and is always shown, the rest fold behind the expand toggle. A comment on a selection reads like a comment on a spot with the selected text above it: its first reply is the comment itself, with that reply's author in the header when it has one. A bare selection shows no badge, since nothing says it is a comment. Text that goes away is red and text that arrives is green, the way a diff reads, softened toward the text color and with no strikethrough. A card shows an author chip only when the annotation names one. The note does not say who made an unauthored change, so the card does not either. Only an unsigned reply says No author.
 - **Filter button**: between the author menu and the expand toggle. Toggles each annotation type, annotations without an author, and bare selections. Remembered across notes, unlike the author filter, which only means something within one note.
 - **Wrapper at a glance**: a thin line along the top of each card says how the annotation is written in the note, yellow for a highlight, gray for hidden percent marks, purple for braces.
 - **Follows the caret**: the card whose annotation the caret is inside is marked and scrolled into view, so the note and the sidebar stay in step whichever one you are looking at.
@@ -119,7 +119,7 @@ The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` car
 - **Inside fenced blocks**: braces or highlight, standing in for percent marks where they do not render. Greyed out while no operation uses percent marks.
 - **Style annotations in live preview**, **Authors on changes**, **Authors on comments and replies**, **Show the diff gutter**: the parts of the editor rendering, each its own setting. Authors are shown as a colored underline, a chip, or not at all, chosen separately for changes (deletions, insertions and replacements) and for comments and replies, since a line under text that is already red or green gets busy while it stays compact under a comment. All but the gutter apply to reading view as well.
 - **Replies**: footnote or CriticMarkup comment. An annotation that already has replies keeps their style.
-- **Author chip opacity** and **Type badge opacity**: how strong the fills behind the author chips and the type badges are, everywhere they appear. Underlines stay solid, since a thin line needs its full color to be seen.
+- **Author chip opacity** and **Type badge opacity**: how strong the fills behind the author chips and the type badges are, everywhere they appear. Underlines stay solid, since a thin line needs its full color to be seen. Text on a chip or a badge is black or white, whichever reads against the fill at that opacity.
 - **Author colors**: each author gets a color from their name, the same in the sidebar and the editor. Pick one here to use instead, per author. Each row shows the chip as it will look. A new row's picker starts at the color the name would get on its own, so adjusting is a nudge rather than a search. On a phone or tablet, tapping the color opens the plugin's own picker, since the system one there is poor: a preview chip, three sliders for hue, saturation and lightness, and a hex field.
 
 Everything above follows the vault through sync, and is picked up the moment it arrives, no restart needed. The sidebar's own state, expanded replies and the type filter, stays on the device, since it changes with every click.

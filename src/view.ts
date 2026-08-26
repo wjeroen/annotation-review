@@ -2,7 +2,7 @@ import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } 
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan } from "./types";
 import { AnnotationFilters } from "./settings";
-import { authorBackground } from "./authors";
+import { applyChipColor } from "./authors";
 
 /**
  * Sizes a textarea to its content, so it shows every line and grows as more
@@ -458,8 +458,7 @@ export class AnnotationReviewView extends ItemView {
 			el.style.removeProperty("color");
 			if (author) {
 				el.setText(author);
-				el.style.backgroundColor = authorBackground(author, this.plugin.settings.authorColors);
-				el.style.color = "var(--text-normal)";
+				applyChipColor(el, author, this.plugin.settings.authorColors);
 			} else {
 				el.setText("No author");
 				el.addClass("annotation-review-author-none");
@@ -646,7 +645,8 @@ export class AnnotationReviewView extends ItemView {
 		const header = card.createEl("div", { cls: "annotation-review-header" });
 		if (!annotation.isPlain) header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
 		if (note) {
-			this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
+			// An unsigned comment shows no chip. Only a reply says No author.
+			if (note.author) this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
 		} else if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
 		}

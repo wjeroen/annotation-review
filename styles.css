@@ -199,8 +199,8 @@
 }
 
 /* The badge fill follows the opacity setting through a variable on the
-   body. The text goes from the on-accent color at full strength toward the
-   normal text color as the fill fades, so it stays readable either way. */
+   body. The text is black or white, whichever reads against the fill as it
+   actually shows, the same way as on the chips. */
 .annotation-review-badge {
 	--arv-badge-color: var(--background-modifier-border);
 	background-color: color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), transparent);
@@ -210,7 +210,8 @@
 .annotation-type-delete .annotation-review-badge,
 .annotation-type-replace .annotation-review-badge,
 .annotation-type-insert .annotation-review-badge {
-	color: color-mix(in srgb, var(--text-on-accent) calc(var(--arv-badge-alpha, 1) * 100%), var(--text-normal));
+	color: var(--text-on-accent);
+	color: lch(from color-mix(in srgb, var(--arv-badge-color) calc(var(--arv-badge-alpha, 1) * 100%), var(--background-primary)) calc((50 - l) * infinity) 0 0);
 }
 
 .annotation-type-comment .annotation-review-badge {
@@ -234,6 +235,7 @@
 	padding: 1px 6px;
 	border-radius: 4px;
 	cursor: pointer;
+	color: var(--text-normal);
 }
 
 .annotation-review-author-none {
@@ -608,6 +610,15 @@
 	border-radius: 4px;
 	font-size: 0.85em;
 	color: var(--text-normal);
+}
+
+/* Black or white text on a chip, whichever reads against the fill as it
+   actually shows: the author's color at its opacity over the page. Relative
+   color syntax takes the lightness of that mix and pushes it to 0 or 100.
+   A browser without it keeps the normal text color declared above. */
+.arv-chip,
+.annotation-review-author:not(.annotation-review-author-none) {
+	color: lch(from color-mix(in srgb, var(--arv-chip-color) calc(var(--arv-chip-alpha, 0.45) * 100%), var(--background-primary)) calc((50 - l) * infinity) 0 0);
 }
 
 /* A brace reply sits right against the text it follows. Its first part, the

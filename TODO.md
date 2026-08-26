@@ -23,6 +23,9 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Text on author chips and type badges is black or white, whichever reads against the fill as it shows at the chosen opacity, never grey. One solid author color feeds the chip, the underline and the picker, so adding an author with the offered color changes nothing on screen (2026-08-26)
+- [x] Insert with nothing selected writes an empty insertion with the caret inside, from the command and the right click menu, like a comment on a spot (2026-08-26)
+- [x] An unsigned comment on a selection shows no author chip. Only a reply says No author (2026-08-26)
 - [x] Nested braces: putting the caret in the outer annotation reveals the nested ones too, and with chips the outer author's chip returns after each nested annotation, so the rest of the outer text is not read as the inner author's (2026-08-26)
 - [x] A comment on a spot is braces or percent marks, chosen in its own setting under Wrappers. Obsidian never opens a highlight that starts with `>`, so `==>>note<<==` cannot render, is no longer read, and is skipped whole. The Comment command falls back to braces where needed (2026-08-26)
 - [x] Sidebar: a comment on a selection reads like a comment on a spot with the selected text above it, its first reply being the comment and that reply's author in the header. A bare selection shows no badge, and the filter calls them bare selections (2026-08-26)

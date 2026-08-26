@@ -270,6 +270,8 @@ check("insert, braces", composeInsert("Sel.", "Claude", PLAIN, "brace", "brace")
 check("insert, percent marks", composeInsert("Sel.", "Claude", PLAIN, "percent", "highlight").text, `%%++[Claude]@@Sel.++%%`);
 check("insert reads back", shape(one(composeInsert("Sel.", "Claude", PLAIN, "percent", "highlight").text)), ["insert", "Claude", "", "Sel.", null, []]);
 check("percent marks fall back in a fence, to braces", composeInsert("Sel.", "Claude", FENCED, "percent", "brace").text, `{++${C}Sel.++}`);
+check("insert with nothing selected lands the caret inside", composeInsert("", "Claude", PLAIN, "brace", "brace"), { text: `{++${C}++}`, cursor: 3 + C.length });
+check("and inside percent marks too", composeInsert("", "", PLAIN, "percent", "brace"), { text: "%%++++%%", cursor: 4 });
 check("or to a highlight", composeInsert("Sel.", "Claude", FENCED, "percent", "highlight").text, `==++[Claude]@@Sel.++==`);
 check("braces stay braces in a fence", composeInsert("Sel.", "Claude", FENCED, "brace", "highlight").text, `{++${C}Sel.++}`);
 check("an open reply, brace", openReply("Claude", "brace"), { text: `{>>${C}<<}`, cursor: 3 + C.length });

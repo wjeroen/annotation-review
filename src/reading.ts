@@ -1,4 +1,4 @@
-import { AuthorColors, authorColor, authorBackground } from "./authors";
+import { AuthorColors, applyChipColor, authorColor } from "./authors";
 import { AuthorStyle } from "./settings";
 
 /*
@@ -72,7 +72,7 @@ function chip(author: string): HTMLElement {
 	const el = document.createElement("span");
 	el.className = "arv-chip";
 	el.textContent = author;
-	el.style.backgroundColor = authorBackground(author, colors);
+	applyChipColor(el, author, colors);
 	return el;
 }
 

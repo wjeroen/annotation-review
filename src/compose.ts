@@ -95,20 +95,27 @@ export function composeReplace(selected: string, author: string, wrapper: Wrappe
  * for them there.
  */
 export function composeInsert(selected: string, author: string, context: InsertContext, wrapper: Wrapper, fallback: Wrapper): Composed {
-	let text: string;
+	let head: string;
+	let tail: string;
 	if (context.kind === "nested") {
-		text = `${context.marker}%%%%++${authorPrefix(author, "percent")}${selected}++%%%%${context.marker}`;
+		head = `${context.marker}%%%%++${authorPrefix(author, "percent")}`;
+		tail = `++%%%%${context.marker}`;
 	} else {
 		const w = context.kind === "fenced" && wrapper === "percent" ? fallback : wrapper;
-		text = wrap(w, `++${authorPrefix(author, w)}${selected}++`);
+		head = `${OPEN[w]}++${authorPrefix(author, w)}`;
+		tail = `++${CLOSE[w]}`;
 	}
-	return { text, cursor: text.length };
+	const text = head + selected + tail;
+	// With text selected the insertion is complete and the caret goes after
+	// it. With nothing selected it is empty and the caret goes inside, ready
+	// to type, the way a comment on a spot works.
+	return { text, cursor: selected ? text.length : head.length };
 }
 
 /**
- * A comment on a spot rather than a span, with the caret inside. The `>>`
- * operator in whichever wrapper is chosen: `{>>note<<}`, `==>>note<<==` or
- * `%%>>note<<%%`, the author written the way it is for any other operation.
+ * A comment on a spot rather than a selection, with the caret inside. The
+ * `>>` operator in braces or percent marks, `{>>note<<}` or `%%>>note<<%%`,
+ * the author written the way it is for any other operation.
  */
 export function composePointComment(author: string, wrapper: Wrapper): Composed {
 	// A highlight cannot hold one, Obsidian never opens a highlight that

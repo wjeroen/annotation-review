@@ -26,6 +26,16 @@ export function defaultColorHex(name: string): string {
 }
 
 /**
+ * The author's color itself: the one chosen in settings, or the computed
+ * one. The same color feeds the chip, the underline and the picker's
+ * starting point, so adding an author with the color the picker offers
+ * changes nothing on screen.
+ */
+export function authorSolid(name: string, colors?: AuthorColors): string {
+	return colors?.[name] ?? `hsl(${authorHue(name)}, 55%, 50%)`;
+}
+
+/**
  * The fill behind a chip: the author's color at the opacity chosen in
  * settings. The opacity is a CSS variable on the body, so every chip in the
  * sidebar, the editor and reading view follows a change at once, with no
@@ -33,13 +43,26 @@ export function defaultColorHex(name: string): string {
  * line needs its full color to be seen.
  */
 export function authorBackground(name: string, colors?: AuthorColors): string {
-	const solid = colors?.[name] ?? `hsl(${authorHue(name)}, 55%, 45%)`;
-	return `color-mix(in srgb, ${solid} calc(var(--arv-chip-alpha, 0.45) * 100%), transparent)`;
+	return `color-mix(in srgb, ${authorSolid(name, colors)} calc(var(--arv-chip-alpha, 0.45) * 100%), transparent)`;
+}
+
+/**
+ * Everything a chip needs inline: the fill, and the color itself as a
+ * variable the stylesheet reads to pick black or white text against the
+ * fill as it actually shows.
+ */
+export function chipStyle(name: string, colors?: AuthorColors): string {
+	return `background-color: ${authorBackground(name, colors)}; --arv-chip-color: ${authorSolid(name, colors)}`;
+}
+
+export function applyChipColor(el: HTMLElement, name: string, colors?: AuthorColors) {
+	el.style.backgroundColor = authorBackground(name, colors);
+	el.style.setProperty("--arv-chip-color", authorSolid(name, colors));
 }
 
 /** The solid color of the underline in the editor. */
 export function authorColor(name: string, colors?: AuthorColors): string {
-	return colors?.[name] ?? `hsl(${authorHue(name)}, 55%, 50%)`;
+	return authorSolid(name, colors);
 }
 
 function hexToRgb(hex: string): [number, number, number] {
