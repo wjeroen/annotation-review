@@ -679,6 +679,13 @@ del.arv-replace {
 	margin-right: 4px;
 }
 
+/* With no line to show the strip takes no room at all, so a note without
+   annotations is not shifted right by an empty gutter. */
+.cm-editor:not(.arv-gutter-lines) .arv-diff-gutter {
+	width: 0;
+	margin-right: 0;
+}
+
 .arv-diff-gutter .cm-gutterElement {
 	padding: 0;
 }

@@ -95,7 +95,7 @@ The moment the caret or the selection touches an annotation, all of its syntax c
 
 Reading view is styled the same way, from the rendered HTML: brace syntax in the text, operator marks inside a highlight, and a `{~~replacement~~}` Obsidian rendered as a strikethrough. Percent marks are dropped by Obsidian in reading view, which is right for text that is hidden until approved. Footnote labels at the bottom of the page become the author. An annotation whose text carries its own inline formatting is left as it is rather than half styled.
 
-A gutter draws a colored line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncolored: red, green, both for a replacement, blue for a comment. The styling, the author display and the gutter are each a setting.
+A gutter draws a colored line down the left edge of every annotated line, in live preview and in source mode, where the text itself stays uncolored: red, green, both for a replacement, blue for a comment. In a note with no annotations it takes no room, so the text is not shifted right by an empty strip. The styling, the author display and the gutter are each a setting.
 
 ## Sidebar features
 

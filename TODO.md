@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The gutter takes room only while the note holds an annotation that draws a line, so a note with none is no longer shifted right by an empty strip. Bare selections and admonitions do not count (2026-08-27)
 - [x] The gaps are 0.125em, two pixels at the default size, about half a space (2026-08-26)
 - [x] Every gap around a chip or a brace comment is 0.19em of the surrounding text, three pixels at the default size, scaled on chips to match, and a spot comment with a chip in front no longer stacks its own gap on the chip (2026-08-26)
 - [x] A comment on a spot gets the gap in front as well, the gaps are two pixels like the chip gap, and the mobile swatch is square (2026-08-26)

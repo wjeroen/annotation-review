@@ -204,7 +204,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		};
 		authorStyle("Authors on changes", "Deletions, insertions and replacements, in live preview and reading view.", "changeAuthorStyle");
 		authorStyle("Authors on comments and replies", "", "commentAuthorStyle");
-		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
+		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode. It takes no room in a note that has nothing to mark.", "showGutter");
 
 		new Setting(containerEl).setName("Chips").setHeading();
 

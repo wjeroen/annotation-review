@@ -3,7 +3,8 @@
    tests never render an editor, so these only have to exist. */
 export const EditorView = {
 	updateListener: { of: (listener: unknown) => listener },
-	decorations: { from: (field: unknown) => field }
+	decorations: { from: (field: unknown) => field },
+	editorAttributes: { of: (source: unknown) => source }
 };
 export class WidgetType {}
 export class GutterMarker {}

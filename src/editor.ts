@@ -271,9 +271,21 @@ const diffGutter = gutter({
 	initialSpacer: () => MARKERS.delete
 });
 
+/**
+ * The gutter is a strip of a fixed width, so in a note with nothing to mark
+ * it used to sit there empty and shift the text right for no reason. This
+ * class is what gives the strip its width, and the editor carries it only
+ * while the note holds an annotation that draws a line. A bare selection
+ * draws none, so it does not count, and an admonition is not an annotation
+ * at all: it has its own tab in the sidebar and never a line here.
+ */
+const gutterWidth = EditorView.editorAttributes.of(view =>
+	view.state.field(annotationsField).some(a => !a.isPlain) ? { class: "arv-gutter-lines" } : null
+);
+
 /** The editor extensions for the current settings. Rebuilt when they change. */
 export function editorExtensions(settings: EditorRenderSettings): Extension[] {
 	const extensions: Extension[] = [annotationsField, decorationsField(settings)];
-	if (settings.showGutter) extensions.push(diffGutter);
+	if (settings.showGutter) extensions.push(diffGutter, gutterWidth);
 	return extensions;
 }
