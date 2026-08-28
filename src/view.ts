@@ -1,4 +1,4 @@
-import { ItemView, MarkdownRenderer, Menu, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan, AnnotationReply } from "./types";
 import { AnnotationFilters } from "./settings";
@@ -16,6 +16,29 @@ function fitToContent(field: HTMLTextAreaElement) {
 			? field.offsetHeight - field.clientHeight
 			: -(parseFloat(style.paddingTop) + parseFloat(style.paddingBottom));
 	field.style.height = `${field.scrollHeight + extra}px`;
+}
+
+/**
+ * Keeps a field that has just taken focus clear of the on-screen keyboard.
+ * The keyboard covers the bottom of the screen without always shrinking the
+ * page, so a field near the end of the list ends up behind it. The covered
+ * height is read from the visual viewport, handed to the list as room at the
+ * bottom, and the field is scrolled up into what is left. The room goes away
+ * again when the field is closed.
+ */
+function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
+	if (!Platform.isMobile) return;
+	const settle = () => {
+		const viewport = window.visualViewport;
+		const covered = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+		if (scrollArea) scrollArea.style.paddingBottom = covered > 0 ? `\${covered}px` : "";
+		field.scrollIntoView({ block: "center" });
+	};
+	// Whichever comes first: the viewport reporting the keyboard, or the wait
+	// running out on a keyboard that never moved the viewport.
+	window.visualViewport?.addEventListener("resize", settle, { once: true });
+	window.setTimeout(settle, 400);
+	field.addEventListener("blur", () => scrollArea?.style.removeProperty("padding-bottom"), { once: true });
 }
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
@@ -425,6 +448,7 @@ export class AnnotationReviewView extends ItemView {
 			input.focus();
 			input.select();
 			fitToContent(input);
+			keepAboveKeyboard(input, this.scrollArea);
 
 			let committed = false;
 			const commit = () => {
@@ -501,6 +525,7 @@ export class AnnotationReviewView extends ItemView {
 			input.value = author ?? "";
 			input.focus();
 			input.select();
+			keepAboveKeyboard(input, this.scrollArea);
 
 			let committed = false;
 			const commit = () => {
@@ -586,6 +611,7 @@ export class AnnotationReviewView extends ItemView {
 				fitToContent(input);
 				input.focus();
 				if (prefill) input.setSelectionRange(prefill.cursor, prefill.cursor);
+				keepAboveKeyboard(input, this.scrollArea);
 			}
 		};
 	}
