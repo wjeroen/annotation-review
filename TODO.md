@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] On a phone an approve or a dismiss brings the change on screen when it is off screen, and leaves the note alone when the change is already in view (2026-08-28)
 - [x] Approving or dismissing on a phone no longer throws the note to the caret, usually the start. The change goes straight to CodeMirror there, which adds no scroll, and a card tap now sets the caret on the annotation without focusing, so the keyboard stays down. Desktop behavior is unchanged (2026-08-28)
 - [x] The gutter takes room only while the note holds an annotation that draws a line, so a note with none is no longer shifted right by an empty strip. Bare selections and admonitions do not count (2026-08-27)
 - [x] The gaps are 0.125em, two pixels at the default size, about half a space (2026-08-26)

@@ -4,7 +4,8 @@
 export const EditorView = {
 	updateListener: { of: (listener: unknown) => listener },
 	decorations: { from: (field: unknown) => field },
-	editorAttributes: { of: (source: unknown) => source }
+	editorAttributes: { of: (source: unknown) => source },
+	scrollIntoView: (pos: unknown) => pos
 };
 export class WidgetType {}
 export class GutterMarker {}

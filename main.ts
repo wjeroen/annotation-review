@@ -252,8 +252,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 			// Obsidian's call, where a card tap has already put the caret and
 			// the focus on the annotation.
 			const cm = Platform.isMobile ? (editor as EditorWithCm).cm : undefined;
-			if (cm) cm.dispatch({ changes: { from: result.from, to: result.to, insert: result.replacement } });
-			else editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
+			if (cm) {
+				cm.dispatch({ changes: { from: result.from, to: result.to, insert: result.replacement } });
+				// A card acted on straight from the list, with the note showing
+				// another part of the file, would otherwise change text nobody
+				// can see. This brings the change on screen, and only when it
+				// is off screen, so a note already showing the annotation does
+				// not move under the thumb. Focus stays in the sidebar, so the
+				// keyboard stays down.
+				cm.dispatch({ effects: EditorView.scrollIntoView(result.from, { y: "nearest" }) });
+			} else {
+				editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
+			}
 		} else {
 			await this.app.vault.modify(file, result.newContent);
 		}
