@@ -21,24 +21,30 @@ function fitToContent(field: HTMLTextAreaElement) {
 /**
  * Keeps a field that has just taken focus clear of the on-screen keyboard.
  * The keyboard covers the bottom of the screen without always shrinking the
- * page, so a field near the end of the list ends up behind it. The covered
- * height is read from the visual viewport, handed to the list as room at the
- * bottom, and the field is scrolled up into what is left. The room goes away
- * again when the field is closed.
+ * page, so a field near the end of the list ends up behind it. The list is
+ * given room at its end, the height the keyboard covers and never less than
+ * most of the screen, and the field is moved to the top of the list, the one
+ * place a keyboard of any height cannot reach. It is done again while the
+ * keyboard settles, since it is animated and reports its size late. The room
+ * goes away when the field is closed.
  */
 function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
-	if (!Platform.isMobile) return;
-	const settle = () => {
+	if (!Platform.isMobile || !scrollArea) return;
+	const lift = () => {
 		const viewport = window.visualViewport;
 		const covered = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
-		if (scrollArea) scrollArea.style.paddingBottom = covered > 0 ? `\${covered}px` : "";
-		field.scrollIntoView({ block: "center" });
+		scrollArea.style.paddingBottom = `\${Math.max(covered, window.innerHeight * 0.6)}px`;
+		field.scrollIntoView({ block: "start" });
 	};
-	// Whichever comes first: the viewport reporting the keyboard, or the wait
-	// running out on a keyboard that never moved the viewport.
-	window.visualViewport?.addEventListener("resize", settle, { once: true });
-	window.setTimeout(settle, 400);
-	field.addEventListener("blur", () => scrollArea?.style.removeProperty("padding-bottom"), { once: true });
+	lift();
+	const timers = [window.setTimeout(lift, 250), window.setTimeout(lift, 700)];
+	const stop = () => {
+		for (const timer of timers) window.clearTimeout(timer);
+		window.visualViewport?.removeEventListener("resize", lift);
+		scrollArea.style.removeProperty("padding-bottom");
+	};
+	window.visualViewport?.addEventListener("resize", lift);
+	field.addEventListener("blur", stop, { once: true });
 }
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";

@@ -675,22 +675,30 @@ del.arv-replace {
 }
 
 /* Obsidian puts the gutter inside the note's own column, in front of the
-   text lines but under the inline title. Any width there indents every line
-   while the title stays where it is, which reads as a broken layout. So the
-   gutter takes no width, and the strip is drawn in the page margin instead,
-   beside the text rather than in front of it. */
+   text lines but under the inline title, so any width there indents every
+   line while the title stays where it is. The strip therefore keeps its own
+   width and the whole container is pulled left by that width, into the page
+   margin, where it costs the text nothing.
+
+   Two CodeMirror rules have to give way for that. Every gutter is
+   overflow: hidden, at a weight a plugin selector cannot beat, so a strip
+   that leans out of its box is cut off. That is why the strip stays inside
+   and the container is what moves. And the container is position: sticky,
+   which pins it to the left edge of the text and cancels the pull, so it is
+   made static. Sticky only matters while scrolling sideways.
+
+   Obsidian's own margins on the container, 24px after it and -18px before it
+   on a phone, are for a gutter that takes room, so they go as well. All of
+   it holds only while ours is the one gutter in there. Another plugin's
+   gutter needs the room, and then the strip takes its own again. */
 .arv-diff-gutter {
-	width: 0;
-	margin-right: 0;
-	overflow: visible;
+	width: 4px;
+	margin-right: 4px;
 }
 
-/* Obsidian's own margins on the container, 24px after it and -18px before it
-   on a phone, only make sense for a gutter that takes room. They are dropped
-   unless another plugin put a gutter in there too, which needs them. The
-   rules they override are set per platform, hence the weight. */
 .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
-	margin-inline-start: 0 !important;
+	position: static !important;
+	margin-inline-start: -8px !important;
 	margin-inline-end: 0 !important;
 }
 
@@ -701,7 +709,6 @@ del.arv-replace {
 .arv-gutter {
 	width: 3px;
 	height: 100%;
-	margin-left: -8px;
 	border-radius: 2px;
 }
 
