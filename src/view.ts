@@ -18,29 +18,43 @@ function fitToContent(field: HTMLTextAreaElement) {
 	field.style.height = `${field.scrollHeight + extra}px`;
 }
 
-/** How long the field is held at the top of the list, in milliseconds. */
+/** How long the list is held in place while the keyboard opens, in milliseconds. */
 const KEYBOARD_SETTLE_MS = 1500;
+
+/** Breathing room left under a field brought up from behind the keyboard. */
+const KEYBOARD_GAP_PX = 8;
 
 /**
  * Keeps a field that has just taken focus clear of the on-screen keyboard.
  * A field near the end of the list is otherwise left behind the keyboard,
  * where it cannot be read or typed into.
  *
- * The list is given as much room at its end as the list is tall, so that
- * even the last card can travel all the way up, and the field is put at the
- * top of the list, which no keyboard can reach. The move is a scrollTop of
- * our own rather than scrollIntoView, which is free to pick a target of its
- * own and to scroll containers we do not own. It is repeated while the
- * keyboard slides open, since Obsidian resizes the app around it and any
- * scroll made during that is undone. The room goes when the field closes.
+ * The list moves by the smallest amount that brings the field into view, so
+ * a field already in the clear is left where it is and the card keeps the
+ * text above it on screen. A field taller than what is left of the list is
+ * shown from its top instead. The list is given room at its end only when it
+ * cannot scroll far enough on its own, and only as much as is missing. The
+ * move is a scrollTop of our own rather than scrollIntoView, which is free
+ * to pick a target of its own and to scroll containers we do not own. It is
+ * repeated while the keyboard slides open, since Obsidian resizes the app
+ * around it and a scroll made during that is undone.
  */
 function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	if (!Platform.isMobile || !scrollArea) return;
 	const lift = () => {
 		if (!field.isConnected || !scrollArea.isConnected) return stop();
-		scrollArea.style.paddingBottom = `${scrollArea.clientHeight}px`;
-		const offset = field.getBoundingClientRect().top - scrollArea.getBoundingClientRect().top;
-		if (Math.abs(offset) > 2) scrollArea.scrollTop += offset;
+		// Measured without any room of ours, so it is never counted twice.
+		scrollArea.style.removeProperty("padding-bottom");
+		const area = scrollArea.getBoundingClientRect();
+		const box = field.getBoundingClientRect();
+		const move =
+			box.height > area.height || box.top < area.top
+				? box.top - area.top
+				: Math.max(0, box.bottom + KEYBOARD_GAP_PX - area.bottom);
+		if (move === 0) return;
+		const canScroll = scrollArea.scrollHeight - scrollArea.clientHeight - scrollArea.scrollTop;
+		if (move > canScroll) scrollArea.style.paddingBottom = `${move - canScroll}px`;
+		scrollArea.scrollTop += move;
 	};
 	const ticking = window.setInterval(lift, 100);
 	const settled = window.setTimeout(() => window.clearInterval(ticking), KEYBOARD_SETTLE_MS);

@@ -1,6 +1,6 @@
 {
 	"name": "annotation-review",
-	"version": "0.6.5-beta.6",
+	"version": "0.6.5-beta.7",
 	"description": "Review, approve, and dismiss text annotations in Obsidian notes.",
 	"main": "main.js",
 	"private": true,
