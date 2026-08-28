@@ -18,33 +18,45 @@ function fitToContent(field: HTMLTextAreaElement) {
 	field.style.height = `${field.scrollHeight + extra}px`;
 }
 
+/** How long the field is held at the top of the list, in milliseconds. */
+const KEYBOARD_SETTLE_MS = 1500;
+
 /**
  * Keeps a field that has just taken focus clear of the on-screen keyboard.
- * The keyboard covers the bottom of the screen without always shrinking the
- * page, so a field near the end of the list ends up behind it. The list is
- * given room at its end, the height the keyboard covers and never less than
- * most of the screen, and the field is moved to the top of the list, the one
- * place a keyboard of any height cannot reach. It is done again while the
- * keyboard settles, since it is animated and reports its size late. The room
- * goes away when the field is closed.
+ * A field near the end of the list is otherwise left behind the keyboard,
+ * where it cannot be read or typed into.
+ *
+ * The list is given as much room at its end as the list is tall, so that
+ * even the last card can travel all the way up, and the field is put at the
+ * top of the list, which no keyboard can reach. The move is a scrollTop of
+ * our own rather than scrollIntoView, which is free to pick a target of its
+ * own and to scroll containers we do not own. It is repeated while the
+ * keyboard slides open, since Obsidian resizes the app around it and any
+ * scroll made during that is undone. The room goes when the field closes.
  */
 function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	if (!Platform.isMobile || !scrollArea) return;
 	const lift = () => {
-		const viewport = window.visualViewport;
-		const covered = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
-		scrollArea.style.paddingBottom = `\${Math.max(covered, window.innerHeight * 0.6)}px`;
-		field.scrollIntoView({ block: "start" });
+		if (!field.isConnected || !scrollArea.isConnected) return stop();
+		scrollArea.style.paddingBottom = `${scrollArea.clientHeight}px`;
+		const offset = field.getBoundingClientRect().top - scrollArea.getBoundingClientRect().top;
+		if (Math.abs(offset) > 2) scrollArea.scrollTop += offset;
 	};
-	lift();
-	const timers = [window.setTimeout(lift, 250), window.setTimeout(lift, 700)];
+	const ticking = window.setInterval(lift, 100);
+	const settled = window.setTimeout(() => window.clearInterval(ticking), KEYBOARD_SETTLE_MS);
 	const stop = () => {
-		for (const timer of timers) window.clearTimeout(timer);
-		window.visualViewport?.removeEventListener("resize", lift);
+		window.clearInterval(ticking);
+		window.clearTimeout(settled);
+		field.removeEventListener("blur", onBlur);
 		scrollArea.style.removeProperty("padding-bottom");
 	};
-	window.visualViewport?.addEventListener("resize", lift);
-	field.addEventListener("blur", stop, { once: true });
+	// A phone can blur a field for a moment while the keyboard opens, so a
+	// blur only counts when the field really is not the one being typed into.
+	const onBlur = () => {
+		if (field !== field.ownerDocument.activeElement) stop();
+	};
+	field.addEventListener("blur", onBlur);
+	lift();
 }
 
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";

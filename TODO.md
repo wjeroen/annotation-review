@@ -25,7 +25,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 
 ## Completed Recently
 - [x] The gutter strip is back and the text still lines up with the note title. The strip keeps its width and the container is pulled into the page margin, since CodeMirror cuts off anything leaning out of a gutter and pins the container in place (2026-08-28)
-- [x] A field opened in the sidebar on a phone is moved to the top of the list, with room added at the end, so no keyboard height can cover it (2026-08-28)
+- [x] A field opened in the sidebar on a phone is moved to the top of the list, with room added at the end, so no keyboard height can cover it. The move is our own scrollTop, repeated while the keyboard slides open, since Obsidian resizes the app around it and undoes a scroll made during that (2026-08-28)
 - [x] The gutter takes no room at all, in any note. Obsidian puts it inside the note's own column, so any width there indented every line while the note title stayed put. The strip is drawn in the page margin instead (2026-08-28)
 - [x] A field opened in the sidebar on a phone is kept clear of the on-screen keyboard, so the last card can be edited too (2026-08-28)
 - [x] On a phone an approve or a dismiss brings the change on screen when it is off screen, and leaves the note alone when the change is already in view (2026-08-28)
