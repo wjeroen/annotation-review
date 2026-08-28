@@ -244,7 +244,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (editor) {
 			// Going through the editor keeps this in the undo history and
 			// leaves any unsaved edits elsewhere in the note untouched.
-			editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
+			// Obsidian's own replaceRange always dispatches scrollIntoView,
+			// which sends the note to wherever the caret sits. On a phone that
+			// is often the very start, since a card tap there never focuses
+			// the note. The same change handed straight to CodeMirror carries
+			// no scroll, so the note stays where it is. The desktop keeps
+			// Obsidian's call, where a card tap has already put the caret and
+			// the focus on the annotation.
+			const cm = Platform.isMobile ? (editor as EditorWithCm).cm : undefined;
+			if (cm) cm.dispatch({ changes: { from: result.from, to: result.to, insert: result.replacement } });
+			else editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
 		} else {
 			await this.app.vault.modify(file, result.newContent);
 		}
@@ -402,10 +411,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 		}
 
 		// On mobile, focusing the editor raises the keyboard, which then covers
-		// half the screen for a tap that only meant "show me". So there the
-		// note is scrolled and nothing else, not even the caret moves. The
-		// drawer is left open: closing it was tried and found annoying.
+		// half the screen for a tap that only meant "show me". So the caret
+		// moves and the note scrolls, and focus stays in the sidebar. Without
+		// focus CodeMirror never writes the selection into the page, so no
+		// keyboard comes up, while the caret still marks the spot the note
+		// returns to after an edit. The drawer is left open: closing it was
+		// tried and found annoying.
 		if (Platform.isMobile) {
+			view.editor.setSelection(from, to);
 			view.editor.scrollIntoView({ from, to }, true);
 			return;
 		}
