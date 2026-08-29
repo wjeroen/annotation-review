@@ -110,6 +110,19 @@ A gutter draws a colored line down the left edge of every annotated line, in liv
 - **Refresh button**: an icon-only button in the filter row forces a rescan of the active note if the list ever looks stale.
 - **Finding the text**: clicking a card opens the note and selects the whole annotation, so it is obvious which one the card refers to. In reading view nothing can be selected, so it scrolls to the line instead. On a phone or tablet it moves the caret and scrolls, but leaves focus in the sidebar, so the keyboard stays down and the selection is not drawn. There an approve or a dismiss brings the change on screen when it is off screen, and leaves the note alone when the change is already in view.
 
+### Linked annotations
+
+A move is two annotations, a deletion in one place and an insertion in another, and approving one while dismissing the other leaves the note broken. Writing the same link on both makes them one decision:
+
+```
+{--{"author":"Claude","link":"move"}@@This sentence moves down. --}
+{++{"author":"Claude","link":"move"}@@This sentence moves down. ++}
+```
+
+The lighter form puts it in a second bracket, `[Claude][Lmove]@@`, or `[][Lmove]@@` with nobody signing it. Any number of annotations can share a link, and the name is anything you like, note-wide.
+
+In the sidebar they are drawn together where the first of them sits, however far apart they are in the note, on a thread with a header that approves or dismisses all of them at once. Each keeps its own card, line number and buttons, so a set can still be taken apart on purpose. A link with nobody else on it shows as an ordinary card.
+
 ## Settings
 
 The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.

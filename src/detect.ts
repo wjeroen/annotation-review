@@ -53,8 +53,13 @@ const PERCENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
 const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
 const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
-/** An author terminated by `@@`, in either spelling. */
-const META_REGEX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
+/**
+ * An author terminated by `@@`, in either spelling, with an optional second
+ * bracket after it. The second one is a marker rather than a name: `[Lname]`
+ * links annotations that belong together. The first may be empty, `[]`, for a
+ * marker on something nobody signed.
+ */
+const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])(\[[^\]]*\])?@@/;
 /** A plain `[Author] ` label, only meaningful at the start of prose. */
 const LABEL_REGEX = /^\[([^\]]+)\]\s*/;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
@@ -103,7 +108,7 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 
 /** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
 function readMeta(raw: string): { author?: string; meta?: Record<string, unknown> } {
-	if (raw.startsWith("[")) return { author: raw.slice(1, -1) };
+	if (raw.startsWith("[")) return { author: raw.slice(1, -1) || undefined };
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
@@ -118,8 +123,15 @@ function readMeta(raw: string): { author?: string; meta?: Record<string, unknown
 	return { author: typeof value === "string" && value ? value : undefined, meta: fields };
 }
 
+/** The link carried in metadata, `{"author":"X","link":"move"}`. */
+function linkIn(meta?: Record<string, unknown>): string | undefined {
+	const value = meta?.link;
+	return typeof value === "string" && value ? value : undefined;
+}
+
 interface AuthorParse {
 	author?: string;
+	link?: string;
 	authorSpan?: TextSpan;
 	authorMeta?: Record<string, unknown>;
 	/** Where the text after the author begins. */
@@ -136,7 +148,15 @@ function parseAuthorAt(text: string, contentStart: number, contentEnd: number, a
 	const m = META_REGEX.exec(segment);
 	if (m) {
 		const { author, meta } = readMeta(m[1]);
-		return { author, authorMeta: meta, authorSpan: { start: contentStart, end: contentStart + m[0].length }, restStart: contentStart + m[0].length };
+		const tag = m[2] ? m[2].slice(1, -1) : "";
+		const link = tag.length > 1 && tag.startsWith("L") ? tag.slice(1) : linkIn(meta);
+		return {
+			author,
+			link,
+			authorMeta: meta,
+			authorSpan: { start: contentStart, end: contentStart + m[0].length },
+			restStart: contentStart + m[0].length
+		};
 	}
 	if (allowLabel) {
 		const l = LABEL_REGEX.exec(segment);
@@ -246,6 +266,7 @@ function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
 	const textSpan = trimmedSpan(fullMatch, a.restStart, entry.contentEnd);
 	return {
 		author: a.author,
+		link: a.link,
 		authorSpan: a.authorSpan,
 		authorMeta: a.authorMeta,
 		authorInsert: authorInsertFor(entry.contentStart, entry.channel === "brace" ? "brace" : "label"),
@@ -394,6 +415,7 @@ function buildAnnotation(
 	const originalSpan = body.originalSpan ? { ...body.originalSpan } : undefined;
 	const bodySpan = body.bodySpan ? { ...body.bodySpan } : undefined;
 	let author: string | undefined;
+	let link: string | undefined;
 	let authorSpan: TextSpan | undefined;
 	let authorMeta: Record<string, unknown> | undefined;
 	let authorInsert: InsertPoint;
@@ -403,6 +425,7 @@ function buildAnnotation(
 		// The note is prose, so a plain label counts as well as the @@ forms.
 		const a = parseAuthorAt(fullMatch, selfEntry.contentStart, selfEntry.contentEnd, true);
 		author = a.author;
+		link = a.link;
 		authorSpan = a.authorSpan;
 		authorMeta = a.authorMeta;
 		commentSpan = trimmedSpan(fullMatch, a.restStart, selfEntry.contentEnd);
@@ -415,6 +438,7 @@ function buildAnnotation(
 			const a = parseAuthorAt(fullMatch, lead.start, lead.end, false);
 			if (a.authorSpan) {
 				author = a.author;
+				link = a.link;
 				authorSpan = a.authorSpan;
 				authorMeta = a.authorMeta;
 				lead.start = a.restStart;
@@ -438,12 +462,13 @@ function buildAnnotation(
 		isPoint,
 		// A highlight or hidden text with nothing attached and nobody named
 		// could be ordinary Obsidian markup. A >> comment never is.
-		isPlain: body.type === "comment" && !isPoint && !author && replies.length === 0,
+		isPlain: body.type === "comment" && !isPoint && !author && !link && replies.length === 0,
 		originalText: slice(originalSpan) ?? "",
 		commentText: slice(commentSpan),
 		insertedText: slice(bodySpan),
 		replacement: slice(body.replacementSpan),
 		author,
+		link,
 		authorSpan,
 		authorMeta,
 		authorInsert,

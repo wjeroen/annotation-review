@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Annotations can be linked, `[X][Lname]@@` or a `link` field in the metadata, and a linked set is drawn together in the sidebar on a thread, with a header that approves or dismisses all of it. Each member keeps its own card and buttons (2026-08-29)
 - [x] A line with several kinds of annotation shows a color for each, side by side in the order they appear, never above each other. The line grows with the number of colors and stays right aligned. Two settings in pixels: the thickness of one band, 1 to 10, and the space between two bands, 0 to 5 (2026-08-29)
 - [x] The gutter line runs unbroken through a block of annotated lines, instead of breaking at every paragraph. The space beside the line now means the same in the margin and in the text column, since Obsidian's 24px is dropped in both, and the slider reaches 40 so the old 29 is available (2026-08-29)
 - [x] The gutter position is a setting, in the margin or in the text column as older versions had it, with a slider for the space between the line and the text. Both reach the stylesheet as a class and a variable on the body (2026-08-29)

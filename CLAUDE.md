@@ -62,6 +62,8 @@ These are all real bugs that shipped once, or rules that were easy to get wrong.
 
 **Obsidian never opens a highlight that starts with `>`.** Its live preview mode checks `/^[^\s>]/` after an opening `==`, so `==>>note<<==` is plain text to it and the closing `==` becomes an opener that runs to the end of the line. Reading view has no such rule. That is why a comment on a spot is braces or percent marks only, with its own setting, and why the parser skips the highlight form whole instead of consuming one mark.
 
+**A link is a second bracket, or a metadata field.** \`[X][Lname]@@\` and \`{"author":"X","link":"name"}@@\` put an annotation in a set, and the sidebar draws the set together with a header that acts on all of it. The link is read into \`link\` and left where it was found, so rewriting the author keeps it. Names are note-wide, and a set of one is drawn as an ordinary card. Acting on a whole set walks it from the last member backwards, since replacing an earlier one moves everything after it.
+
 **Only braces nest.** Their opening and closing marks differ, so depth can be counted. `==` and `%%` cannot nest at all, and the way to insert inside a percent mark insertion is to close and reopen it, operator included: `%%++A ++%%%%++X++%%%%++B++%%`. The insert command does this through `getInsertContext`, which also reports which operator the surrounding annotation uses so the halves stay well formed. Get this wrong and the surrounding text escapes its comment and becomes visible prose.
 
 **Percent marks do not render inside fenced blocks**, admonitions included, so they are ignored there and the commands fall back to a highlight.

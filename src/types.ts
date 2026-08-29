@@ -44,6 +44,12 @@ export interface Authored {
 	authorSpan?: TextSpan;
 	/** The other fields of a metadata object, kept so editing the author does not drop them. */
 	authorMeta?: Record<string, unknown>;
+	/**
+	 * The name of the set this belongs to, from `[X][Lname]@@` or a `link`
+	 * field in the metadata. Annotations that share one are one decision: a
+	 * move is a deletion in one place and an insertion in another.
+	 */
+	link?: string;
 	/** Where an author goes when there is none, and the syntax to wrap it in. */
 	authorInsert: InsertPoint;
 }

@@ -735,6 +735,47 @@ body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 	height: calc(100% + 20px);
 }
 
+/* A linked set: a header that acts on all of them, and a thread down the
+   left of the cards, so they read as one decision with several parts. */
+.annotation-review-linked {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.annotation-review-linked-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.annotation-review-linked-label {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.annotation-review-linked-icon {
+	display: flex;
+	align-items: center;
+}
+
+.annotation-review-linked-header .annotation-review-actions {
+	margin-top: 0;
+}
+
+.annotation-review-linked-body {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-left: 2px solid var(--text-faint);
+	padding-left: 8px;
+}
+
 /* Modals for creating annotations from the editor */
 
 .annotation-review-modal-textarea {

@@ -107,8 +107,10 @@ function rewriteAuthor(current: string, author: string, meta?: Record<string, un
 		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
 		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 	}
-	if (!author) return "";
-	if (current.endsWith("@@")) return `[${author}]@@`;
+	// A second bracket is a marker rather than a name, so it stays put.
+	const tag = /^\[[^\]]*\](\[[^\]]*\])@@$/.exec(current)?.[1] ?? "";
+	if (!author) return tag ? `[]${tag}@@` : "";
+	if (current.endsWith("@@")) return `[${author}]${tag}@@`;
 	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
 }
 
@@ -419,14 +421,18 @@ export class AnnotationReviewView extends ItemView {
 	private renderAnnotationsList(container: Element) {
 		const annotations = this.plugin.annotations;
 		const filters = this.plugin.settings.filters;
-		const filtered = annotations.filter(a => {
+		const matches = (a: Annotation) => {
 			if (!filters[a.type]) return false;
 			if (!a.author && !filters.noAuthor) return false;
 			if (a.isPlain && !filters.plain) return false;
 			if (this.selectedAuthor === ALL_VALUE) return true;
 			if (this.selectedAuthor === NO_AUTHOR) return !a.author;
 			return a.author === this.selectedAuthor;
-		});
+		};
+		// A linked set stays whole as soon as one of its members matches. Half
+		// a move in the list is worse than a card the filter did not ask for.
+		const kept = new Set(annotations.filter(matches).map(a => a.link).filter((link): link is string => !!link));
+		const filtered = annotations.filter(a => matches(a) || (a.link !== undefined && kept.has(a.link)));
 
 		const list = container.createEl("div", { cls: "annotation-review-list" });
 		if (filtered.length === 0) {
@@ -437,9 +443,65 @@ export class AnnotationReviewView extends ItemView {
 			return;
 		}
 
+		const sets = new Map<string, Annotation[]>();
 		for (const annotation of filtered) {
-			this.renderAnnotationItem(list, annotation);
+			if (!annotation.link) continue;
+			const members = sets.get(annotation.link) ?? [];
+			members.push(annotation);
+			sets.set(annotation.link, members);
 		}
+
+		const drawn = new Set<string>();
+		for (const annotation of filtered) {
+			const members = annotation.link ? sets.get(annotation.link) : undefined;
+			// A link with nobody else on it is just an annotation.
+			if (!members || members.length < 2) {
+				this.renderAnnotationItem(list, annotation);
+				continue;
+			}
+			if (drawn.has(annotation.link as string)) continue;
+			drawn.add(annotation.link as string);
+			this.renderLinkedSet(list, members);
+		}
+	}
+
+	/**
+	 * Annotations that carry the same link are one decision, a move being a
+	 * deletion in one place and an insertion in another, so they are drawn
+	 * together where the first of them sits, however far apart they are in the
+	 * note. The header acts on all of them at once. Each keeps its own card,
+	 * its own line number and its own buttons, since a set can still be taken
+	 * apart on purpose.
+	 */
+	private renderLinkedSet(container: Element, members: Annotation[]) {
+		const box = container.createEl("div", { cls: "annotation-review-linked" });
+		const header = box.createEl("div", { cls: "annotation-review-linked-header" });
+		const label = header.createEl("span", { cls: "annotation-review-linked-label" });
+		setIcon(label.createEl("span", { cls: "annotation-review-linked-icon" }), "link");
+		label.createEl("span", { text: `${members.length} linked` });
+
+		const actions = header.createEl("div", { cls: "annotation-review-actions" });
+		// A comment cannot be approved, so the button is only there for a set
+		// that holds something else.
+		if (members.some(a => a.type !== "comment")) {
+			const approveBtn = actions.createEl("button", { cls: "annotation-review-approve" });
+			setIcon(approveBtn.createEl("span", { cls: "annotation-review-action-icon" }), "check");
+			approveBtn.createEl("span", { cls: "annotation-review-action-label", text: "Approve all" });
+			approveBtn.addEventListener("click", evt => {
+				evt.stopPropagation();
+				this.plugin.applyLinkedAction(members, "approve");
+			});
+		}
+		const dismissBtn = actions.createEl("button", { cls: "annotation-review-dismiss" });
+		setIcon(dismissBtn.createEl("span", { cls: "annotation-review-action-icon" }), "x");
+		dismissBtn.createEl("span", { cls: "annotation-review-action-label", text: "Dismiss all" });
+		dismissBtn.addEventListener("click", evt => {
+			evt.stopPropagation();
+			this.plugin.applyLinkedAction(members, "dismiss");
+		});
+
+		const thread = box.createEl("div", { cls: "annotation-review-linked-body" });
+		for (const annotation of members) this.renderAnnotationItem(thread, annotation);
 	}
 
 	/** A text field that turns into an inline editor on click. */

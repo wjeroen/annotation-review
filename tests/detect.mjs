@@ -303,5 +303,17 @@ const block = "```ad-c\nNote.\n```";
 const doc = `Before.\n\n${block}\n\nAfter.`;
 check("collapses to one blank line", computeRemoval(doc, doc.indexOf(block), block).newContent, "Before.\n\nAfter.");
 
+console.log("\n=== A link makes several annotations one decision ===");
+const MOVE = '{--[Claude][Lmove]@@gone --}and later {++[Claude][Lmove]@@gone ++}here.';
+check("link in metadata", [one('{--{"author":"Claude","link":"move"}@@gone--}').author, one('{--{"author":"Claude","link":"move"}@@gone--}').link], ["Claude", "move"]);
+check("link in the light form", [one('==--[Claude][Lmove]@@gone--==').author, one('==--[Claude][Lmove]@@gone--==').link], ["Claude", "move"]);
+check("link with nobody signing it", [one('{++[][Lmove]@@added++}').author ?? null, one('{++[][Lmove]@@added++}').link], [null, "move"]);
+check("a linked highlight is not a plain one", one('{==[][Lmove]@@text==}').isPlain, false);
+check("the text after a link keeps its spaces", one('{++[Claude][Lmove]@@is ++}').insertedText, "is ");
+check("both ends of a move carry it", all(MOVE).map(a => a.link), ["move", "move"]);
+check("no link is no link", one('{--[Claude]@@gone--}').link ?? null, null);
+check("one end can still be approved on its own", computeMutation(MOVE, all(MOVE)[0], "approve").newContent, "and later {++[Claude][Lmove]@@gone ++}here.");
+check("and the other end after it", computeMutation(computeMutation(MOVE, all(MOVE)[1], "approve").newContent, all(MOVE)[0], "approve").newContent, "and later gone here.");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

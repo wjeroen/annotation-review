@@ -371,6 +371,19 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	/**
+	 * Every annotation on one link, in one go. The note is rewritten from the
+	 * last of them backwards, so the ones still to come keep their place while
+	 * the ones behind them are replaced. A comment cannot be approved, so an
+	 * approve steps over it and leaves it in the note.
+	 */
+	async applyLinkedAction(annotations: Annotation[], action: AnnotationAction) {
+		for (const annotation of [...annotations].sort((a, b) => b.matchStart - a.matchStart)) {
+			if (action === "approve" && annotation.type === "comment") continue;
+			await this.applyAction(annotation, action);
+		}
+	}
+
+	/**
 	 * The reply field is prefilled with an author bracket, so the text typed
 	 * into it carries whatever label the user wants. The label is read back
 	 * off the front and written in the annotation's own channel.
