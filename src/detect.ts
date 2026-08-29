@@ -55,10 +55,10 @@ const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
 /**
  * An author terminated by `@@`, in either spelling. The bracket may be empty,
- * and it may end in a marker, `[Claude L3]`, which names the set the
- * annotation belongs to rather than a person. A second bracket is not used
- * for that: `[Claude][L3]` is a reference link in markdown, so Obsidian eats
- * the brackets and draws the name as a link.
+ * and it may carry markers behind colons, `[Claude:L3]`, which name the set
+ * the annotation belongs to rather than a person. A second bracket is not
+ * used for that: `[Claude][L3]` is a reference link in markdown, so Obsidian
+ * eats the brackets and draws the name as a link.
  */
 const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])@@/;
 /** A plain `[Author] ` label, only meaningful at the start of prose. */
@@ -109,15 +109,19 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 
 /** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
 /**
- * A label is a name, a marker, or both. A marker is a letter and digits with
- * nothing else, so only a person called L3 loses their name to one, and the
- * metadata form is there for them.
+ * A label is a name, then any number of markers behind colons. A colon never
+ * appears in a name, so nothing is guessed: `[Claude:L3]` is Claude in set 3,
+ * `[:L3]` is set 3 with nobody signing it, and `[L3]` is a person called L3.
+ * A marker we do not know is left where it is.
  */
 function readLabel(raw: string): { author?: string; link?: string } {
-	const inside = raw.slice(1, -1).trim();
-	const m = /^(.*?)\s*L(\d+)$/.exec(inside);
-	if (m) return { author: m[1] || undefined, link: m[2] };
-	return { author: inside || undefined };
+	const parts = raw.slice(1, -1).split(":").map(part => part.trim());
+	const author = parts[0] || undefined;
+	for (const marker of parts.slice(1)) {
+		const m = /^L(\d+)$/.exec(marker);
+		if (m) return { author, link: m[1] };
+	}
+	return { author };
 }
 
 function readMeta(raw: string): { author?: string; link?: string; meta?: Record<string, unknown> } {
@@ -172,7 +176,12 @@ function parseAuthorAt(text: string, contentStart: number, contentEnd: number, a
 	}
 	if (allowLabel) {
 		const l = LABEL_REGEX.exec(segment);
-		if (l) return { author: l[1], authorSpan: { start: contentStart, end: contentStart + l[0].length }, restStart: contentStart + l[0].length };
+		if (l) {
+			// A marker is read off a label as well, so a name with one behind
+			// it comes out as the name.
+			const { author } = readLabel(`[${l[1]}]`);
+			return { author, authorSpan: { start: contentStart, end: contentStart + l[0].length }, restStart: contentStart + l[0].length };
+		}
 	}
 	return { restStart: contentStart };
 }

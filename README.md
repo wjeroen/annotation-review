@@ -119,7 +119,7 @@ A move is two annotations, a deletion in one place and an insertion in another, 
 {++{"author":"Claude","link":3}@@This sentence moves down. ++}
 ```
 
-The lighter form puts it after the name, `[Claude L3]@@`, or `[L3]@@` with nobody signing it. A link is a number, counted per note, and any number of annotations can share one. Only changes carry links, since a comment is never approved. A second bracket is not used for this, because `[Claude][L3]` is a reference link in markdown and Obsidian draws it as one.
+The lighter form puts it behind a colon, `[Claude:L3]@@`, or `[:L3]@@` with nobody signing it. A colon never appears in a name, so `[L3]@@` is still a person called L3. A link is a number, counted per note, and any number of annotations can share one. Only changes carry links, since a comment is never approved. A second bracket is not used for this, because `[Claude][L3]` is a reference link in markdown and Obsidian draws it as one.
 
 In the sidebar they are drawn together where the first of them sits, however far apart they are in the note, on a thread with a header that approves or dismisses all of them at once. Each keeps its own card, line number and buttons, so a set can still be taken apart on purpose. A link with nobody else on it shows as an ordinary card.
 
