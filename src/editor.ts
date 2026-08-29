@@ -315,9 +315,11 @@ function marker(kinds: string[], joined: boolean, band: number, between: number)
  *
  * CodeMirror gives each gutter element the height of its own line and turns
  * whatever sits between two lines into a margin on the next one, which broke
- * the line at every paragraph. So a strip whose next line is marked as well
- * reaches past its own line, far enough to cross that margin. The overhang
- * lands under the next strip, which is drawn after it.
+ * the line at every paragraph. So a strip reaches past its own line, far
+ * enough to cross that margin, whenever the next line draws exactly the same
+ * colors. Then the overhang lands under the next strip and nobody sees it.
+ * With different colors it would not: the bands are right aligned, so a wider
+ * line would leave its leftmost bands hanging below itself.
  */
 function diffGutter(settings: EditorRenderSettings) {
 	return gutter({
@@ -327,7 +329,7 @@ function diffGutter(settings: EditorRenderSettings) {
 			if (kinds.length === 0) return null;
 			const doc = view.state.doc;
 			const next = line.to + 1 <= doc.length ? doc.lineAt(line.to + 1) : null;
-			const joined = next !== null && kindsOn(view.state, next.from, next.to).length > 0;
+			const joined = next !== null && kindsOn(view.state, next.from, next.to).join(" ") === kinds.join(" ");
 			return marker(kinds, joined, settings.gutterBand, settings.gutterBandGap);
 		},
 		lineMarkerChange: update => update.docChanged,
