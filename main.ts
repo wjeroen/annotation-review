@@ -196,10 +196,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 		document.body.style.setProperty("--arv-chip-alpha", String(this.settings.authorChipOpacity));
 		document.body.style.setProperty("--arv-badge-alpha", String(this.settings.typeBadgeOpacity));
 		document.body.style.setProperty("--arv-gutter-gap", `${this.settings.gutterGap}px`);
-		// The column is as wide as the widest line it can hold, so the text
-		// does not move as lines with one, two or three colors scroll by.
-		const thickness = this.settings.gutterThickness;
-		const total = this.settings.gutterMultiStyle === "split" ? thickness : Math.round(thickness / 2) * 3;
+		// The column is as wide as the widest line it can hold, three bands and
+		// the two spaces between them, so the text does not move as lines with
+		// one, two or three colors scroll by.
+		const total = this.settings.gutterBand * 3 + this.settings.gutterBandGap * 2;
 		document.body.style.setProperty("--arv-gutter-total", `${total}px`);
 		document.body.classList.toggle("arv-gutter-in-margin", this.settings.gutterPosition === "margin");
 	}

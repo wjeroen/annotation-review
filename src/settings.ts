@@ -62,10 +62,10 @@ export interface AnnotationReviewSettings {
 	gutterPosition: GutterPosition;
 	/** Pixels between the gutter line and the text. */
 	gutterGap: number;
-	/** Thickness of the line in pixels, a multiple of 3 so three colors divide evenly. */
-	gutterThickness: number;
-	/** A line with more than one kind of annotation shares the thickness, or takes a band per kind. */
-	gutterMultiStyle: GutterMultiStyle;
+	/** Thickness of one color band in pixels. */
+	gutterBand: number;
+	/** Pixels between two bands. */
+	gutterBandGap: number;
 	/** Colors chosen per author, winning over the one computed from the name. */
 	authorColors: AuthorColors;
 	/** Strength of the fill behind author chips and type badges, 0 to 1. */
@@ -89,15 +89,14 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	showGutter: true,
 	gutterPosition: "margin",
 	gutterGap: 5,
-	gutterThickness: 6,
-	gutterMultiStyle: "split",
+	gutterBand: 6,
+	gutterBandGap: 0,
 	authorColors: {},
 	authorChipOpacity: 0.45,
 	typeBadgeOpacity: 1
 };
 
 export type GutterPosition = "margin" | "column";
-export type GutterMultiStyle = "split" | "side";
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
 	brace: "Braces",
@@ -232,42 +231,30 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 			this.plugin.applyEditorSettings();
 		});
-		new Setting(containerEl)
-			.setName("Gutter thickness")
-			.setDesc("Width of the line in pixels.")
-			.addSlider(slider =>
-				slider
-					.setLimits(6, 18, 3)
-					.setValue(settings.gutterThickness)
-					.setDynamicTooltip()
-					.onChange(async value => {
-						settings.gutterThickness = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyEditorSettings();
-					})
-			);
-		const several = new Setting(containerEl)
-			.setName("Several annotations on a line")
-			.setDesc("Deletions, insertions and comments each get a color, in the order they appear.");
-		addDropdown(several, { split: "Share the thickness", side: "A band for each" }, settings.gutterMultiStyle, async value => {
-			settings.gutterMultiStyle = value as GutterMultiStyle;
-			await this.plugin.saveSettings();
-			this.plugin.applyEditorSettings();
-		});
-		new Setting(containerEl)
-			.setName("Space beside the gutter line")
-			.setDesc("Pixels between the line and the text. Older versions had 29, in the text column.")
-			.addSlider(slider =>
-				slider
-					.setLimits(0, 40, 1)
-					.setValue(settings.gutterGap)
-					.setDynamicTooltip()
-					.onChange(async value => {
-						settings.gutterGap = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyEditorSettings();
-					})
-			);
+		const pixels = (name: string, desc: string, key: "gutterBand" | "gutterBandGap" | "gutterGap", min: number, max: number) =>
+			new Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addSlider(slider =>
+					slider
+						.setLimits(min, max, 1)
+						.setValue(settings[key])
+						.setDynamicTooltip()
+						.onChange(async value => {
+							settings[key] = value;
+							await this.plugin.saveSettings();
+							this.plugin.applyEditorSettings();
+						})
+				);
+		pixels(
+			"Gutter thickness",
+			"Pixels per color. A deletion, an insertion and a comment on one line each get a band, in the order they appear.",
+			"gutterBand",
+			1,
+			10
+		);
+		pixels("Space between the bands", "Pixels.", "gutterBandGap", 0, 5);
+		pixels("Space beside the gutter line", "Pixels between the line and the text.", "gutterGap", 0, 40);
 
 		new Setting(containerEl).setName("Chips").setHeading();
 

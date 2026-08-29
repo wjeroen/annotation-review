@@ -24,7 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
-- [x] A line with several kinds of annotation shows a color for each, side by side in the order they appear, never above each other. Two settings: the thickness, 6 to 18 in threes, and whether the colors share it or each take a band, which widens the line and keeps it right aligned (2026-08-29)
+- [x] A line with several kinds of annotation shows a color for each, side by side in the order they appear, never above each other. The line grows with the number of colors and stays right aligned. Two settings in pixels: the thickness of one band, 1 to 10, and the space between two bands, 0 to 5 (2026-08-29)
 - [x] The gutter line runs unbroken through a block of annotated lines, instead of breaking at every paragraph. The space beside the line now means the same in the margin and in the text column, since Obsidian's 24px is dropped in both, and the slider reaches 40 so the old 29 is available (2026-08-29)
 - [x] The gutter position is a setting, in the margin or in the text column as older versions had it, with a slider for the space between the line and the text. Both reach the stylesheet as a class and a variable on the body (2026-08-29)
 - [x] Tapping an annotation in the note with the sidebar drawer closed now leaves the right card marked and in view when the drawer is opened, the first tap in a note included. A panel that is off screen cannot scroll, so the scroll waits, and the card is read from the plugin at that moment (2026-08-29)

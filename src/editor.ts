@@ -4,7 +4,7 @@ import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
 import { Annotation, Authored, TextSpan } from "./types";
 import { AuthorColors, applyChipColor, authorColor, chipStyle } from "./authors";
-import { AuthorStyle, GutterMultiStyle } from "./settings";
+import { AuthorStyle } from "./settings";
 
 /*
  * Drawing annotations in the editor.
@@ -30,8 +30,8 @@ export interface EditorRenderSettings {
 	changeAuthorStyle: AuthorStyle;
 	commentAuthorStyle: AuthorStyle;
 	showGutter: boolean;
-	gutterThickness: number;
-	gutterMultiStyle: GutterMultiStyle;
+	gutterBand: number;
+	gutterBandGap: number;
 	authorColors: AuthorColors;
 }
 
@@ -238,13 +238,6 @@ const GUTTER_COLOR: Record<string, string> = {
 	comment: "var(--arv-gutter-comment)"
 };
 
-/** A width shared out over the bands, the first one keeping the odd pixel. */
-function shareOut(total: number, count: number): number[] {
-	const each = Math.floor(total / count);
-	const over = total - each * count;
-	return Array.from({ length: count }, (_, i) => each + (i < over ? 1 : 0));
-}
-
 /**
  * What happens on the line, in the order it appears, each thing once. A
  * replacement takes text away and puts text back, so it counts as both. A
@@ -264,20 +257,17 @@ function kindsOn(state: EditorState, from: number, to: number): string[] {
 }
 
 /**
- * The line beside one text line. The colors stand next to each other rather
- * than above each other, since a color above another reads as if it belonged
- * to the words beside it, while the whole line is what it marks.
- *
- * Sharing the width keeps every line the same thickness. A line for each
- * gives every color the same band and lets the line grow, right aligned, so
- * the lines end together against the text.
+ * The line beside one text line: one band per color, side by side. Above
+ * each other a color would read as if it belonged to the words beside it,
+ * while the whole line is what it marks. The bands are drawn as one gradient
+ * with hard edges, so a band and the space after it are exact pixels.
  */
 class LineMarker extends GutterMarker {
 	constructor(
 		readonly kinds: string,
 		readonly joined: boolean,
-		readonly style: GutterMultiStyle,
-		readonly thickness: number
+		readonly band: number,
+		readonly between: number
 	) {
 		super();
 	}
@@ -285,41 +275,43 @@ class LineMarker extends GutterMarker {
 		return (
 			other.kinds === this.kinds &&
 			other.joined === this.joined &&
-			other.style === this.style &&
-			other.thickness === this.thickness
+			other.band === this.band &&
+			other.between === this.between
 		);
 	}
 	toDOM() {
-		const kinds = this.kinds.split(" ");
-		const widths =
-			this.style === "split" ? shareOut(this.thickness, kinds.length) : kinds.map(() => Math.round(this.thickness / 2));
 		const el = document.createElement("div");
 		el.className = this.joined ? "arv-gutter arv-gutter-joined" : "arv-gutter";
+		const stops: string[] = [];
 		let at = 0;
-		const bands = kinds.map((kind, i) => {
-			const from = at;
-			at += widths[i];
-			return `${GUTTER_COLOR[kind]} ${from}px ${at}px`;
-		});
+		for (const kind of this.kinds.split(" ")) {
+			if (at > 0 && this.between > 0) {
+				stops.push(`transparent ${at}px ${at + this.between}px`);
+				at += this.between;
+			}
+			stops.push(`${GUTTER_COLOR[kind]} ${at}px ${at + this.band}px`);
+			at += this.band;
+		}
 		el.style.width = `${at}px`;
-		el.style.background = `linear-gradient(to right, ${bands.join(", ")})`;
+		el.style.background = `linear-gradient(to right, ${stops.join(", ")})`;
 		return el;
 	}
 }
 
 const markers = new Map<string, LineMarker>();
 /** One marker object per look, since CodeMirror compares them by identity first. */
-function marker(kinds: string[], joined: boolean, style: GutterMultiStyle, thickness: number): LineMarker {
+function marker(kinds: string[], joined: boolean, band: number, between: number): LineMarker {
 	const list = kinds.join(" ");
-	const key = `${list}|${joined}|${style}|${thickness}`;
+	const key = `${list}|${joined}|${band}|${between}`;
 	let found = markers.get(key);
-	if (!found) markers.set(key, (found = new LineMarker(list, joined, style, thickness)));
+	if (!found) markers.set(key, (found = new LineMarker(list, joined, band, between)));
 	return found;
 }
 
 /**
  * A line down the left edge of every line an annotation touches, in the
- * colors of what happens there.
+ * colors of what happens there, right aligned so lines of one, two or three
+ * colors all end against the text.
  *
  * CodeMirror gives each gutter element the height of its own line and turns
  * whatever sits between two lines into a margin on the next one, which broke
@@ -336,10 +328,10 @@ function diffGutter(settings: EditorRenderSettings) {
 			const doc = view.state.doc;
 			const next = line.to + 1 <= doc.length ? doc.lineAt(line.to + 1) : null;
 			const joined = next !== null && kindsOn(view.state, next.from, next.to).length > 0;
-			return marker(kinds, joined, settings.gutterMultiStyle, settings.gutterThickness);
+			return marker(kinds, joined, settings.gutterBand, settings.gutterBandGap);
 		},
 		lineMarkerChange: update => update.docChanged,
-		initialSpacer: () => marker(["delete"], false, settings.gutterMultiStyle, settings.gutterThickness)
+		initialSpacer: () => marker(["delete"], false, settings.gutterBand, settings.gutterBandGap)
 	});
 }
 
