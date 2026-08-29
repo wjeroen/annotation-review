@@ -73,6 +73,21 @@ function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	lift();
 }
 
+/**
+ * Every name on an annotation, its own and the ones on its comments. A
+ * comment on a selection carries its author on the comment rather than on
+ * the annotation, so reading only the annotation left the writer out of the
+ * filter and put their card under No author.
+ */
+function authorsOf(annotation: Annotation): string[] {
+	const names: string[] = [];
+	if (annotation.author) names.push(annotation.author);
+	for (const reply of annotation.replies) {
+		if (reply.author && !names.includes(reply.author)) names.push(reply.author);
+	}
+	return names;
+}
+
 export const VIEW_TYPE_ANNOTATION_REVIEW = "annotation-review-view";
 
 const TYPE_LABELS: Record<AnnotationType, string> = {
@@ -287,8 +302,9 @@ export class AnnotationReviewView extends ItemView {
 			let hasNoAuthor = false;
 			let hasMoreReplies = false;
 			for (const a of this.plugin.annotations) {
-				if (a.author) authors.add(a.author);
-				else hasNoAuthor = true;
+				const names = authorsOf(a);
+				for (const name of names) authors.add(name);
+				if (names.length === 0) hasNoAuthor = true;
 				const extra = a.replies.length - (this.noteOf(a) ? 1 : 0);
 				if (extra > 1) hasMoreReplies = true;
 			}
@@ -423,11 +439,12 @@ export class AnnotationReviewView extends ItemView {
 		const filters = this.plugin.settings.filters;
 		const matches = (a: Annotation) => {
 			if (!filters[a.type]) return false;
-			if (!a.author && !filters.noAuthor) return false;
+			const names = authorsOf(a);
+			if (names.length === 0 && !filters.noAuthor) return false;
 			if (a.isPlain && !filters.plain) return false;
 			if (this.selectedAuthor === ALL_VALUE) return true;
-			if (this.selectedAuthor === NO_AUTHOR) return !a.author;
-			return a.author === this.selectedAuthor;
+			if (this.selectedAuthor === NO_AUTHOR) return names.length === 0;
+			return names.includes(this.selectedAuthor);
 		};
 		// A linked set stays whole as soon as one of its members matches. Half
 		// a move in the list is worse than a card the filter did not ask for.
