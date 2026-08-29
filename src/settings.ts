@@ -247,7 +247,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 						})
 				);
 		pixels(
-			"Gutter thickness",
+			"Band thickness",
 			"Pixels per color. A deletion, an insertion and a comment on one line each get a band, in the order they appear.",
 			"gutterBand",
 			1,
