@@ -20,7 +20,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 ### Agreed for a next version
 
 - [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
-- [ ] **Timestamps**, as a marker behind a colon, `[Author:T1755000000]@@`, beside a link when there is one, `[Author:L3:T1755000000]@@`. The CriticMarkup plugin's `time` field maps to the same thing. Read it, show it on cards, sort replies by it. Decided in format, not built. Open: whether a bracket that holds only a marker, `[T1755000000]@@` or `[L3]@@`, is that marker with nobody signing it, which is what the first note on timestamps said, or a person with that name, which is what the parser does today. `[:T1755000000]@@` and `[:L3]@@` are the unambiguous forms either way.
+- [ ] **Timestamps**, as a marker behind a colon, `[Author:T1755000000]@@`, beside a link when there is one, `[Author:L3:T1755000000]@@`. The CriticMarkup plugin's `time` field maps to the same thing. Read it, show it on cards, sort replies by it. Decided in format, not built. A bracket holding only a marker is that marker with nobody signing it, and the parser already keeps `T` and digits out of the name.
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently

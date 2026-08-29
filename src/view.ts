@@ -122,14 +122,14 @@ function rewriteAuthor(current: string, author: string, meta?: Record<string, un
 		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
 		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 	}
-	// The markers behind the colons are not part of the name, so they stay put.
+	// The markers are not part of the name, so they stay put. They are known
+	// by their shape, a letter and digits, wherever in the bracket they sit.
 	const label = /^\[([^\]]*)\]@@$/.exec(current);
 	if (label) {
 		const markers = label[1]
 			.split(":")
-			.slice(1)
 			.map(part => part.trim())
-			.filter(Boolean);
+			.filter(part => /^[LT]\d+$/.test(part));
 		const tail = markers.length ? `:${markers.join(":")}` : "";
 		return author || tail ? `[${author}${tail}]@@` : "";
 	}

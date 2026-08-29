@@ -109,19 +109,24 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 
 /** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
 /**
- * A label is a name, then any number of markers behind colons. A colon never
- * appears in a name, so nothing is guessed: `[Claude:L3]` is Claude in set 3,
- * `[:L3]` is set 3 with nobody signing it, and `[L3]` is a person called L3.
- * A marker we do not know is left where it is.
+ * A label is a name and any number of markers, separated by colons. A marker
+ * is known by its own shape rather than by where it sits, a letter and
+ * digits, so the order does not matter and `[L3]`, `[Claude:L3]` and
+ * `[L3:Claude]` all say set 3. `T` is held for a timestamp and read by
+ * nobody yet, but it is already kept out of the name. A person called L3 has
+ * to use the metadata form, which is the price of never guessing.
  */
 function readLabel(raw: string): { author?: string; link?: string } {
-	const parts = raw.slice(1, -1).split(":").map(part => part.trim());
-	const author = parts[0] || undefined;
-	for (const marker of parts.slice(1)) {
-		const m = /^L(\d+)$/.exec(marker);
-		if (m) return { author, link: m[1] };
+	let author: string | undefined;
+	let link: string | undefined;
+	for (const part of raw.slice(1, -1).split(":")) {
+		const piece = part.trim();
+		if (!piece) continue;
+		const m = /^L(\d+)$/.exec(piece);
+		if (m) link = link ?? m[1];
+		else if (!/^T\d+$/.test(piece)) author = author ?? piece;
 	}
-	return { author };
+	return { author, link };
 }
 
 function readMeta(raw: string): { author?: string; link?: string; meta?: Record<string, unknown> } {

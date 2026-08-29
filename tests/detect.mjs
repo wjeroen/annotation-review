@@ -309,7 +309,9 @@ check("link in metadata", [one('{--{"author":"Claude","link":3}@@gone--}').autho
 check("link in the light form", [one('==--[Claude:L3]@@gone--==').author, one('==--[Claude:L3]@@gone--==').link], ["Claude", "3"]);
 check("link with nobody signing it", [one('{++[:L3]@@added++}').author ?? null, one('{++[:L3]@@added++}').link], [null, "3"]);
 check("a name that starts with L is a name", [one('{--[Lisa]@@gone--}').author, one('{--[Lisa]@@gone--}').link ?? null], ["Lisa", null]);
-check("and so is a name that is only L and digits", [one('{--[L3]@@gone--}').author, one('{--[L3]@@gone--}').link ?? null], ["L3", null]);
+check("a marker on its own needs no colon", [one('{--[L3]@@gone--}').author ?? null, one('{--[L3]@@gone--}').link], [null, "3"]);
+check("the order in the bracket does not matter", [one('{--[L3:Claude]@@gone--}').author, one('{--[L3:Claude]@@gone--}').link], ["Claude", "3"]);
+check("a timestamp is held out of the name", [one('{--[Claude:T1755000000:L2]@@gone--}').author, one('{--[Claude:T1755000000:L2]@@gone--}').link], ["Claude", "2"]);
 check("a marker on a label is not part of the name", one('==text==^[[Claude:L3] a note]').replies[0].author, "Claude");
 check("the text after a link keeps its spaces", one('{++[Claude:L3]@@is ++}').insertedText, "is ");
 check("both ends of a move carry it", all(MOVE).map(a => a.link), ["3", "3"]);
