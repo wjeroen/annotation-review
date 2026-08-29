@@ -768,12 +768,21 @@ body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 	margin-top: 0;
 }
 
+.annotation-review-linked {
+	margin-bottom: 8px;
+}
+
 .annotation-review-linked-body {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
 	border-left: 2px solid var(--text-faint);
 	padding-left: 8px;
+}
+
+/* The thread stops with the last card in the set, rather than running on
+   into whatever comes after it. */
+.annotation-review-linked-body > :last-child {
+	margin-bottom: 0;
 }
 
 /* Modals for creating annotations from the editor */

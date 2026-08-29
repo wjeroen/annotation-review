@@ -304,15 +304,17 @@ const doc = `Before.\n\n${block}\n\nAfter.`;
 check("collapses to one blank line", computeRemoval(doc, doc.indexOf(block), block).newContent, "Before.\n\nAfter.");
 
 console.log("\n=== A link makes several annotations one decision ===");
-const MOVE = '{--[Claude][Lmove]@@gone --}and later {++[Claude][Lmove]@@gone ++}here.';
-check("link in metadata", [one('{--{"author":"Claude","link":"move"}@@gone--}').author, one('{--{"author":"Claude","link":"move"}@@gone--}').link], ["Claude", "move"]);
-check("link in the light form", [one('==--[Claude][Lmove]@@gone--==').author, one('==--[Claude][Lmove]@@gone--==').link], ["Claude", "move"]);
-check("link with nobody signing it", [one('{++[][Lmove]@@added++}').author ?? null, one('{++[][Lmove]@@added++}').link], [null, "move"]);
-check("a linked highlight is not a plain one", one('{==[][Lmove]@@text==}').isPlain, false);
-check("the text after a link keeps its spaces", one('{++[Claude][Lmove]@@is ++}').insertedText, "is ");
-check("both ends of a move carry it", all(MOVE).map(a => a.link), ["move", "move"]);
+const MOVE = '{--[Claude L3]@@gone --}and later {++[Claude L3]@@gone ++}here.';
+check("link in metadata", [one('{--{"author":"Claude","link":3}@@gone--}').author, one('{--{"author":"Claude","link":3}@@gone--}').link], ["Claude", "3"]);
+check("link in the light form", [one('==--[Claude L3]@@gone--==').author, one('==--[Claude L3]@@gone--==').link], ["Claude", "3"]);
+check("link with nobody signing it", [one('{++[L3]@@added++}').author ?? null, one('{++[L3]@@added++}').link], [null, "3"]);
+check("a name that starts with L is a name", [one('{--[Lisa]@@gone--}').author, one('{--[Lisa]@@gone--}').link ?? null], ["Lisa", null]);
+check("the text after a link keeps its spaces", one('{++[Claude L3]@@is ++}').insertedText, "is ");
+check("both ends of a move carry it", all(MOVE).map(a => a.link), ["3", "3"]);
 check("no link is no link", one('{--[Claude]@@gone--}').link ?? null, null);
-check("one end can still be approved on its own", computeMutation(MOVE, all(MOVE)[0], "approve").newContent, "and later {++[Claude][Lmove]@@gone ++}here.");
+check("a comment carries none either", one('{>>{"author":"Claude","link":3}@@a note<<}').link ?? null, null);
+check("a word is not a link", one('{--{"author":"Claude","link":"move"}@@gone--}').link ?? null, null);
+check("one end can still be approved on its own", computeMutation(MOVE, all(MOVE)[0], "approve").newContent, "and later {++[Claude L3]@@gone ++}here.");
 check("and the other end after it", computeMutation(computeMutation(MOVE, all(MOVE)[1], "approve").newContent, all(MOVE)[0], "approve").newContent, "and later gone here.");
 
 console.log(`\n${pass} passed, ${fail} failed`);

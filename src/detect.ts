@@ -54,12 +54,13 @@ const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
 const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
 /**
- * An author terminated by `@@`, in either spelling, with an optional second
- * bracket after it. The second one is a marker rather than a name: `[Lname]`
- * links annotations that belong together. The first may be empty, `[]`, for a
- * marker on something nobody signed.
+ * An author terminated by `@@`, in either spelling. The bracket may be empty,
+ * and it may end in a marker, `[Claude L3]`, which names the set the
+ * annotation belongs to rather than a person. A second bracket is not used
+ * for that: `[Claude][L3]` is a reference link in markdown, so Obsidian eats
+ * the brackets and draws the name as a link.
  */
-const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])(\[[^\]]*\])?@@/;
+const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])@@/;
 /** A plain `[Author] ` label, only meaningful at the start of prose. */
 const LABEL_REGEX = /^\[([^\]]+)\]\s*/;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
@@ -107,8 +108,20 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 }
 
 /** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
-function readMeta(raw: string): { author?: string; meta?: Record<string, unknown> } {
-	if (raw.startsWith("[")) return { author: raw.slice(1, -1) || undefined };
+/**
+ * A label is a name, a marker, or both. A marker is a letter and digits with
+ * nothing else, so only a person called L3 loses their name to one, and the
+ * metadata form is there for them.
+ */
+function readLabel(raw: string): { author?: string; link?: string } {
+	const inside = raw.slice(1, -1).trim();
+	const m = /^(.*?)\s*L(\d+)$/.exec(inside);
+	if (m) return { author: m[1] || undefined, link: m[2] };
+	return { author: inside || undefined };
+}
+
+function readMeta(raw: string): { author?: string; link?: string; meta?: Record<string, unknown> } {
+	if (raw.startsWith("[")) return readLabel(raw);
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
@@ -120,13 +133,14 @@ function readMeta(raw: string): { author?: string; meta?: Record<string, unknown
 	const value = fields.author ?? fields.a;
 	delete fields.author;
 	delete fields.a;
-	return { author: typeof value === "string" && value ? value : undefined, meta: fields };
+	return { author: typeof value === "string" && value ? value : undefined, link: linkIn(fields), meta: fields };
 }
 
-/** The link carried in metadata, `{"author":"X","link":"move"}`. */
+/** The set a metadata annotation belongs to, `{"author":"X","link":3}`. Numbers only. */
 function linkIn(meta?: Record<string, unknown>): string | undefined {
 	const value = meta?.link;
-	return typeof value === "string" && value ? value : undefined;
+	if (typeof value === "number" && Number.isInteger(value) && value >= 0) return String(value);
+	return typeof value === "string" && /^\d+$/.test(value) ? value : undefined;
 }
 
 interface AuthorParse {
@@ -147,9 +161,7 @@ function parseAuthorAt(text: string, contentStart: number, contentEnd: number, a
 	const segment = text.slice(contentStart, contentEnd);
 	const m = META_REGEX.exec(segment);
 	if (m) {
-		const { author, meta } = readMeta(m[1]);
-		const tag = m[2] ? m[2].slice(1, -1) : "";
-		const link = tag.length > 1 && tag.startsWith("L") ? tag.slice(1) : linkIn(meta);
+		const { author, link, meta } = readMeta(m[1]);
 		return {
 			author,
 			link,
@@ -462,13 +474,15 @@ function buildAnnotation(
 		isPoint,
 		// A highlight or hidden text with nothing attached and nobody named
 		// could be ordinary Obsidian markup. A >> comment never is.
-		isPlain: body.type === "comment" && !isPoint && !author && !link && replies.length === 0,
+		isPlain: body.type === "comment" && !isPoint && !author && replies.length === 0,
 		originalText: slice(originalSpan) ?? "",
 		commentText: slice(commentSpan),
 		insertedText: slice(bodySpan),
 		replacement: slice(body.replacementSpan),
 		author,
-		link,
+		// A set is a set of changes. A comment is not approved, so it has
+		// nothing to add to one and never carries a link.
+		link: body.type === "comment" ? undefined : link,
 		authorSpan,
 		authorMeta,
 		authorInsert,

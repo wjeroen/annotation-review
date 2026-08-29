@@ -122,10 +122,10 @@ function rewriteAuthor(current: string, author: string, meta?: Record<string, un
 		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
 		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 	}
-	// A second bracket is a marker rather than a name, so it stays put.
-	const tag = /^\[[^\]]*\](\[[^\]]*\])@@$/.exec(current)?.[1] ?? "";
-	if (!author) return tag ? `[]${tag}@@` : "";
-	if (current.endsWith("@@")) return `[${author}]${tag}@@`;
+	// A marker after the name is not part of the name, so it stays put.
+	const marker = /^\[.*?\s*(L\d+)\]@@$/.exec(current)?.[1] ?? "";
+	if (!author) return marker ? `[${marker}]@@` : "";
+	if (current.endsWith("@@")) return `[${author}${marker ? " " + marker : ""}]@@`;
 	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
 }
 
@@ -495,7 +495,7 @@ export class AnnotationReviewView extends ItemView {
 		const header = box.createEl("div", { cls: "annotation-review-linked-header" });
 		const label = header.createEl("span", { cls: "annotation-review-linked-label" });
 		setIcon(label.createEl("span", { cls: "annotation-review-linked-icon" }), "link");
-		label.createEl("span", { text: `${members.length} linked` });
+		label.createEl("span", { text: `${members.length} linked [${members[0].link}]` });
 
 		const actions = header.createEl("div", { cls: "annotation-review-actions" });
 		// A comment cannot be approved, so the button is only there for a set
