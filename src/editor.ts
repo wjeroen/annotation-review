@@ -230,45 +230,67 @@ function decorationsField(settings: EditorRenderSettings) {
 }
 
 class LineMarker extends GutterMarker {
-	constructor(readonly kind: string) {
+	constructor(
+		readonly kind: string,
+		readonly joined: boolean
+	) {
 		super();
 	}
 	eq(other: LineMarker) {
-		return other.kind === this.kind;
+		return other.kind === this.kind && other.joined === this.joined;
 	}
 	toDOM() {
 		const el = document.createElement("div");
-		el.className = `arv-gutter arv-gutter-${this.kind}`;
+		el.className = `arv-gutter arv-gutter-${this.kind}` + (this.joined ? " arv-gutter-joined" : "");
 		return el;
 	}
 }
 
-const MARKERS: Record<string, LineMarker> = {
-	delete: new LineMarker("delete"),
-	insert: new LineMarker("insert"),
-	replace: new LineMarker("replace"),
-	comment: new LineMarker("comment")
-};
+const markers = new Map<string, LineMarker>();
+/** One marker object per look, since CodeMirror compares them by identity first. */
+function marker(kind: string, joined: boolean): LineMarker {
+	const key = `${kind}:${joined}`;
+	let found = markers.get(key);
+	if (!found) markers.set(key, (found = new LineMarker(kind, joined)));
+	return found;
+}
+
+/**
+ * What happens on the line, or null when nothing does. A change outranks a
+ * comment when a line has both, since a comment can sit anywhere. A bare
+ * selection is not a change and not known to be a comment, so it counts for
+ * nothing here.
+ */
+function kindOn(state: EditorState, from: number, to: number): string | null {
+	let kind: string | null = null;
+	for (const a of state.field(annotationsField)) {
+		if (a.isPlain || a.matchEnd < from || a.matchStart > to) continue;
+		if (kind === null || (kind === "comment" && a.type !== "comment")) kind = a.type;
+	}
+	return kind;
+}
 
 /**
  * A line down the left edge of every line an annotation touches, in the
- * color of what happens there. A change outranks a comment when a line has
- * both, since a comment can sit anywhere.
+ * color of what happens there.
+ *
+ * CodeMirror gives each gutter element the height of its own line and turns
+ * whatever sits between two lines into a margin on the next one, which broke
+ * the line at every paragraph. So a strip whose next line is marked as well
+ * reaches past its own line, far enough to cross that margin. The overhang
+ * lands under the next strip, which is drawn after it.
  */
 const diffGutter = gutter({
 	class: "arv-diff-gutter",
 	lineMarker(view, line) {
-		let kind: string | null = null;
-		for (const a of view.state.field(annotationsField)) {
-			// A bare selection is not a change and not known to be a comment,
-			// so it gets no line.
-			if (a.isPlain || a.matchEnd < line.from || a.matchStart > line.to) continue;
-			if (kind === null || (kind === "comment" && a.type !== "comment")) kind = a.type;
-		}
-		return kind ? MARKERS[kind] : null;
+		const kind = kindOn(view.state, line.from, line.to);
+		if (!kind) return null;
+		const doc = view.state.doc;
+		const next = line.to + 1 <= doc.length ? doc.lineAt(line.to + 1) : null;
+		return marker(kind, next !== null && kindOn(view.state, next.from, next.to) !== null);
 	},
 	lineMarkerChange: update => update.docChanged,
-	initialSpacer: () => MARKERS.delete
+	initialSpacer: () => marker("delete", false)
 });
 
 /** The editor extensions for the current settings. Rebuilt when they change. */

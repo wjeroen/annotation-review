@@ -701,10 +701,15 @@ del.arv-replace {
 	margin-right: var(--arv-gutter-gap, 5px);
 }
 
-body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
+.cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 	position: static !important;
-	margin-inline-start: calc(-3px - var(--arv-gutter-gap, 5px)) !important;
+	margin-inline-start: 0 !important;
 	margin-inline-end: 0 !important;
+}
+
+/* In the margin, the box is pulled out of the row by its own width. */
+body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
+	margin-inline-start: calc(-3px - var(--arv-gutter-gap, 5px)) !important;
 }
 
 .arv-diff-gutter .cm-gutterElement {
@@ -715,6 +720,11 @@ body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 	width: 3px;
 	height: 100%;
 	border-radius: 2px;
+}
+
+/* Reaches into the space before the next line, which is marked too. */
+.arv-gutter-joined {
+	height: calc(100% + 20px);
 }
 
 .arv-gutter-delete {

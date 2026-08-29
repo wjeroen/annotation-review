@@ -219,9 +219,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
 		const position = new Setting(containerEl)
 			.setName("Gutter position")
-			.setDesc(
-				"In the margin the line hangs beside the text and takes no room, so every line stays under the note title. In the text column it stands in front of the text, the way Obsidian's own gutters do, which pushes the text right by the line, the space beside it, and 24 pixels of Obsidian's own."
-			);
+			.setDesc("In the margin, beside the text. In the text column, in front of it, which pushes the text right.");
 		addDropdown(position, { margin: "In the margin", column: "In the text column" }, settings.gutterPosition, async value => {
 			settings.gutterPosition = value as GutterPosition;
 			await this.plugin.saveSettings();
@@ -229,10 +227,10 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		});
 		new Setting(containerEl)
 			.setName("Space beside the gutter line")
-			.setDesc("Pixels between the line and the text. In the text column Obsidian adds 24 more of its own, so 5 there is the 29 of older versions.")
+			.setDesc("Pixels between the line and the text. Older versions had 29, in the text column.")
 			.addSlider(slider =>
 				slider
-					.setLimits(0, 24, 1)
+					.setLimits(0, 40, 1)
 					.setValue(settings.gutterGap)
 					.setDynamicTooltip()
 					.onChange(async value => {
