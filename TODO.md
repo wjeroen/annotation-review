@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Tapping an annotation in the note with the sidebar drawer closed now leaves the right card marked and in view when the drawer is opened. A panel that is off screen cannot scroll, so the card is kept until it is back on screen (2026-08-29)
 - [x] The gutter strip is back and the text still lines up with the note title. The strip keeps its width and the container is pulled into the page margin, since CodeMirror cuts off anything leaning out of a gutter and pins the container in place (2026-08-28)
 - [x] A field opened in the sidebar on a phone is brought clear of the keyboard by the smallest scroll that shows it, with room added at the end of the list only when the list cannot scroll that far by itself. The move is our own scrollTop, repeated while the keyboard slides open, since Obsidian resizes the app around it and undoes a scroll made during that (2026-08-28)
 - [x] The gutter takes no room at all, in any note. Obsidian puts it inside the note's own column, so any width there indented every line while the note title stayed put. The strip is drawn in the page margin instead (2026-08-28)

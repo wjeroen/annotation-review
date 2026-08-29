@@ -119,6 +119,11 @@ export class AnnotationReviewView extends ItemView {
 	private selectedAdType: string = ALL_VALUE;
 	private scrollArea: HTMLElement | null = null;
 	private lastSignature = "";
+	/** False while the panel is off screen, which on a phone means the drawer is closed. */
+	private onScreen = true;
+	/** The card to bring into view once the panel is on screen again. */
+	private pendingActiveId: string | null = null;
+	private visibility: IntersectionObserver | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
 		super(leaf);
@@ -162,7 +167,17 @@ export class AnnotationReviewView extends ItemView {
 			card.toggleClass("is-active", on);
 			if (on) target = card;
 		}
-		if (target) target.scrollIntoView({ block: "nearest" });
+		if (!target) return;
+		// A panel that is off screen has no place to scroll in, so the card is
+		// kept and shown when the panel comes back. Without that, tapping an
+		// annotation in the note with the drawer closed left the list wherever
+		// it stood, until some later event scrolled it.
+		if (!this.onScreen) {
+			this.pendingActiveId = id;
+			return;
+		}
+		this.pendingActiveId = null;
+		target.scrollIntoView({ block: "nearest" });
 	}
 
 	getViewType() {
@@ -179,6 +194,19 @@ export class AnnotationReviewView extends ItemView {
 
 	async onOpen() {
 		this.render();
+		this.visibility = new IntersectionObserver(entries => {
+			this.onScreen = entries.some(entry => entry.isIntersecting);
+			if (!this.onScreen || this.pendingActiveId === null) return;
+			const id = this.pendingActiveId;
+			this.pendingActiveId = null;
+			this.setActiveAnnotation(id);
+		});
+		this.visibility.observe(this.containerEl);
+	}
+
+	async onClose() {
+		this.visibility?.disconnect();
+		this.visibility = null;
 	}
 
 	render() {
