@@ -54,6 +54,14 @@ export interface AnnotationReviewSettings {
 	commentAuthorStyle: AuthorStyle;
 	/** A colored line down the left edge of every annotated line, in live preview and source mode. */
 	showGutter: boolean;
+	/**
+	 * Where that line sits. In the margin it hangs beside the text and costs
+	 * it nothing. In the column it stands in front of the text, as Obsidian's
+	 * own gutters do, which pushes every line right and away from the title.
+	 */
+	gutterPosition: GutterPosition;
+	/** Pixels between the gutter line and the text. Obsidian adds 24 of its own in the column position. */
+	gutterGap: number;
 	/** Colors chosen per author, winning over the one computed from the name. */
 	authorColors: AuthorColors;
 	/** Strength of the fill behind author chips and type badges, 0 to 1. */
@@ -75,10 +83,14 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	changeAuthorStyle: "chip",
 	commentAuthorStyle: "underline",
 	showGutter: true,
+	gutterPosition: "margin",
+	gutterGap: 5,
 	authorColors: {},
 	authorChipOpacity: 0.45,
 	typeBadgeOpacity: 1
 };
+
+export type GutterPosition = "margin" | "column";
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
 	brace: "Braces",
@@ -204,7 +216,31 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		};
 		authorStyle("Authors on changes", "Deletions, insertions and replacements, in live preview and reading view.", "changeAuthorStyle");
 		authorStyle("Authors on comments and replies", "", "commentAuthorStyle");
-		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode. It takes no room in a note that has nothing to mark.", "showGutter");
+		toggle("Show the diff gutter", "A colored line down the left edge of every annotated line, in live preview and source mode.", "showGutter");
+		const position = new Setting(containerEl)
+			.setName("Gutter position")
+			.setDesc(
+				"In the margin the line hangs beside the text and takes no room, so every line stays under the note title. In the text column it stands in front of the text, the way Obsidian's own gutters do, which pushes the text right by the line, the space beside it, and 24 pixels of Obsidian's own."
+			);
+		addDropdown(position, { margin: "In the margin", column: "In the text column" }, settings.gutterPosition, async value => {
+			settings.gutterPosition = value as GutterPosition;
+			await this.plugin.saveSettings();
+			this.plugin.applyEditorSettings();
+		});
+		new Setting(containerEl)
+			.setName("Space beside the gutter line")
+			.setDesc("Pixels between the line and the text. In the text column Obsidian adds 24 more of its own, so 5 there is the 29 of older versions.")
+			.addSlider(slider =>
+				slider
+					.setLimits(0, 24, 1)
+					.setValue(settings.gutterGap)
+					.setDynamicTooltip()
+					.onChange(async value => {
+						settings.gutterGap = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyEditorSettings();
+					})
+			);
 
 		new Setting(containerEl).setName("Chips").setHeading();
 

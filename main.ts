@@ -56,7 +56,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-		this.applyChipStyle();
+		this.applyStyleSettings();
 
 		this.registerView(VIEW_TYPE_ANNOTATION_REVIEW, leaf => new AnnotationReviewView(leaf, this));
 		this.addSettingTab(new AnnotationReviewSettingTab(this.app, this));
@@ -191,13 +191,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 * chip in the sidebar, the editor and reading view follows the setting
 	 * without a redraw.
 	 */
-	applyChipStyle() {
+	/** The settings the stylesheet reads, as variables and a class on the body. */
+	applyStyleSettings() {
 		document.body.style.setProperty("--arv-chip-alpha", String(this.settings.authorChipOpacity));
 		document.body.style.setProperty("--arv-badge-alpha", String(this.settings.typeBadgeOpacity));
+		document.body.style.setProperty("--arv-gutter-gap", `${this.settings.gutterGap}px`);
+		document.body.classList.toggle("arv-gutter-in-margin", this.settings.gutterPosition === "margin");
 	}
 
 	applyEditorSettings() {
-		this.applyChipStyle();
+		this.applyStyleSettings();
 		this.editorExtensionSlot.length = 0;
 		this.editorExtensionSlot.push(...editorExtensions(this.settings));
 		this.app.workspace.updateOptions();

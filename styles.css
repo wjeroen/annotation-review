@@ -690,15 +690,20 @@ del.arv-replace {
    Obsidian's own margins on the container, 24px after it and -18px before it
    on a phone, are for a gutter that takes room, so they go as well. All of
    it holds only while ours is the one gutter in there. Another plugin's
-   gutter needs the room, and then the strip takes its own again. */
+   gutter needs the room, and then the strip takes its own again.
+
+   The pull is the width of the box, the 3px strip plus the space beside it,
+   so the box ends exactly where the text begins. Without the class, which is
+   the other setting, none of this applies and the box stands in the row like
+   any other gutter, with Obsidian's 24px after it. */
 .arv-diff-gutter {
-	width: 4px;
-	margin-right: 4px;
+	width: 3px;
+	margin-right: var(--arv-gutter-gap, 5px);
 }
 
-.cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
+body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 	position: static !important;
-	margin-inline-start: -8px !important;
+	margin-inline-start: calc(-3px - var(--arv-gutter-gap, 5px)) !important;
 	margin-inline-end: 0 !important;
 }
 
