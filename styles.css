@@ -692,12 +692,17 @@ del.arv-replace {
    it holds only while ours is the one gutter in there. Another plugin's
    gutter needs the room, and then the strip takes its own again.
 
-   The pull is the width of the box, the 3px strip plus the space beside it,
-   so the box ends exactly where the text begins. Without the class, which is
+   The pull is the width of the box, the line plus the space beside it, so
+   the box ends exactly where the text begins. Without the class, which is
    the other setting, none of this applies and the box stands in the row like
-   any other gutter, with Obsidian's 24px after it. */
+   any other gutter. The width of the line and the width of each color band
+   are worked out in editor.ts and set on the element itself, since they
+   depend on what is on the line. Only the colors live here. */
 .arv-diff-gutter {
-	width: 3px;
+	--arv-gutter-delete: var(--color-red, var(--text-error));
+	--arv-gutter-insert: var(--color-green, var(--text-success));
+	--arv-gutter-comment: var(--color-blue, var(--interactive-accent));
+	width: var(--arv-gutter-total, 6px);
 	margin-right: var(--arv-gutter-gap, 5px);
 }
 
@@ -709,15 +714,18 @@ del.arv-replace {
 
 /* In the margin, the box is pulled out of the row by its own width. */
 body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
-	margin-inline-start: calc(-3px - var(--arv-gutter-gap, 5px)) !important;
+	margin-inline-start: calc(-1 * (var(--arv-gutter-total, 6px) + var(--arv-gutter-gap, 5px))) !important;
 }
 
+/* Right aligned, so lines of different width end together against the text. */
 .arv-diff-gutter .cm-gutterElement {
 	padding: 0;
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-end;
 }
 
 .arv-gutter {
-	width: 3px;
 	height: 100%;
 	border-radius: 2px;
 }
@@ -725,23 +733,6 @@ body.arv-gutter-in-margin .cm-gutters:not(:has(> :not(.arv-diff-gutter))) {
 /* Reaches into the space before the next line, which is marked too. */
 .arv-gutter-joined {
 	height: calc(100% + 20px);
-}
-
-.arv-gutter-delete {
-	background-color: var(--color-red, var(--text-error));
-}
-
-.arv-gutter-insert {
-	background-color: var(--color-green, var(--text-success));
-}
-
-/* A replacement is both, so the line is both. */
-.arv-gutter-replace {
-	background: linear-gradient(to bottom, var(--color-red, var(--text-error)) 50%, var(--color-green, var(--text-success)) 50%);
-}
-
-.arv-gutter-comment {
-	background-color: var(--color-blue, var(--interactive-accent));
 }
 
 /* Modals for creating annotations from the editor */

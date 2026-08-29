@@ -60,8 +60,12 @@ export interface AnnotationReviewSettings {
 	 * own gutters do, which pushes every line right and away from the title.
 	 */
 	gutterPosition: GutterPosition;
-	/** Pixels between the gutter line and the text. Obsidian adds 24 of its own in the column position. */
+	/** Pixels between the gutter line and the text. */
 	gutterGap: number;
+	/** Thickness of the line in pixels, a multiple of 3 so three colors divide evenly. */
+	gutterThickness: number;
+	/** A line with more than one kind of annotation shares the thickness, or takes a band per kind. */
+	gutterMultiStyle: GutterMultiStyle;
 	/** Colors chosen per author, winning over the one computed from the name. */
 	authorColors: AuthorColors;
 	/** Strength of the fill behind author chips and type badges, 0 to 1. */
@@ -85,12 +89,15 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	showGutter: true,
 	gutterPosition: "margin",
 	gutterGap: 5,
+	gutterThickness: 6,
+	gutterMultiStyle: "split",
 	authorColors: {},
 	authorChipOpacity: 0.45,
 	typeBadgeOpacity: 1
 };
 
 export type GutterPosition = "margin" | "column";
+export type GutterMultiStyle = "split" | "side";
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
 	brace: "Braces",
@@ -222,6 +229,28 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			.setDesc("In the margin, beside the text. In the text column, in front of it, which pushes the text right.");
 		addDropdown(position, { margin: "In the margin", column: "In the text column" }, settings.gutterPosition, async value => {
 			settings.gutterPosition = value as GutterPosition;
+			await this.plugin.saveSettings();
+			this.plugin.applyEditorSettings();
+		});
+		new Setting(containerEl)
+			.setName("Gutter thickness")
+			.setDesc("Width of the line in pixels.")
+			.addSlider(slider =>
+				slider
+					.setLimits(6, 18, 3)
+					.setValue(settings.gutterThickness)
+					.setDynamicTooltip()
+					.onChange(async value => {
+						settings.gutterThickness = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyEditorSettings();
+					})
+			);
+		const several = new Setting(containerEl)
+			.setName("Several annotations on a line")
+			.setDesc("Deletions, insertions and comments each get a color, in the order they appear.");
+		addDropdown(several, { split: "Share the thickness", side: "A band for each" }, settings.gutterMultiStyle, async value => {
+			settings.gutterMultiStyle = value as GutterMultiStyle;
 			await this.plugin.saveSettings();
 			this.plugin.applyEditorSettings();
 		});

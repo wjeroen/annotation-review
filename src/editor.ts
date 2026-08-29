@@ -4,7 +4,7 @@ import { editorLivePreviewField } from "obsidian";
 import { detectAnnotations } from "./detect";
 import { Annotation, Authored, TextSpan } from "./types";
 import { AuthorColors, applyChipColor, authorColor, chipStyle } from "./authors";
-import { AuthorStyle } from "./settings";
+import { AuthorStyle, GutterMultiStyle } from "./settings";
 
 /*
  * Drawing annotations in the editor.
@@ -30,6 +30,8 @@ export interface EditorRenderSettings {
 	changeAuthorStyle: AuthorStyle;
 	commentAuthorStyle: AuthorStyle;
 	showGutter: boolean;
+	gutterThickness: number;
+	gutterMultiStyle: GutterMultiStyle;
 	authorColors: AuthorColors;
 }
 
@@ -229,50 +231,95 @@ function decorationsField(settings: EditorRenderSettings) {
 	});
 }
 
+/** The colors, kept in the stylesheet so a theme can reach them. */
+const GUTTER_COLOR: Record<string, string> = {
+	delete: "var(--arv-gutter-delete)",
+	insert: "var(--arv-gutter-insert)",
+	comment: "var(--arv-gutter-comment)"
+};
+
+/** A width shared out over the bands, the first one keeping the odd pixel. */
+function shareOut(total: number, count: number): number[] {
+	const each = Math.floor(total / count);
+	const over = total - each * count;
+	return Array.from({ length: count }, (_, i) => each + (i < over ? 1 : 0));
+}
+
+/**
+ * What happens on the line, in the order it appears, each thing once. A
+ * replacement takes text away and puts text back, so it counts as both. A
+ * bare selection is not a change and not known to be a comment, so it counts
+ * for nothing. A comment on a change is a reply rather than an annotation of
+ * its own, so it never reaches this at all.
+ */
+function kindsOn(state: EditorState, from: number, to: number): string[] {
+	const kinds: string[] = [];
+	for (const a of state.field(annotationsField)) {
+		if (a.isPlain || a.matchEnd < from || a.matchStart > to) continue;
+		for (const kind of a.type === "replace" ? ["delete", "insert"] : [a.type]) {
+			if (!kinds.includes(kind)) kinds.push(kind);
+		}
+	}
+	return kinds;
+}
+
+/**
+ * The line beside one text line. The colors stand next to each other rather
+ * than above each other, since a color above another reads as if it belonged
+ * to the words beside it, while the whole line is what it marks.
+ *
+ * Sharing the width keeps every line the same thickness. A line for each
+ * gives every color the same band and lets the line grow, right aligned, so
+ * the lines end together against the text.
+ */
 class LineMarker extends GutterMarker {
 	constructor(
-		readonly kind: string,
-		readonly joined: boolean
+		readonly kinds: string,
+		readonly joined: boolean,
+		readonly style: GutterMultiStyle,
+		readonly thickness: number
 	) {
 		super();
 	}
 	eq(other: LineMarker) {
-		return other.kind === this.kind && other.joined === this.joined;
+		return (
+			other.kinds === this.kinds &&
+			other.joined === this.joined &&
+			other.style === this.style &&
+			other.thickness === this.thickness
+		);
 	}
 	toDOM() {
+		const kinds = this.kinds.split(" ");
+		const widths =
+			this.style === "split" ? shareOut(this.thickness, kinds.length) : kinds.map(() => Math.round(this.thickness / 2));
 		const el = document.createElement("div");
-		el.className = `arv-gutter arv-gutter-${this.kind}` + (this.joined ? " arv-gutter-joined" : "");
+		el.className = this.joined ? "arv-gutter arv-gutter-joined" : "arv-gutter";
+		let at = 0;
+		const bands = kinds.map((kind, i) => {
+			const from = at;
+			at += widths[i];
+			return `${GUTTER_COLOR[kind]} ${from}px ${at}px`;
+		});
+		el.style.width = `${at}px`;
+		el.style.background = `linear-gradient(to right, ${bands.join(", ")})`;
 		return el;
 	}
 }
 
 const markers = new Map<string, LineMarker>();
 /** One marker object per look, since CodeMirror compares them by identity first. */
-function marker(kind: string, joined: boolean): LineMarker {
-	const key = `${kind}:${joined}`;
+function marker(kinds: string[], joined: boolean, style: GutterMultiStyle, thickness: number): LineMarker {
+	const list = kinds.join(" ");
+	const key = `${list}|${joined}|${style}|${thickness}`;
 	let found = markers.get(key);
-	if (!found) markers.set(key, (found = new LineMarker(kind, joined)));
+	if (!found) markers.set(key, (found = new LineMarker(list, joined, style, thickness)));
 	return found;
 }
 
 /**
- * What happens on the line, or null when nothing does. A change outranks a
- * comment when a line has both, since a comment can sit anywhere. A bare
- * selection is not a change and not known to be a comment, so it counts for
- * nothing here.
- */
-function kindOn(state: EditorState, from: number, to: number): string | null {
-	let kind: string | null = null;
-	for (const a of state.field(annotationsField)) {
-		if (a.isPlain || a.matchEnd < from || a.matchStart > to) continue;
-		if (kind === null || (kind === "comment" && a.type !== "comment")) kind = a.type;
-	}
-	return kind;
-}
-
-/**
  * A line down the left edge of every line an annotation touches, in the
- * color of what happens there.
+ * colors of what happens there.
  *
  * CodeMirror gives each gutter element the height of its own line and turns
  * whatever sits between two lines into a margin on the next one, which broke
@@ -280,22 +327,25 @@ function kindOn(state: EditorState, from: number, to: number): string | null {
  * reaches past its own line, far enough to cross that margin. The overhang
  * lands under the next strip, which is drawn after it.
  */
-const diffGutter = gutter({
-	class: "arv-diff-gutter",
-	lineMarker(view, line) {
-		const kind = kindOn(view.state, line.from, line.to);
-		if (!kind) return null;
-		const doc = view.state.doc;
-		const next = line.to + 1 <= doc.length ? doc.lineAt(line.to + 1) : null;
-		return marker(kind, next !== null && kindOn(view.state, next.from, next.to) !== null);
-	},
-	lineMarkerChange: update => update.docChanged,
-	initialSpacer: () => marker("delete", false)
-});
+function diffGutter(settings: EditorRenderSettings) {
+	return gutter({
+		class: "arv-diff-gutter",
+		lineMarker(view, line) {
+			const kinds = kindsOn(view.state, line.from, line.to);
+			if (kinds.length === 0) return null;
+			const doc = view.state.doc;
+			const next = line.to + 1 <= doc.length ? doc.lineAt(line.to + 1) : null;
+			const joined = next !== null && kindsOn(view.state, next.from, next.to).length > 0;
+			return marker(kinds, joined, settings.gutterMultiStyle, settings.gutterThickness);
+		},
+		lineMarkerChange: update => update.docChanged,
+		initialSpacer: () => marker(["delete"], false, settings.gutterMultiStyle, settings.gutterThickness)
+	});
+}
 
 /** The editor extensions for the current settings. Rebuilt when they change. */
 export function editorExtensions(settings: EditorRenderSettings): Extension[] {
 	const extensions: Extension[] = [annotationsField, decorationsField(settings)];
-	if (settings.showGutter) extensions.push(diffGutter);
+	if (settings.showGutter) extensions.push(diffGutter(settings));
 	return extensions;
 }
