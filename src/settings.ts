@@ -73,7 +73,10 @@ export interface AnnotationReviewSettings {
 	typeBadgeOpacity: number;
 }
 
-/** Plain CriticMarkup out of the box, since that is the standard. */
+/**
+ * CriticMarkup out of the box, since that is the standard, with footnote
+ * replies, which read as notes in Obsidian rather than as raw markers.
+ */
 export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	defaultAuthor: "",
 	repliesExpanded: false,
@@ -81,18 +84,18 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	wrappers: { comment: "brace", delete: "brace", replace: "brace", insert: "brace" },
 	pointCommentWrapper: "brace",
 	fencedFallback: "brace",
-	channel: "brace",
+	channel: "footnote",
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
 	renderInEditor: true,
-	changeAuthorStyle: "chip",
-	commentAuthorStyle: "underline",
+	changeAuthorStyle: "underline",
+	commentAuthorStyle: "chip",
 	showGutter: true,
 	gutterPosition: "margin",
 	gutterGap: 5,
-	gutterBand: 6,
-	gutterBandGap: 0,
+	gutterBand: 4,
+	gutterBandGap: 2,
 	authorColors: {},
-	authorChipOpacity: 0.45,
+	authorChipOpacity: 0.85,
 	typeBadgeOpacity: 1
 };
 

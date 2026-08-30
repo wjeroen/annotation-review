@@ -24,6 +24,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] The defaults a fresh install starts with: braces everywhere with footnote replies, authors underlined on changes and chipped on comments, gutter in the margin with 4 pixel bands, 2 between them and 5 beside the line, author chips at 85 percent (2026-08-30)
 - [x] The gutter line only reaches into the next line when that line draws the same colors, so a line with three bands no longer leaves its leftmost band hanging over the line below it (2026-08-29)
 - [x] A link is written inside the author bracket behind a colon, `[Claude:L3]@@` or `[:L3]@@`, since a second bracket is a reference link in markdown and Obsidian draws it as one, and a colon never appears in a name. Links are numbers, only changes carry them, the set header names the link, and the thread stops with the last card (2026-08-29)
 - [x] The author filter and the author list count the author of every comment as well as the annotation's own, so a comment on a selection is filed under whoever wrote it instead of under No author (2026-08-29)

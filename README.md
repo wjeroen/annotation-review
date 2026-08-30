@@ -66,7 +66,7 @@ Braces, the five CriticMarkup marks, `{~~old~>new~~}`, adjacent `{>>...<<}` comm
 
 Select the text you want to annotate, then either right click it or run a command. None of the commands are bound to a hotkey by default, bind whichever you use most in Settings, Hotkeys.
 
-Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or replacement immediately and carry on. Out of the box everything is written as plain CriticMarkup, which is what the table shows, with Claude as the author.
+Nothing opens a dialog. Each one writes the annotation straight into the note and leaves the caret where text is still needed, so you can type the comment or replacement immediately and carry on. Out of the box everything is written as CriticMarkup braces, which is what the table shows, with footnote replies and no author until one is set.
 
 | Command | Writes | Caret lands |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ In the sidebar they are drawn together where the first of them sits, however far
 
 ## Settings
 
-The defaults are plain CriticMarkup: braces for everything, with `{>>...<<}` carrying the author, reason and replies. Change any of it to taste.
+The defaults are CriticMarkup braces for every annotation, with footnote replies, an underline for the author of a change and a chip for the author of a comment. Change any of it to taste.
 
 - **Author**: written inside every new annotation and at the start of every reply.
 - **Wrappers**: braces, highlight, or percent marks, chosen separately for comments on a selection, deletions, replacements and insertions. Comments on a spot choose between braces and percent marks, since Obsidian cannot draw one as a highlight.
