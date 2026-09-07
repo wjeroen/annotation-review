@@ -57,6 +57,7 @@ A few rules that follow from this:
 - Braces nest, because their opening and closing marks differ: `{++outer {++inner++} rest++}` is two insertions. Highlights and percent marks cannot nest. To insert inside an existing percent mark insertion, close and reopen it: `%%++A ++%%%%++X++%%%%++B++%%` is three insertions in a row, and the insert command writes this for you.
 - Percent marks do not render inside any fenced block, admonitions included, so use highlights or braces there.
 - A highlight cannot cross a blank line, but braces and percent marks can, which is the only way to insert or delete a paragraph break: `{++\n\n++}`.
+- Nothing inside backticks is a delimiter, and an annotation may hold backticks: `` ==--a `==` b--== `` deletes the text with its backticked marks, and a `~>` inside backticks never splits a replacement. An annotation written inside backticks is text, so it is never listed and never acted on. Links, HTML comments and the text of a reply are stepped over the same way.
 
 ### Compatibility with the CriticMarkup plugin
 

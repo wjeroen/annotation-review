@@ -237,6 +237,15 @@ check("double hyphens in prose are not a deletion", shape(one(`==a -- b==^[c]`))
 check("nor inside one", one(`{--a -- b--}`).originalText, "a -- b");
 check("a link is not an annotation", all(`[text](==x==)`).length, 0);
 check("everything comes back in note order", all(`{++a++} ==--b--==^[x] %%++c++%% d{>>e<<}`).map(a => a.type), ["insert", "delete", "insert", "comment"]);
+// Backticks are stepped over whole: an annotation may hold them, and an
+// annotation written inside them is text.
+check("a highlight may hold a backticked ==", shape(one("==--a `==` b--==^[c]")), ["delete", null, "a `==` b", null, null, [[null, "c"]]]);
+check("percent marks may hold a backticked percent form", shape(one("%%++a `%%++b++%%` c++%%")), ["insert", null, "", "a `%%++b++%%` c", null, []]);
+check("a backticked ~> does not split a highlight replacement", shape(one("==~~a `x~>y` b~>c~~==")), ["replace", null, "a `x~>y` b", null, "c", []]);
+check("nor a percent mark replacement", shape(one("%%~~[J]@@`old %%~~x~>y~~%%`~>`new`~~%%")), ["replace", "J", "`old %%~~x~>y~~%%`", null, "`new`", []]);
+check("nor a brace replacement", shape(one("{~~a `x~>y` b~>c~~}")), ["replace", null, "a `x~>y` b", null, "c", []]);
+check("an annotation inside backticks is text, so only the outer one is listed", all("==--a `==--b--==` c--==").length, 1);
+check("a highlight may hold a brace comment", all("==a {==b==} c==").map(a => a.originalText), ["a {==b==} c", "b"]);
 
 console.log("\n=== Insert context ===");
 const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%++an insert++%% %%--gone--%% %%~~old~>new~~%% after.";
@@ -245,6 +254,8 @@ check("fenced", getInsertContext(ctx, ctx.indexOf("fenced")), FENCED);
 check("inside an insert", getInsertContext(ctx, ctx.indexOf("an insert")), { kind: "nested", marker: "++" });
 check("inside a deletion", getInsertContext(ctx, ctx.indexOf("gone")), { kind: "nested", marker: "--" });
 check("inside a replacement there is nothing to reopen", getInsertContext(ctx, ctx.indexOf("old")), { kind: "nested", marker: "" });
+const held = "%%++a `%%` b++%%";
+check("inside an insert holding a backticked %%", getInsertContext(held, held.indexOf("b++")), { kind: "nested", marker: "++" });
 
 console.log("\n=== What the editor commands write is read back correctly ===");
 /** Types `typed` at the caret position the command would have left. */

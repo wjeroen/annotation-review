@@ -16,6 +16,11 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  * `{>>...<<}`, attached by adjacency, and every one of them is a reply with
  * its own author. A `{>>...<<}` with nothing in front of it is a comment on
  * that spot rather than a reply.
+ *
+ * Nothing inside backticks, a link, an HTML comment, a fenced block or the
+ * text of an entry is a delimiter. Those ranges are stepped over whole, so an
+ * annotation may hold a backticked `==` or `%%`, and an annotation written
+ * inside backticks is text.
  */
 
 interface FenceRange extends ExcludedRange {
@@ -48,8 +53,6 @@ interface Body {
 }
 
 const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
-const HIGHLIGHT_REGEX = /==([\s\S]+?)==/g;
-const PERCENT_REGEX = /%%%%([\s\S]+?)%%%%|%%([\s\S]+?)%%/g;
 const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
 const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
@@ -72,13 +75,6 @@ const BRACE_CLOSERS = new Set(["--}", "++}", "~~}", "==}", "<<}"]);
 
 function rangeAt(pos: number, ranges: ExcludedRange[]): ExcludedRange | undefined {
 	return ranges.find(r => pos >= r.start && pos < r.end);
-}
-
-function hasDelimiterInsideRanges(start: number, end: number, ranges: ExcludedRange[]): boolean {
-	return ranges.some(range =>
-		(start >= range.start && start < range.end) ||
-		(end > range.start && end <= range.end)
-	);
 }
 
 function lineAt(content: string, offset: number): number {
@@ -306,11 +302,15 @@ function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
 /**
  * Works out the operation from the markers at both ends of the wrapped text,
  * for highlights and percent marks. `base` is where that text starts inside
- * fullMatch, so the spans come out relative to it. Whitespace is kept exactly
- * as written, since `++is ++` inserting its own trailing space is the whole
- * point of the markers. The author, if any, is read off the spans afterwards.
+ * fullMatch, so the spans come out relative to it, and `split` is where the
+ * scanner found the `~>` of a replacement, in the same coordinates. The
+ * scanner finds it rather than this function because a `~>` inside backticks
+ * is text, and only the scanner knows which ranges to step over. Whitespace
+ * is kept exactly as written, since `++is ++` inserting its own trailing
+ * space is the whole point of the markers. The author, if any, is read off
+ * the spans afterwards.
  */
-function classifyInner(inner: string, base: number): Body {
+function classifyInner(inner: string, base: number, split?: number): Body {
 	const n = inner.length;
 	if (n >= 4) {
 		const head = inner.slice(0, 2);
@@ -322,8 +322,8 @@ function classifyInner(inner: string, base: number): Body {
 			replacementSpan: { start: base + 2 + splitAt + splitLen, end: base + n - 2 }
 		});
 		if (head === "~~" && tail === "~~") {
-			const k = mid.indexOf("~>");
-			if (k !== -1) return replace(k, 2);
+			const k = split === undefined ? -1 : split - base - 2;
+			if (k >= 0 && k + 2 <= mid.length) return replace(k, 2);
 		} else if (head === "--" && tail === "--") {
 			return { type: "delete", originalSpan: { start: base + 2, end: base + n - 2 } };
 		} else if (head === "++" && tail === "++") {
@@ -383,6 +383,82 @@ function scanBrace(content: string, start: number, excluded: ExcludedRange[]): B
 			continue;
 		}
 		i++;
+	}
+	return null;
+}
+
+interface WrappedScan {
+	closeStart: number;
+	/** The first `~>` between the marks that is not inside an excluded range. */
+	split?: number;
+}
+
+/**
+ * Finds the closing marks for a highlight or percent mark, walking forward
+ * from `from` and stepping over every excluded range whole, the way scanBrace
+ * does. So a backticked `==` inside a highlight is never taken for its end,
+ * and a `~>` inside backticks is never taken for the split of a replacement.
+ * The arrow is looked for from `splitFrom`, after the operator marks, and
+ * only outside those ranges.
+ */
+function scanWrapped(content: string, from: number, splitFrom: number, closer: string, excluded: ExcludedRange[]): WrappedScan | null {
+	let split: number | undefined;
+	let i = from;
+	while (i < content.length) {
+		const skip = rangeAt(i, excluded);
+		if (skip) {
+			i = skip.end;
+			continue;
+		}
+		if (content.startsWith(closer, i)) return { closeStart: i, split };
+		if (split === undefined && i >= splitFrom && content.startsWith("~>", i)) {
+			split = i;
+			i += 2;
+			continue;
+		}
+		i++;
+	}
+	return null;
+}
+
+interface WrappedMatch {
+	start: number;
+	/** The length of one mark: 2, or 4 for a doubled percent mark. */
+	delim: number;
+	closeStart: number;
+	end: number;
+	/** The `~>` of a replacement, absolute, if there is one outside an excluded range. */
+	split?: number;
+}
+
+/**
+ * The next `==...==` or `%%...%%` at or after `from`. The opener is the first
+ * mark outside an excluded range, and its closer is the first mark after it
+ * outside one, with at least one character between them. A doubled percent
+ * mark, `%%%%...%%%%`, is tried first where it could apply. An opener that
+ * finds no closer counts as consumed on its own, so the mark after it gets a
+ * fresh chance to pair with its real partner. Consuming both once let one
+ * stray `==` desync every annotation after it.
+ */
+function findWrapped(content: string, from: number, mark: "==" | "%%", excluded: ExcludedRange[]): WrappedMatch | null {
+	let pos = from;
+	while ((pos = content.indexOf(mark, pos)) !== -1) {
+		const skip = rangeAt(pos, excluded);
+		if (skip) {
+			pos = skip.end;
+			continue;
+		}
+		let delim = 4;
+		let scan = mark === "%%" && content.startsWith("%%%%", pos) ? scanWrapped(content, pos + 5, pos + 6, "%%%%", excluded) : null;
+		if (!scan) {
+			delim = 2;
+			scan = scanWrapped(content, pos + 3, pos + 4, mark, excluded);
+		}
+		if (!scan) {
+			pos += 2;
+			continue;
+		}
+		return { start: pos, delim, closeStart: scan.closeStart, end: scan.closeStart + delim, split: scan.split };
 	}
 	return null;
 }
@@ -567,8 +643,8 @@ export function detectAnnotations(content: string, filePath: string, options: De
 
 	// Braces. Every opener gets its turn, including ones nested inside another
 	// brace annotation, so both the outer and the inner one are found.
-	const braceEqOpen = new Set<number>();
-	const braceEqClose = new Set<number>();
+	/** The `{==` and `==}` of every brace comment. Those == belong to the braces, never to a highlight. */
+	const braceEqMarks: ExcludedRange[] = [];
 	const braceRegex = new RegExp(BRACE_OPEN_REGEX.source, "g");
 	while ((m = braceRegex.exec(content)) !== null) {
 		const start = m.index;
@@ -578,68 +654,47 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		if (!scan) continue;
 		const body = braceBody(m[1], start, scan);
 		if (!body) continue;
-		if (m[1] === "==") {
-			braceEqOpen.add(start);
-			braceEqClose.add(scan.closeStart);
-		}
+		if (m[1] === "==") braceEqMarks.push({ start, end: start + 3 }, { start: scan.closeStart, end: scan.closeEnd });
 		publish(buildAnnotation(content, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start), channel));
 	}
 
-	// Highlights. Whenever a pairing is rejected only the opening delimiter
-	// counts as consumed, so the closing one gets a fresh chance to pair with
-	// its real partner. Consuming both used to let one stray == desync every
-	// annotation after it.
-	const highlightRegex = new RegExp(HIGHLIGHT_REGEX.source, "g");
-	while ((m = highlightRegex.exec(content)) !== null) {
-		const fullStart = m.index;
-		const highlightEnd = fullStart + m[0].length;
-		const retry = () => {
-			highlightRegex.lastIndex = fullStart + 2;
-		};
-		// The == of a {==...==} belongs to the braces.
-		if (braceEqOpen.has(fullStart - 1) || braceEqClose.has(fullStart)) {
-			retry();
-			continue;
-		}
-		if (/\n\s*\n/.test(m[1])) {
-			retry();
-			continue;
-		}
-		if (hasDelimiterInsideRanges(fullStart, highlightEnd, wrapperExcluded)) {
-			retry();
-			continue;
-		}
+	// Highlights. The == of a {==...==} belongs to the braces, so those marks
+	// are stepped over like code. Whenever a pairing is rejected only the
+	// opening delimiter counts as consumed, so the closing one gets a fresh
+	// chance to pair with its real partner.
+	const highlightExcluded: ExcludedRange[] = [...wrapperExcluded, ...braceEqMarks];
+	let from = 0;
+	let h: WrappedMatch | null;
+	while ((h = findWrapped(content, from, "==", highlightExcluded)) !== null) {
+		from = h.start + 2;
+		const inner = content.slice(h.start + 2, h.closeStart);
+		if (/\n\s*\n/.test(inner)) continue;
 		// Obsidian never opens a highlight whose first character is >, so a
 		// ==>>note<<== cannot render there. It is skipped whole, both marks,
 		// rather than letting its closing == pair with the next highlight.
-		const body = classifyInner(m[1], 2);
+		const body = classifyInner(inner, 2, h.split === undefined ? undefined : h.split - h.start);
 		if (body.pointSpan) {
-			highlightRegex.lastIndex = highlightEnd;
+			from = h.end;
 			continue;
 		}
 		// An ordinary highlight with nothing attached counts too, as a bare
 		// selection, so the sidebar can list it or filter it out.
-		const built = buildWrapped(content, filePath, fullStart, highlightEnd, body, "highlight", isInsideAdBlock(fullStart), channel);
+		const built = buildWrapped(content, filePath, h.start, h.end, body, "highlight", isInsideAdBlock(h.start), channel);
 		publish(built);
-		highlightRegex.lastIndex = built.annotation.matchEnd;
+		from = built.annotation.matchEnd;
 	}
 
 	// Percent marks. A comment on a hidden span shows its reply, which is the
 	// accepted cost of hiding the span. A bare %%note%% is a plain comment,
 	// the same as a bare highlight, and the filter can hide it.
-	const percentRegex = new RegExp(PERCENT_REGEX.source, "g");
-	while ((m = percentRegex.exec(content)) !== null) {
-		const fullStart = m.index;
-		const end = fullStart + m[0].length;
-		const doubled = m[1] !== undefined;
-		const delim = doubled ? 4 : 2;
-		if (hasDelimiterInsideRanges(fullStart, end, percentExcluded)) {
-			percentRegex.lastIndex = fullStart + delim;
-			continue;
-		}
-		const built = buildWrapped(content, filePath, fullStart, end, classifyInner(doubled ? m[1] : m[2], delim), "percent", false, channel);
+	from = 0;
+	let p: WrappedMatch | null;
+	while ((p = findWrapped(content, from, "%%", percentExcluded)) !== null) {
+		const inner = content.slice(p.start + p.delim, p.closeStart);
+		const body = classifyInner(inner, p.delim, p.split === undefined ? undefined : p.split - p.start);
+		const built = buildWrapped(content, filePath, p.start, p.end, body, "percent", false, channel);
 		publish(built);
-		percentRegex.lastIndex = built.annotation.matchEnd;
+		from = built.annotation.matchEnd;
 	}
 
 	// Point comments: whatever {>>...<<} is left over once the ones attached to
@@ -693,21 +748,22 @@ export function getInsertContext(content: string, offset: number): InsertContext
 	const fenceRanges = getFenceRanges(content);
 	if (fenceRanges.some(r => offset > r.start && offset < r.end)) return { kind: "fenced" };
 
+	// The same ranges detectAnnotations steps over for percent marks, so the
+	// two agree on where an annotation ends.
 	const excluded: ExcludedRange[] = [
 		...fenceRanges,
 		...collectRanges(content, INLINE_CODE_REGEX),
 		...collectRanges(content, MARKDOWN_LINK_REGEX),
-		...collectRanges(content, HTML_COMMENT_REGEX)
+		...collectRanges(content, HTML_COMMENT_REGEX),
+		...collectRanges(content, FOOTNOTE_REGEX),
+		...collectRanges(content, BRACE_COMMENT_REGEX)
 	];
-	const regex = new RegExp(PERCENT_REGEX.source, "g");
-	let m: RegExpExecArray | null;
-	while ((m = regex.exec(content)) !== null) {
-		const start = m.index;
-		const end = m.index + m[0].length;
-		if (hasDelimiterInsideRanges(start, end, excluded)) continue;
-		if (offset <= start || offset >= end) continue;
-		const doubled = m[1] !== undefined;
-		const body = classifyInner(doubled ? m[1] : m[2], start + (doubled ? 4 : 2));
+	let from = 0;
+	let p: WrappedMatch | null;
+	while ((p = findWrapped(content, from, "%%", excluded)) !== null) {
+		from = p.end;
+		if (offset <= p.start || offset >= p.end) continue;
+		const body = classifyInner(content.slice(p.start + p.delim, p.closeStart), p.start + p.delim, p.split);
 		// Inside a replacement or a comment there is nothing sensible to
 		// reopen, so the surrounding one is simply closed and reopened as is.
 		const marker = body.type === "insert" ? "++" : body.type === "delete" ? "--" : "";
