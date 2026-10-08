@@ -1,7 +1,7 @@
-import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, Notice, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, TextSpan, AnnotationReply } from "./types";
-import { AnnotationFilters } from "./settings";
+import { AnnotationFilters, NotesSort } from "./settings";
 import { applyChipColor } from "./authors";
 
 /**
@@ -41,6 +41,7 @@ const KEYBOARD_GAP_PX = 8;
  */
 function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	if (!Platform.isMobile || !scrollArea) return;
+	const probe = keyboardProbe(field, scrollArea);
 	const lift = () => {
 		if (!field.isConnected || !scrollArea.isConnected) return stop();
 		// Measured without any room of ours, so it is never counted twice.
@@ -55,6 +56,7 @@ function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 		const canScroll = scrollArea.scrollHeight - scrollArea.clientHeight - scrollArea.scrollTop;
 		if (move > canScroll) scrollArea.style.paddingBottom = `${move - canScroll}px`;
 		scrollArea.scrollTop += move;
+		probe.moved(move, move > canScroll ? move - canScroll : 0);
 	};
 	const ticking = window.setInterval(lift, 100);
 	const settled = window.setTimeout(() => window.clearInterval(ticking), KEYBOARD_SETTLE_MS);
@@ -71,6 +73,55 @@ function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	};
 	field.addEventListener("blur", onBlur);
 	lift();
+}
+
+/**
+ * WIP: a temporary readout for 0.8.0-beta.2, to find out why a field at the
+ * end of the list still ends up behind the keyboard on a phone. Three
+ * seconds after a field opens, a notice shows what keepAboveKeyboard saw at
+ * the start, when it stopped at 1.5 seconds, and at 3 seconds. A list that
+ * reaches below the visible area means the drawer does not shrink with the
+ * keyboard. Numbers still changing after 1.5 seconds mean the keyboard is
+ * slower than the wait. A scroll position lower than the one we set means
+ * something undid it. Remove once the cause is known.
+ */
+function keyboardProbe(field: HTMLElement, scrollArea: HTMLElement) {
+	const started = Date.now();
+	const rows: string[] = [];
+	let lifts = 0;
+	let total = 0;
+	let padded = 0;
+	let setTop = -1;
+	const sample = () => {
+		const area = scrollArea.getBoundingClientRect();
+		const box = field.getBoundingClientRect();
+		const vv = window.visualViewport;
+		const visible = vv ? vv.offsetTop + vv.height : window.innerHeight;
+		const kb = getComputedStyle(document.documentElement).getPropertyValue("--keyboard-height").trim() || "none";
+		const r = Math.round;
+		rows.push(
+			`${Date.now() - started}ms: kb ${kb}, visible to ${r(visible)}, list ${r(area.top)}-${r(area.bottom)}, field ${r(box.top)}-${r(box.bottom)}, scroll ${r(scrollArea.scrollTop)}`
+		);
+	};
+	sample();
+	window.setTimeout(sample, KEYBOARD_SETTLE_MS);
+	window.setTimeout(() => {
+		sample();
+		const lines = [
+			"Annotation Review keyboard check, please screenshot",
+			...rows,
+			`lifts ${lifts}, moved ${Math.round(total)}, padding ${Math.round(padded)}, last set scroll ${Math.round(setTop)}`
+		];
+		new Notice(createFragment(f => lines.forEach(line => f.createDiv({ text: line }))), 20000);
+	}, KEYBOARD_SETTLE_MS * 2);
+	return {
+		moved(move: number, padding: number) {
+			lifts++;
+			total += move;
+			padded = Math.max(padded, padding);
+			setTop = scrollArea.scrollTop;
+		}
+	};
 }
 
 /**
@@ -426,6 +477,47 @@ export class AnnotationReviewView extends ItemView {
 				menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 			});
 
+			if (this.showNotes) {
+				// The order of the list of notes, in the place the expand toggle
+				// has on the cards. Kept on this device, like the filters.
+				const sortBtn = filterRow.createEl("button", { cls: "clickable-icon" });
+				setIcon(sortBtn, "arrow-up-down");
+				setTooltip(sortBtn, "Sort");
+				sortBtn.addEventListener("click", () => {
+					const menu = new Menu();
+					const choice = (title: string, value: NotesSort) =>
+						menu.addItem(item =>
+							item
+								.setTitle(title)
+								.setChecked(this.plugin.settings.notesSort === value)
+								.onClick(() => {
+									this.plugin.settings.notesSort = value;
+									this.plugin.saveLocalState();
+									this.render();
+								})
+						);
+					choice("Most annotations", "count");
+					choice("Recently changed", "recent");
+					const rect = sortBtn.getBoundingClientRect();
+					menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+				});
+			} else if (hasMoreReplies) {
+				// The first reply is always shown, so the toggle only matters
+				// once some annotation has more than one.
+				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
+				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
+				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse comments" : "Expand comments");
+				expandBtn.addEventListener("click", () => {
+					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
+					this.plugin.saveLocalState();
+					this.render();
+				});
+			}
+
+			// Everything after this sits at the right end, so the notes button
+			// keeps its place next to Refresh whatever the author label says.
+			filterRow.createEl("div", { cls: "annotation-review-spacer" });
+
 			// Every note in the vault that holds an annotation. The vault is
 			// read each time the list opens, so it is never older than that.
 			const notesBtn = filterRow.createEl("button", {
@@ -440,19 +532,6 @@ export class AnnotationReviewView extends ItemView {
 				if (this.showNotes) void this.loadNotes(true);
 				else this.render();
 			});
-
-			// The first reply is always shown, so the toggle only matters once
-			// some annotation has more than one.
-			if (!this.showNotes && hasMoreReplies) {
-				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
-				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
-				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse comments" : "Expand comments");
-				expandBtn.addEventListener("click", () => {
-					this.plugin.settings.repliesExpanded = !this.plugin.settings.repliesExpanded;
-					this.plugin.saveLocalState();
-					this.render();
-				});
-			}
 		} else {
 			const types = Array.from(new Set(this.plugin.admonitions.map(b => b.adType))).sort((a, b) => a.localeCompare(b));
 			const currentLabel = this.selectedAdType === ALL_VALUE ? "All types" : this.selectedAdType;
@@ -488,6 +567,8 @@ export class AnnotationReviewView extends ItemView {
 				this.plugin.saveLocalState();
 				this.render();
 			});
+
+			filterRow.createEl("div", { cls: "annotation-review-spacer" });
 		}
 
 		const refreshBtn = filterRow.createEl("button", { cls: "clickable-icon annotation-review-refresh" });
@@ -1028,6 +1109,10 @@ export class AnnotationReviewView extends ItemView {
 		const shown = this.notes
 			.map(note => ({ note, visible: visibleAnnotations(note.annotations, filters, this.selectedAuthor) }))
 			.filter(entry => entry.visible.length > 0);
+		// The count is the cards a note opens to, the same numbers as its
+		// badges. The vault scan returns the newest first and the sort keeps
+		// that order between notes with as many, so a tie goes to the newest.
+		if (this.plugin.settings.notesSort === "count") shown.sort((a, b) => b.visible.length - a.visible.length);
 		if (shown.length === 0) {
 			list.createEl("div", {
 				cls: "annotation-review-empty",

@@ -25,7 +25,7 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 
 One parser, three consumers. `detect.ts` turns a note into a list of annotations with every editable span recorded relative to the annotation's own text. The sidebar lists them, the editor extension decorates them, and the reading view restyles them, and none of the three parses on its own. Anything the parser skips, such as code blocks, backticks and links, is skipped everywhere for free. Those ranges are stepped over whole while the closing mark or the `~>` of a replacement is looked for, so an annotation may hold a backticked `==` or `%%`, and an annotation written inside backticks is text.
 
-The sidebar's list of notes is the same parser run over every note in the vault, each time the list opens or is refreshed. No index is kept between openings, so it costs nothing while nobody looks. The parser takes under half a second for about 600 notes on a desktop, and the scan pauses between batches so the sidebar can draw. The counts on a note go through the same filter as its cards.
+The sidebar's list of notes is the same parser run over every note in the vault, each time the list opens or is refreshed. No index is kept between openings, so it costs nothing while nobody looks. The parser takes under half a second for about 600 notes on a desktop, and the scan pauses between batches so the sidebar can draw. The counts on a note go through the same filter as its cards, and so does the order by count.
 
 `detect.ts` and `compose.ts` are two halves of one contract: one reads the syntax, the other writes it. The round-trip tests in `tests/detect.mjs` fail if they disagree.
 

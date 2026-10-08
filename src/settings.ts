@@ -33,6 +33,8 @@ export interface AnnotationReviewSettings {
 	 */
 	repliesExpanded: boolean;
 	admonitionsExpanded: boolean;
+	/** The order of the list of notes, kept on this device like the expanded state. */
+	notesSort: NotesSort;
 	/** The wrapper the commands write, per operation. For comments this is the comment on a selection. */
 	wrappers: Record<AnnotationType, Wrapper>;
 	/** A comment on a spot has two choices: Obsidian never opens a highlight that starts with >. */
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	defaultAuthor: "",
 	repliesExpanded: false,
 	admonitionsExpanded: false,
+	notesSort: "count",
 	wrappers: { comment: "brace", delete: "brace", replace: "brace", insert: "brace" },
 	pointCommentWrapper: "brace",
 	fencedFallback: "brace",
@@ -100,6 +103,9 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 };
 
 export type GutterPosition = "margin" | "column";
+
+/** Most annotations first, or most recently saved first. */
+export type NotesSort = "count" | "recent";
 
 const WRAPPER_LABELS: Record<Wrapper, string> = {
 	brace: "Braces",

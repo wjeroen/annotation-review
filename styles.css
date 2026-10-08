@@ -125,8 +125,9 @@
 	height: 12px;
 }
 
-.annotation-review-refresh {
-	margin-left: auto;
+/* Pushes the buttons after it to the right end of the row. */
+.annotation-review-spacer {
+	flex: 1;
 }
 
 /* Annotation cards */

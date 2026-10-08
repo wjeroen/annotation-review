@@ -12,8 +12,8 @@ import { processReadingView } from "./src/reading";
 import type { Extension } from "@codemirror/state";
 
 /** Sidebar state that stays on this device, see saveLocalState. */
-type LocalState = Pick<AnnotationReviewSettings, "repliesExpanded" | "admonitionsExpanded" | "filters">;
-const LOCAL_KEYS: (keyof LocalState)[] = ["repliesExpanded", "admonitionsExpanded", "filters"];
+type LocalState = Pick<AnnotationReviewSettings, "repliesExpanded" | "admonitionsExpanded" | "notesSort" | "filters">;
+const LOCAL_KEYS: (keyof LocalState)[] = ["repliesExpanded", "admonitionsExpanded", "notesSort", "filters"];
 const LOCAL_STATE_KEY = "annotation-review-state";
 
 /** How long to wait after the last keystroke before rescanning the note. */
@@ -39,6 +39,18 @@ function innermostAt(annotations: Annotation[], from: number, to: number = from)
 		if (!best || a.matchEnd - a.matchStart < best.matchEnd - best.matchStart) best = a;
 	}
 	return best;
+}
+
+/**
+ * True when a position is outside the editor's visible area. CodeMirror
+ * draws a little past what is on screen and nothing far away, so a position
+ * with no coordinates at all is off screen too.
+ */
+function isOffScreen(cm: EditorView, pos: number): boolean {
+	const at = cm.coordsAtPos(pos);
+	if (!at) return true;
+	const box = cm.scrollDOM.getBoundingClientRect();
+	return at.top < box.top || at.bottom > box.bottom;
 }
 
 export default class AnnotationReviewPlugin extends Plugin {
@@ -124,6 +136,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		if (local) {
 			if (local.repliesExpanded !== undefined) this.settings.repliesExpanded = local.repliesExpanded;
 			if (local.admonitionsExpanded !== undefined) this.settings.admonitionsExpanded = local.admonitionsExpanded;
+			if (local.notesSort !== undefined) this.settings.notesSort = local.notesSort;
 			this.settings.filters = { ...this.settings.filters, ...(local.filters ?? {}) };
 		}
 		// The first 0.6.0 betas had one wrapper for three operations and one for
@@ -163,6 +176,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const state: LocalState = {
 			repliesExpanded: this.settings.repliesExpanded,
 			admonitionsExpanded: this.settings.admonitionsExpanded,
+			notesSort: this.settings.notesSort,
 			filters: this.settings.filters
 		};
 		this.app.saveLocalStorage?.(LOCAL_STATE_KEY, state);
@@ -263,14 +277,20 @@ export default class AnnotationReviewPlugin extends Plugin {
 			// the focus on the annotation.
 			const cm = Platform.isMobile ? (editor as EditorWithCm).cm : undefined;
 			if (cm) {
+				// Measured before the change, while the layout still matches the screen.
+				const offScreen = isOffScreen(cm, result.from);
 				cm.dispatch({ changes: { from: result.from, to: result.to, insert: result.replacement } });
 				// A card acted on straight from the list, with the note showing
 				// another part of the file, would otherwise change text nobody
 				// can see. This brings the change on screen, and only when it
 				// is off screen, so a note already showing the annotation does
-				// not move under the thumb. Focus stays in the sidebar, so the
-				// keyboard stays down.
-				cm.dispatch({ effects: EditorView.scrollIntoView(result.from, { y: "nearest" }) });
+				// not move under the thumb. It lands a third of the way down,
+				// where the eye usually is, since at the top edge it was easy to
+				// miss. Focus stays in the sidebar, so the keyboard stays down.
+				if (offScreen) {
+					const yMargin = Math.round(cm.scrollDOM.clientHeight / 3);
+					cm.dispatch({ effects: EditorView.scrollIntoView(result.from, { y: "start", yMargin }) });
+				}
 			} else {
 				editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
 			}
@@ -420,11 +440,44 @@ export default class AnnotationReviewPlugin extends Plugin {
 	async openNote(filePath: string): Promise<MarkdownView | null> {
 		const file = this.fileFor(filePath);
 		if (!file) return null;
+		const { workspace } = this.app;
 		// Clicking a card makes the sidebar the active leaf, and the note has
 		// to open in the main area rather than on top of this panel.
-		const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
+		const recent = workspace.getMostRecentLeaf();
+		// A tab plugin that prevents duplicate tabs, Open Tab Settings among
+		// them, catches openFile on one tab and sends it to the tab that
+		// already shows the note, and brings that tab to the front only when
+		// the open asks for it or comes from the active tab. Opening from the
+		// sidebar does neither, so the note opened in a hidden tab and nothing
+		// changed on screen. A tab that already shows the note is therefore
+		// brought forward here, on the desktop. The phone keeps the plain open.
+		if (!Platform.isMobile && recent?.getViewState().state?.file !== filePath) {
+			const shown = this.tabShowing(filePath);
+			if (shown) {
+				// Revealing loads a tab still in the background, and making it
+				// active is what moves the active file, which the sidebar reads.
+				await workspace.revealLeaf(shown);
+				workspace.setActiveLeaf(shown, { focus: true });
+				return shown.view instanceof MarkdownView ? shown.view : null;
+			}
+		}
+		const leaf = recent ?? workspace.getLeaf(true);
 		await leaf.openFile(file);
 		return leaf.view instanceof MarkdownView ? leaf.view : null;
+	}
+
+	/**
+	 * A tab in the main area showing the note, background tabs included. A tab
+	 * that has not been looked at since startup holds a placeholder rather
+	 * than a MarkdownView, so the note is read from its saved state.
+	 */
+	private tabShowing(filePath: string): WorkspaceLeaf | null {
+		let found: WorkspaceLeaf | null = null;
+		this.app.workspace.iterateRootLeaves(leaf => {
+			const state = leaf.getViewState();
+			if (!found && state.type === "markdown" && state.state?.file === filePath) found = leaf;
+		});
+		return found;
 	}
 
 	/**
