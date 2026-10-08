@@ -247,6 +247,25 @@ check("nor a brace replacement", shape(one("{~~a `x~>y` b~>c~~}")), ["replace", 
 check("an annotation inside backticks is text, so only the outer one is listed", all("==--a `==--b--==` c--==").length, 1);
 check("a highlight may hold a brace comment", all("==a {==b==} c==").map(a => a.originalText), ["a {==b==} c", "b"]);
 
+console.log("\n=== An HTML comment is a bare comment ===");
+const html = doc => (a => a && [a.type, a.wrapper, a.isPlain, a.originalText])(one(doc));
+check("listed as a bare comment", html("Text <!-- a note --> more."), ["comment", "html", true, "a note"]);
+check("the padding is not part of the text, inner spaces are", one("<!--  two  words -->").originalText, "two  words");
+check("it may span lines", one("<!--\nline one\nline two\n-->").originalText, "line one\nline two");
+check("one holding only spaces is a separator and is left alone", all("- a\n\n<!-- -->\n\n- b\n<!---->").length, 0);
+check("nothing inside one is read, annotations included", all("<!-- {++x++} ==y== %%z%% -->").map(a => [a.wrapper, a.originalText]), [["html", "{++x++} ==y== %%z%%"]]);
+check("nor an author", [one("<!-- [Claude]@@note -->").author ?? null, one("<!-- [Claude]@@note -->").isPlain], [null, true]);
+check("it takes no replies, so a footnote after one stays a footnote", all("<!-- note -->^[[Jeroen] agreed]").map(a => [a.wrapper, a.isPlain, a.replies.length]), [["html", true, 0]]);
+check("and a brace comment after one is a comment of its own", all("<!-- note -->{>>reply<<}").map(a => [a.wrapper, a.isPoint]), [["html", false], ["brace", true]]);
+check("inside code it is text", all("```html\n<!-- svg -->\n```\nUse `<!-- x -->` to hide.").length, 0);
+check("inside a reply it is text", all("==T==^[[C] see <!-- x -->]").map(a => a.wrapper), ["highlight"]);
+check("inside an admonition it counts", all("```ad-c\n<!-- note -->\n```").map(a => a.insideAdBlock), [true]);
+check("in note order with the rest", all("{++a++} <!-- b --> ==c==^[d]").map(a => a.wrapper), ["brace", "html", "highlight"]);
+check("dismissing one removes the note, since its text is the note", dismiss("A <!-- note --> B"), "A  B");
+check("and leaves a footnote after it alone", dismiss("A <!-- note -->^[[J] ok] B"), "A ^[[J] ok] B");
+check("approving one is refused", computeMutation("<!-- note -->", one("<!-- note -->"), "approve").ok, false);
+check("editing its text keeps the padding", (d => computeSpanReplace(d, one(d), one(d).originalSpan.start, one(d).originalSpan.end, "new").newContent)("<!-- old -->"), "<!-- new -->");
+
 console.log("\n=== Insert context ===");
 const ctx = "Plain.\n\n```ad-j\nfenced\n```\n\nBefore %%++an insert++%% %%--gone--%% %%~~old~>new~~%% after.";
 check("plain", getInsertContext(ctx, ctx.indexOf("Plain")), PLAIN);

@@ -1,4 +1,4 @@
-import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedRange, InsertContext, InsertPoint, MetaChannel, TextSpan, Wrapper } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedRange, FoundWrapper, InsertContext, InsertPoint, MetaChannel, TextSpan, Wrapper } from "./types";
 
 /*
  * The grammar, in one line:
@@ -21,6 +21,13 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  * text of an entry is a delimiter. Those ranges are stepped over whole, so an
  * annotation may hold a backticked `==` or `%%`, and an annotation written
  * inside backticks is text.
+ *
+ * An HTML comment is itself listed, as a bare comment whose text is the note.
+ * Nothing inside it is read, no operator, no author and no annotation, since
+ * an HTML comment is how text is switched off. It takes no replies either, so
+ * an entry after it is whatever it would be on its own. One holding only
+ * spaces, `<!-- -->`, is the usual way to keep two lists apart rather than a
+ * note, so it is left alone.
  */
 
 interface FenceRange extends ExcludedRange {
@@ -103,7 +110,6 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 	return { start: s, end: e };
 }
 
-/** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
 /**
  * A label is a name and any number of markers, separated by colons. A marker
  * is known by its own shape rather than by where it sits, a letter and
@@ -125,6 +131,7 @@ function readLabel(raw: string): { author?: string; link?: string } {
 	return { author, link };
 }
 
+/** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
 function readMeta(raw: string): { author?: string; link?: string; meta?: Record<string, unknown> } {
 	if (raw.startsWith("[")) return readLabel(raw);
 	let parsed: unknown;
@@ -491,7 +498,7 @@ function buildAnnotation(
 	fullStart: number,
 	wrapperEnd: number,
 	body: Body,
-	wrapper: Wrapper,
+	wrapper: FoundWrapper,
 	isPoint: boolean,
 	insideAdBlock: boolean,
 	channel: MetaChannel,
@@ -501,7 +508,8 @@ function buildAnnotation(
 	 */
 	selfEntry?: MetaEntry
 ): Built {
-	const entries = extractMeta(content, wrapperEnd);
+	// An HTML comment takes no replies, so nothing after it is claimed.
+	const entries = wrapper === "html" ? [] : extractMeta(content, wrapperEnd);
 	const matchEnd = entries.length ? entries[entries.length - 1].fullEnd : wrapperEnd;
 	const fullMatch = content.slice(fullStart, matchEnd);
 	const relative = entries.map(e => ({
@@ -534,10 +542,11 @@ function buildAnnotation(
 		authorInsert = authorInsertFor(selfEntry.contentStart, wrapper === "brace" ? "brace" : "label");
 	} else {
 		// The author sits at the start of the annotated text, or of the old
-		// text for a replacement.
+		// text for a replacement. An HTML comment is a note and nothing more,
+		// so nothing in it is read as an author.
 		const lead = originalSpan ?? bodySpan;
 		if (lead) {
-			const a = parseAuthorAt(fullMatch, lead.start, lead.end, false);
+			const a: AuthorParse = wrapper === "html" ? { restStart: lead.start } : parseAuthorAt(fullMatch, lead.start, lead.end, false);
 			if (a.authorSpan) {
 				author = a.author;
 				link = a.link;
@@ -695,6 +704,18 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		const built = buildWrapped(content, filePath, p.start, p.end, body, "percent", false, channel);
 		publish(built);
 		from = built.annotation.matchEnd;
+	}
+
+	// HTML comments, each one a bare comment whose text is the note. The
+	// padding inside the marks is not part of the note, so editing the text
+	// keeps it.
+	const htmlExcluded: ExcludedRange[] = [...nonAdFences, ...inlineCode, ...links, ...footnotes, ...braceComments];
+	for (const c of htmlComments) {
+		if (rangeAt(c.start, htmlExcluded)) continue;
+		const note = trimmedSpan(content, c.start + 4, c.end - 3);
+		if (note.end === note.start) continue;
+		const body: Body = { type: "comment", originalSpan: { start: note.start - c.start, end: note.end - c.start } };
+		publish(buildAnnotation(content, filePath, c.start, c.end, body, "html", false, isInsideAdBlock(c.start), channel));
 	}
 
 	// Point comments: whatever {>>...<<} is left over once the ones attached to

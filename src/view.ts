@@ -1,6 +1,6 @@
 import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, Authored, TextSpan, AnnotationReply } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, TextSpan, AnnotationReply } from "./types";
 import { AnnotationFilters } from "./settings";
 import { applyChipColor } from "./authors";
 
@@ -100,6 +100,27 @@ const TYPE_LABELS: Record<AnnotationType, string> = {
 const NO_AUTHOR = "__none__";
 const ALL_VALUE = "";
 
+/**
+ * What the sidebar shows of a note's annotations under the current filters.
+ * A linked set stays whole as soon as one of its members matches. Half a move
+ * in the list is worse than a card the filter did not ask for. The list of
+ * notes counts with this too, so the numbers on a note are the cards it opens
+ * to.
+ */
+function visibleAnnotations(annotations: Annotation[], filters: AnnotationFilters, author: string): Annotation[] {
+	const matches = (a: Annotation) => {
+		if (!filters[a.type]) return false;
+		const names = authorsOf(a);
+		if (names.length === 0 && !filters.noAuthor) return false;
+		if (a.isPlain && !filters.plain) return false;
+		if (author === ALL_VALUE) return true;
+		if (author === NO_AUTHOR) return names.length === 0;
+		return names.includes(author);
+	};
+	const kept = new Set(annotations.filter(matches).map(a => a.link).filter((link): link is string => !!link));
+	return annotations.filter(a => matches(a) || (a.link !== undefined && kept.has(a.link)));
+}
+
 interface EditableOptions {
 	inline?: boolean;
 	/**
@@ -144,6 +165,12 @@ export class AnnotationReviewView extends ItemView {
 	private selectedAdType: string = ALL_VALUE;
 	private scrollArea: HTMLElement | null = null;
 	private lastSignature = "";
+	/** The list of every annotated note in the vault, in place of this note's cards. */
+	private showNotes = false;
+	/** What the last vault scan found, null while one is running for a list just opened. */
+	private notes: NoteAnnotations[] | null = null;
+	/** Only the newest vault scan may publish, like the note scans in the plugin. */
+	private notesToken = 0;
 	/** False while the panel is off screen, which on a phone means the drawer is closed. */
 	private onScreen = true;
 	private visibility: IntersectionObserver | null = null;
@@ -160,12 +187,19 @@ export class AnnotationReviewView extends ItemView {
 	 * results, and redrawing on each of those made the list jump to the top.
 	 */
 	refreshFromData() {
+		// The list of notes is read when it opens, not with every change to
+		// the note on screen.
+		if (this.listingNotes()) return;
 		if (this.dataSignature() === this.lastSignature) {
 			this.setActiveAnnotation(this.plugin.activeAnnotationId);
 			return;
 		}
 		if (this.isEditing()) return;
 		this.render();
+	}
+
+	private listingNotes(): boolean {
+		return this.activeTab === "annotations" && this.showNotes;
 	}
 
 	private dataSignature(): string {
@@ -238,7 +272,9 @@ export class AnnotationReviewView extends ItemView {
 
 		const scrollArea = container.createEl("div", { cls: "annotation-review-scroll-area" });
 		this.scrollArea = scrollArea;
-		if (this.activeTab === "annotations") {
+		if (this.listingNotes()) {
+			this.renderNotesList(scrollArea);
+		} else if (this.activeTab === "annotations") {
 			this.renderAnnotationsList(scrollArea);
 		} else {
 			this.renderAdmonitionsList(scrollArea);
@@ -306,10 +342,13 @@ export class AnnotationReviewView extends ItemView {
 		const filterRow = container.createEl("div", { cls: "annotation-review-filter-row" });
 
 		if (this.activeTab === "annotations") {
+			// In the list of notes the authors are the whole vault's, so the
+			// menu picks out every note one person annotated.
+			const listed = this.showNotes ? (this.notes ?? []).flatMap(n => n.annotations) : this.plugin.annotations;
 			const authors = new Set<string>();
 			let hasNoAuthor = false;
 			let hasMoreReplies = false;
-			for (const a of this.plugin.annotations) {
+			for (const a of listed) {
 				const names = authorsOf(a);
 				for (const name of names) authors.add(name);
 				if (names.length === 0) hasNoAuthor = true;
@@ -354,8 +393,8 @@ export class AnnotationReviewView extends ItemView {
 				}
 			});
 
-			// What kinds of annotation to show. Remembered across notes, unlike
-			// the author filter, which only means something within one note.
+			// What kinds of annotation to show. Saved, and the same for every
+			// note, unlike the author filter, which lasts while the panel is open.
 			const filters = this.plugin.settings.filters;
 			const anyOff = Object.values(filters).some(v => !v);
 			const filterBtn = filterRow.createEl("button", {
@@ -387,9 +426,24 @@ export class AnnotationReviewView extends ItemView {
 				menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 			});
 
+			// Every note in the vault that holds an annotation. The vault is
+			// read each time the list opens, so it is never older than that.
+			const notesBtn = filterRow.createEl("button", {
+				cls: `clickable-icon annotation-review-notes-toggle ${this.showNotes ? "is-active" : ""}`
+			});
+			setIcon(notesBtn, "files");
+			setTooltip(notesBtn, this.showNotes ? "Back to this note" : "Notes with annotations");
+			notesBtn.addEventListener("click", () => {
+				this.showNotes = !this.showNotes;
+				// A list just opened starts at the top.
+				this.scrollArea = null;
+				if (this.showNotes) void this.loadNotes(true);
+				else this.render();
+			});
+
 			// The first reply is always shown, so the toggle only matters once
 			// some annotation has more than one.
-			if (hasMoreReplies) {
+			if (!this.showNotes && hasMoreReplies) {
 				const expandBtn = filterRow.createEl("button", { cls: "clickable-icon" });
 				setIcon(expandBtn, this.plugin.settings.repliesExpanded ? "chevrons-down-up" : "chevrons-up-down");
 				setTooltip(expandBtn, this.plugin.settings.repliesExpanded ? "Collapse comments" : "Expand comments");
@@ -439,25 +493,12 @@ export class AnnotationReviewView extends ItemView {
 		const refreshBtn = filterRow.createEl("button", { cls: "clickable-icon annotation-review-refresh" });
 		setIcon(refreshBtn, "refresh-cw");
 		setTooltip(refreshBtn, "Refresh");
-		refreshBtn.addEventListener("click", () => this.plugin.rescanActiveFile());
+		refreshBtn.addEventListener("click", () => (this.listingNotes() ? void this.loadNotes(false) : void this.plugin.rescanActiveFile()));
 	}
 
 	private renderAnnotationsList(container: Element) {
 		const annotations = this.plugin.annotations;
-		const filters = this.plugin.settings.filters;
-		const matches = (a: Annotation) => {
-			if (!filters[a.type]) return false;
-			const names = authorsOf(a);
-			if (names.length === 0 && !filters.noAuthor) return false;
-			if (a.isPlain && !filters.plain) return false;
-			if (this.selectedAuthor === ALL_VALUE) return true;
-			if (this.selectedAuthor === NO_AUTHOR) return names.length === 0;
-			return names.includes(this.selectedAuthor);
-		};
-		// A linked set stays whole as soon as one of its members matches. Half
-		// a move in the list is worse than a card the filter did not ask for.
-		const kept = new Set(annotations.filter(matches).map(a => a.link).filter((link): link is string => !!link));
-		const filtered = annotations.filter(a => matches(a) || (a.link !== undefined && kept.has(a.link)));
+		const filtered = visibleAnnotations(annotations, this.plugin.settings.filters, this.selectedAuthor);
 
 		const list = container.createEl("div", { cls: "annotation-review-list" });
 		if (filtered.length === 0) {
@@ -529,7 +570,6 @@ export class AnnotationReviewView extends ItemView {
 		for (const annotation of members) this.renderAnnotationItem(thread, annotation);
 	}
 
-	/** A text field that turns into an inline editor on click. */
 	/** The text with every annotation nested inside it cut out. Spans are relative to the annotation, the list is absolute. */
 	private withoutNested(annotation: Annotation, span: TextSpan, text: string): string {
 		const start = annotation.matchStart + span.start;
@@ -549,6 +589,7 @@ export class AnnotationReviewView extends ItemView {
 		return out + text.slice(pos);
 	}
 
+	/** A text field that turns into an inline editor on click. */
 	private renderEditableText(
 		container: Element,
 		cls: string,
@@ -894,23 +935,27 @@ export class AnnotationReviewView extends ItemView {
 
 		// Prefilled with an author bracket, since a reply's author has to be
 		// typed as part of its text. The cursor lands inside the brackets when
-		// there is no default author to fill in.
+		// there is no default author to fill in. An HTML comment is a note on
+		// its own and takes no comments, so it gets no field.
 		const defaultAuthor = this.plugin.settings.defaultAuthor;
 		const replyPrefill = defaultAuthor
 			? { value: `[${defaultAuthor}] `, cursor: defaultAuthor.length + 3 }
 			: { value: "[] ", cursor: 1 };
-		const replyForm = this.createInlineForm(
-			card,
-			"Comment...",
-			text => {
-				// Show the replies, otherwise a new one lands under a collapsed
-				// count and looks like nothing happened.
-				this.plugin.settings.repliesExpanded = true;
-				this.plugin.saveLocalState();
-				this.plugin.addReply(annotation, text);
-			},
-			replyPrefill
-		);
+		const replyForm =
+			annotation.wrapper === "html"
+				? null
+				: this.createInlineForm(
+						card,
+						"Comment...",
+						text => {
+							// Show the replies, otherwise a new one lands under a collapsed
+							// count and looks like nothing happened.
+							this.plugin.settings.repliesExpanded = true;
+							this.plugin.saveLocalState();
+							this.plugin.addReply(annotation, text);
+						},
+						replyPrefill
+					);
 
 		card.addEventListener("click", evt => {
 			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author")) return;
@@ -937,21 +982,107 @@ export class AnnotationReviewView extends ItemView {
 			this.plugin.applyAction(annotation, "dismiss");
 		});
 
-		// A comment goes on anything, so the button sits with the other two,
-		// kept in the quiet icon-button style so it reads as a different kind
-		// of action. Nothing in the sidebar is called a reply: the syntax has
-		// replies, the user just has comments. The line number moves to the
-		// far end of this row.
-		const commentBtn = actions.createEl("button", { cls: "clickable-icon annotation-review-comment" });
-		const commentIcon = commentBtn.createEl("span", { cls: "annotation-review-action-icon" });
-		setIcon(commentIcon, "message-square-plus");
-		commentBtn.createEl("span", { cls: "annotation-review-comment-label", text: "Comment" });
-		setTooltip(commentBtn, "Comment");
-		commentBtn.addEventListener("click", evt => {
-			evt.stopPropagation();
-			replyForm.toggle();
-		});
+		// A comment goes on anything but an HTML comment, so the button sits
+		// with the other two, kept in the quiet icon-button style so it reads
+		// as a different kind of action. Nothing in the sidebar is called a
+		// reply: the syntax has replies, the user just has comments. The line
+		// number moves to the far end of this row.
+		if (replyForm) {
+			const commentBtn = actions.createEl("button", { cls: "clickable-icon annotation-review-comment" });
+			const commentIcon = commentBtn.createEl("span", { cls: "annotation-review-action-icon" });
+			setIcon(commentIcon, "message-square-plus");
+			commentBtn.createEl("span", { cls: "annotation-review-comment-label", text: "Comment" });
+			setTooltip(commentBtn, "Comment");
+			commentBtn.addEventListener("click", evt => {
+				evt.stopPropagation();
+				replyForm.toggle();
+			});
+		}
 		actions.createEl("span", { cls: "annotation-review-line", text: `Line ${annotation.line}` });
+	}
+
+	/**
+	 * Reads the vault for the list of notes. A list just opened says it is
+	 * scanning, while a refresh keeps the old list on screen until the new
+	 * one is in, so it does not jump to the top and back.
+	 */
+	private async loadNotes(fresh: boolean) {
+		const token = ++this.notesToken;
+		if (fresh) {
+			this.notes = null;
+			this.render();
+		}
+		const notes = await this.plugin.scanVault();
+		if (token !== this.notesToken) return;
+		this.notes = notes;
+		if (this.listingNotes()) this.render();
+	}
+
+	private renderNotesList(container: Element) {
+		const list = container.createEl("div", { cls: "annotation-review-list" });
+		if (this.notes === null) {
+			list.createEl("div", { cls: "annotation-review-empty", text: "Scanning the vault..." });
+			return;
+		}
+		const filters = this.plugin.settings.filters;
+		const shown = this.notes
+			.map(note => ({ note, visible: visibleAnnotations(note.annotations, filters, this.selectedAuthor) }))
+			.filter(entry => entry.visible.length > 0);
+		if (shown.length === 0) {
+			list.createEl("div", {
+				cls: "annotation-review-empty",
+				text: this.notes.length === 0 ? "No notes with annotations in this vault." : "No notes match these filters."
+			});
+			return;
+		}
+		for (const { note, visible } of shown) this.renderNoteCard(list, note, visible);
+	}
+
+	/**
+	 * One note in the list: its name and folder, how many of each kind it
+	 * holds in the colors of the type badges, and who wrote them. Both rows
+	 * wrap when the sidebar is narrow. A bare selection is not known to be a
+	 * comment, so it is counted on its own, in grey.
+	 */
+	private renderNoteCard(container: Element, note: NoteAnnotations, visible: Annotation[]) {
+		const card = container.createEl("div", { cls: "annotation-review-card annotation-review-file-card" });
+		card.createEl("div", { cls: "annotation-review-file-name", text: note.name });
+		if (note.folder) card.createEl("div", { cls: "annotation-review-file-folder", text: note.folder });
+
+		const counts = card.createEl("div", { cls: "annotation-review-file-row" });
+		const count = (n: number, label: string, type?: AnnotationType) => {
+			if (n === 0) return;
+			const holder = counts.createEl("span", { cls: type ? `annotation-type-${type}` : "" });
+			holder.createEl("span", { cls: "annotation-review-badge", text: `${n} ${label}` });
+		};
+		for (const type of ["delete", "insert", "replace", "comment"] as AnnotationType[]) {
+			count(visible.filter(a => a.type === type && !a.isPlain).length, TYPE_LABELS[type], type);
+		}
+		count(visible.filter(a => a.isPlain).length, "Bare");
+
+		const names = Array.from(new Set(visible.flatMap(authorsOf))).sort((a, b) => a.localeCompare(b));
+		if (names.length > 0) {
+			const authors = card.createEl("div", { cls: "annotation-review-file-row" });
+			for (const name of names) {
+				const chip = authors.createEl("span", { cls: "annotation-review-author", text: name });
+				applyChipColor(chip, name, this.plugin.settings.authorColors);
+			}
+		}
+
+		card.addEventListener("click", () => void this.openNote(note.path));
+	}
+
+	/**
+	 * Opens a note from the list and goes back to its cards. The author filter
+	 * stays as it was, so a note picked for one author opens on that author's
+	 * cards.
+	 */
+	private async openNote(path: string) {
+		this.showNotes = false;
+		this.scrollArea = null;
+		await this.plugin.openNote(path);
+		await this.plugin.rescanActiveFile();
+		this.render();
 	}
 
 	private renderAdmonitionsList(container: Element) {

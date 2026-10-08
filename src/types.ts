@@ -9,6 +9,12 @@ export type AnnotationType = "comment" | "delete" | "replace" | "insert";
 export type Wrapper = "brace" | "highlight" | "percent";
 
 /**
+ * How an annotation found in a note is wrapped. An HTML comment is read as a
+ * bare comment but never written, so it is not one of the wrappers to choose.
+ */
+export type FoundWrapper = Wrapper | "html";
+
+/**
  * Where replies are written. A footnote renders natively in Obsidian, a brace
  * comment stays readable in any CriticMarkup tool. Both attach by sitting
  * directly after the wrapper with no space in between.
@@ -45,7 +51,7 @@ export interface Authored {
 	/** The other fields of a metadata object, kept so editing the author does not drop them. */
 	authorMeta?: Record<string, unknown>;
 	/**
-	 * The name of the set this belongs to, from `[X][Lname]@@` or a `link`
+	 * The name of the set this belongs to, from `[X:L3]@@` or a `link`
 	 * field in the metadata. Annotations that share one are one decision: a
 	 * move is a deletion in one place and an insertion in another.
 	 */
@@ -70,8 +76,8 @@ export interface Annotation extends Authored {
 	matchStart: number;
 	matchEnd: number;
 	fullMatch: string;
-	wrapper: Wrapper;
-	/** A comment on a spot rather than a span: `{>>note<<}` or `%%note%%`. Its text is its own. */
+	wrapper: FoundWrapper;
+	/** A comment on a spot rather than a span: `{>>note<<}` or `%%>>note<<%%`. Its text is its own. */
 	isPoint: boolean;
 	/**
 	 * An ordinary highlight or hidden note with nothing attached and no author.
@@ -98,6 +104,18 @@ export interface Annotation extends Authored {
 	wrapperLength: number;
 	/** The channel a new reply should use, matching whatever is already there. */
 	nextChannel: MetaChannel;
+}
+
+/** A note and what was found in it, for the list of every annotated note in the vault. */
+export interface NoteAnnotations {
+	path: string;
+	/** The note's name without `.md`. */
+	name: string;
+	/** The folder it sits in, empty at the root of the vault. */
+	folder: string;
+	/** When the file was last saved, for putting the latest work first. */
+	mtime: number;
+	annotations: Annotation[];
 }
 
 export interface AdmonitionBlock {

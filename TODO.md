@@ -24,6 +24,9 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] A button right of the filter button lists every note in the vault that holds annotations, newest first, with a count per type and the authors on each, under the same filters as the cards (2026-10-07)
+- [x] An HTML comment is listed as a bare comment, its text being the note. Nothing inside it is read, it takes no comments, and dismissing it removes it whole (2026-10-07)
+- [x] Doc comments that sat above the wrong function or described old syntax are fixed (2026-10-07)
 - [x] An annotation may hold backticks, and an annotation written inside backticks is text. The closing `==` or `%%` and the `~>` of a replacement are found by walking forward past code, links, HTML comments and entry text, the way braces always did, so a replacement whose old and new text are backticked strings holding `%%` is read as one replacement rather than nothing. A highlight may hold a brace comment, and the insert command sees the same annotation ends as the sidebar (2026-09-07)
 - [x] The defaults a fresh install starts with: braces everywhere with footnote replies, authors underlined on changes and chipped on comments, gutter in the margin with 4 pixel bands, 2 between them and 5 beside the line, author chips at 85 percent (2026-08-30)
 - [x] The gutter line only reaches into the next line when that line draws the same colors, so a line with three bands no longer leaves its leftmost band hanging over the line below it (2026-08-29)

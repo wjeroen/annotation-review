@@ -65,7 +65,9 @@ export function computeMutation(content: string, annotation: Annotation, action:
 
 	let replacement: string;
 	if (action === "dismiss") {
-		replacement = type === "insert" ? "" : annotation.originalText;
+		// An HTML comment's text is the note itself rather than text of the
+		// document, so dismissing it takes the text along.
+		replacement = type === "insert" || annotation.wrapper === "html" ? "" : annotation.originalText;
 	} else {
 		switch (type) {
 			case "comment":

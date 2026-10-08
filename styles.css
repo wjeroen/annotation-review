@@ -151,8 +151,8 @@
 }
 
 /* A line along the top says which wrapper the annotation uses in the note:
-   yellow for a highlight, gray for percent marks that hide the text, purple
-   for braces. */
+   yellow for a highlight, gray for percent marks and HTML comments, which
+   both hide their text, purple for braces. */
 .annotation-review-annotation-card::before {
 	content: "";
 	position: absolute;
@@ -166,7 +166,8 @@
 	background-color: var(--color-yellow, #e0b040);
 }
 
-.annotation-wrapper-percent::before {
+.annotation-wrapper-percent::before,
+.annotation-wrapper-html::before {
 	background-color: var(--text-faint);
 }
 
@@ -187,7 +188,8 @@
 	margin-top: 4px;
 }
 
-.annotation-review-filter-toggle.is-active {
+.annotation-review-filter-toggle.is-active,
+.annotation-review-notes-toggle.is-active {
 	color: var(--interactive-accent);
 }
 
@@ -481,6 +483,38 @@
 
 .annotation-review-dismiss {
 	color: var(--text-muted);
+}
+
+/* The list of every annotated note in the vault. A card is the note's name,
+   its folder, then a row of counts and a row of authors, each wrapping onto
+   more lines when the sidebar is narrow. */
+
+.annotation-review-file-card {
+	border: 1px solid var(--background-modifier-border);
+	padding: 8px 10px;
+	transition: background-color 0.2s ease;
+}
+
+.annotation-review-file-card:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.annotation-review-file-name {
+	font-weight: 600;
+	word-break: break-word;
+}
+
+.annotation-review-file-folder {
+	font-size: 0.85em;
+	color: var(--text-faint);
+	word-break: break-word;
+}
+
+.annotation-review-file-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	margin-top: 6px;
 }
 
 /* Admonition items: the header is a title bar attached directly to the top of

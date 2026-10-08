@@ -193,8 +193,9 @@ function buildDecorations(state: EditorState, settings: EditorRenderSettings): D
 
 		// The wrapper. Everything that is not text is hidden: the opening and
 		// closing marks, and the arrow of a replacement, so the old and new
-		// text sit right against each other.
-		if (contentSpans.length > 0) {
+		// text sit right against each other. An HTML comment is left the way
+		// Obsidian draws it, marks and all.
+		if (contentSpans.length > 0 && a.wrapper !== "html") {
 			const contentStart = Math.min(...contentSpans.map(s => s.start));
 			const contentEnd = Math.max(...contentSpans.map(s => s.end));
 			add({ start: 0, end: a.authorSpan ? a.authorSpan.start : contentStart }, hide);

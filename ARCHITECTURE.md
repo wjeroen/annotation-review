@@ -6,7 +6,7 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 
 | File | Responsibility |
 | --- | --- |
-| `main.ts` | Plugin entry point. Event wiring, scanning the active note, reading and writing files, the editor commands, caret tracking. |
+| `main.ts` | Plugin entry point. Event wiring, scanning the active note and, for the list of notes, the whole vault, reading and writing files, the editor commands, caret tracking. |
 | `src/detect.ts` | Parsing. Turns note text into `Annotation` and `AdmonitionBlock` objects, and records where every editable piece sits. The grammar is described at the top of the file. |
 | `src/compose.ts` | Writing. The syntax for each annotation type, used by the editor commands. |
 | `src/actions.ts` | Rewriting. Works out what text changes for an approve, dismiss, edit, reply, or removal. Pure functions, no Obsidian imports. |
@@ -24,6 +24,8 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 ## How the pieces fit
 
 One parser, three consumers. `detect.ts` turns a note into a list of annotations with every editable span recorded relative to the annotation's own text. The sidebar lists them, the editor extension decorates them, and the reading view restyles them, and none of the three parses on its own. Anything the parser skips, such as code blocks, backticks and links, is skipped everywhere for free. Those ranges are stepped over whole while the closing mark or the `~>` of a replacement is looked for, so an annotation may hold a backticked `==` or `%%`, and an annotation written inside backticks is text.
+
+The sidebar's list of notes is the same parser run over every note in the vault, each time the list opens or is refreshed. No index is kept between openings, so it costs nothing while nobody looks. The parser takes under half a second for about 600 notes on a desktop, and the scan pauses between batches so the sidebar can draw. The counts on a note go through the same filter as its cards.
 
 `detect.ts` and `compose.ts` are two halves of one contract: one reads the syntax, the other writes it. The round-trip tests in `tests/detect.mjs` fail if they disagree.
 
@@ -43,6 +45,7 @@ The full grammar with every form per operation lives in the repo owner's test no
 - **Braces are the only wrapper that nests**, since their opening and closing marks differ. `==` and `%%` cannot nest, and percent marks chain by closing and reopening, operator included: `%%++A ++%%%%++X++%%%%++B++%%`.
 - **`>>` is an operator.** Braces already told a span from a spot by operator, `{==span==}` against `{>>note<<}`, and `%%note%%` was ambiguous precisely because it left that to the wrapper. So a comment on a spot is `>>note<<` in any wrapper, and a wrapper with no operator is always a comment on the span inside it. The wrapper never carries meaning, only visibility. `%%span%%^[reply]` comments on a hidden span, the reply showing being the accepted cost of hiding it. In highlights it is not read: Obsidian never opens a highlight whose first character is `>`, so `==>>note<<==` cannot render, and the parser skips it whole rather than letting its closing `==` pair with the next highlight. A comment on a spot is braces or percent marks, chosen in its own setting.
 - **A bare `==highlight==` or `%%note%%` is listed as a plain comment**, so nothing in a note goes unseen, and filtered out through a saved setting. The cost is that a stray `==` on the same line as a real annotation pairs with it, since there is no way left to tell an unintended pairing from a plain highlight. A blank line between them still breaks the pairing.
+- **An HTML comment is a bare comment, and nothing inside it is read.** `<!-- -->` is how text is switched off in markdown, so an annotation written inside one is switched off rather than proposed, and approving it would mean nothing. The comment itself is listed so a note left that way is not missed, and dismissing it removes its text, since that text is the note rather than the document. It takes no replies, since a conversation attached to text that is switched off read as odd, so an entry after it stays what it would be on its own. It is read but never written, so it is not one of the wrappers to choose, and the editor leaves it as Obsidian draws it. One holding only spaces separates two lists and is skipped.
 - **A footnote inside a percent or highlight wrapper was tried** as a way to keep hidden annotations silent, and does not work: live preview breaks, reading view still lists the footnote, and the highlight equivalent swallows the rest of the line. Replies always sit outside the wrapper.
 - **Migration was never a goal.** The old keyword syntax was deleted from the parser rather than converted.
 - **Plain CriticMarkup is the default for a fresh install**, since that is the standard people arrive with. Everything is a setting.

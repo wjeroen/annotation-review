@@ -2,7 +2,7 @@ import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceL
 import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
 import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
-import { AdmonitionBlock, Annotation, AnnotationType, Wrapper } from "./src/types";
+import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openReply } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
@@ -18,6 +18,9 @@ const LOCAL_STATE_KEY = "annotation-review-state";
 
 /** How long to wait after the last keystroke before rescanning the note. */
 const RESCAN_DELAY_MS = 400;
+
+/** How many notes the vault scan reads at once before letting the sidebar draw. */
+const VAULT_SCAN_BATCH = 25;
 
 /** Obsidian's editor keeps its CodeMirror view on `cm`. Undocumented, so treated as optional. */
 interface EditorWithCm extends Editor {
@@ -185,13 +188,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 		}
 	}
 
-	/** Swaps the editor extensions for ones built from the current settings, in every open editor. */
 	/**
-	 * The chip and badge opacities, as CSS variables on the body, so every
-	 * chip in the sidebar, the editor and reading view follows the setting
-	 * without a redraw.
+	 * The settings the stylesheet reads, as variables and a class on the
+	 * body, so every chip in the sidebar, the editor and reading view follows
+	 * them without a redraw.
 	 */
-	/** The settings the stylesheet reads, as variables and a class on the body. */
 	applyStyleSettings() {
 		document.body.style.setProperty("--arv-chip-alpha", String(this.settings.authorChipOpacity));
 		document.body.style.setProperty("--arv-badge-alpha", String(this.settings.typeBadgeOpacity));
@@ -204,6 +205,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		document.body.classList.toggle("arv-gutter-in-margin", this.settings.gutterPosition === "margin");
 	}
 
+	/** Swaps the editor extensions for ones built from the current settings, in every open editor. */
 	applyEditorSettings() {
 		this.applyStyleSettings();
 		this.editorExtensionSlot.length = 0;
@@ -414,20 +416,55 @@ export default class AnnotationReviewPlugin extends Plugin {
 		await this.applyMutation(file, computeRemoval(content, block.matchStart, block.raw));
 	}
 
+	/** Opens a note in the main area, and returns its view when that is a markdown one. */
+	async openNote(filePath: string): Promise<MarkdownView | null> {
+		const file = this.fileFor(filePath);
+		if (!file) return null;
+		// Clicking a card makes the sidebar the active leaf, and the note has
+		// to open in the main area rather than on top of this panel.
+		const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
+		await leaf.openFile(file);
+		return leaf.view instanceof MarkdownView ? leaf.view : null;
+	}
+
+	/**
+	 * Every note in the vault that holds an annotation, the most recently
+	 * saved first. Read on request rather than kept up to date, so it costs
+	 * nothing while nobody looks at it. A note open in an editor is read from
+	 * there, since its unsaved typing is not on disk yet. Parsing holds up
+	 * everything else while it runs, so the sidebar gets a moment to draw
+	 * between batches.
+	 */
+	async scanVault(): Promise<NoteAnnotations[]> {
+		const open = new Map<string, Editor>();
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.file) open.set(view.file.path, view.editor);
+		}
+		const files = this.app.vault.getMarkdownFiles();
+		const notes: NoteAnnotations[] = [];
+		for (let i = 0; i < files.length; i += VAULT_SCAN_BATCH) {
+			const batch = files.slice(i, i + VAULT_SCAN_BATCH);
+			const contents = await Promise.all(batch.map(file => open.get(file.path)?.getValue() ?? this.app.vault.cachedRead(file)));
+			batch.forEach((file, k) => {
+				const annotations = this.detect(contents[k], file.path);
+				if (annotations.length === 0) return;
+				const folder = file.parent && !file.parent.isRoot() ? file.parent.path : "";
+				notes.push({ path: file.path, name: file.basename, folder, mtime: file.stat.mtime, annotations });
+			});
+			await new Promise(resolve => window.setTimeout(resolve, 0));
+		}
+		return notes.sort((a, b) => b.mtime - a.mtime);
+	}
+
 	/**
 	 * Reveals an annotation in the note, selecting the whole thing rather than
 	 * placing a caret, since a card in the middle of the screen is otherwise
 	 * hard to match up with the text it refers to.
 	 */
 	async revealRange(filePath: string, start: number, end: number) {
-		const file = this.fileFor(filePath);
-		if (!file) return;
-		// Clicking a card makes the sidebar the active leaf, and the note has
-		// to open in the main area rather than on top of this panel.
-		const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
-		await leaf.openFile(file);
-		const view = leaf.view;
-		if (!(view instanceof MarkdownView)) return;
+		const view = await this.openNote(filePath);
+		if (!view) return;
 
 		const from = view.editor.offsetToPos(start);
 		const to = view.editor.offsetToPos(end);
@@ -534,8 +571,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 				for (const action of this.annotationActions()) {
 					// Delete and Replace need a selection outside any annotation.
 					// Insert works on a selection or at the caret, but not inside
-					// an annotation, where the menu offers a reply instead.
+					// an annotation, where the menu offers a reply instead. An
+					// HTML comment takes no replies, so inside one there is none.
 					if (action.id === "insert" ? !!target : action.id !== "comment" && (!hasSelection || target)) continue;
+					if (action.id === "comment" && target?.wrapper === "html") continue;
 					// On a selection that has no comment yet, a bare one or one
 					// that only names who selected it, the first entry is the
 					// comment itself, not a reply.
@@ -623,12 +662,17 @@ export default class AnnotationReviewPlugin extends Plugin {
 	/**
 	 * One command for every kind of remark, since a comment, a reason and a
 	 * reply are the same thing in different places. Inside an annotation it
-	 * adds a reply. On a selection outside any annotation it comments on that
-	 * text. With nothing selected it leaves a comment on that spot.
+	 * adds a reply, except inside an HTML comment, which takes none. On a
+	 * selection outside any annotation it comments on that text. With nothing
+	 * selected it leaves a comment on that spot.
 	 */
 	private comment(editor: Editor) {
 		const { defaultAuthor: author, channel } = this.settings;
 		const target = this.annotationAtCaret(editor);
+		if (target?.wrapper === "html") {
+			new Notice("Annotation Review: an HTML comment takes no comments.");
+			return;
+		}
 		if (target) {
 			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel));
 			return;
