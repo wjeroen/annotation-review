@@ -1,4 +1,4 @@
-import { ItemView, MarkdownRenderer, Menu, Notice, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
+import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, TextSpan, AnnotationReply } from "./types";
 import { AnnotationFilters, NotesSort } from "./settings";
@@ -41,22 +41,27 @@ const KEYBOARD_GAP_PX = 8;
  */
 function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	if (!Platform.isMobile || !scrollArea) return;
-	const probe = keyboardProbe(field, scrollArea);
 	const lift = () => {
 		if (!field.isConnected || !scrollArea.isConnected) return stop();
 		// Measured without any room of ours, so it is never counted twice.
 		scrollArea.style.removeProperty("padding-bottom");
 		const area = scrollArea.getBoundingClientRect();
 		const box = field.getBoundingClientRect();
+		// The drawer keeps its full height while the keyboard is up, so the
+		// list's own bottom edge sits behind the keyboard. The keyboard's top,
+		// from the height Obsidian sets on the root element, is the limit then.
+		const viewport = window.visualViewport;
+		const screenBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+		const keyboard = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--keyboard-height")) || 0;
+		const bottom = Math.min(area.bottom, screenBottom - keyboard);
 		const move =
-			box.height > area.height || box.top < area.top
+			box.height > bottom - area.top || box.top < area.top
 				? box.top - area.top
-				: Math.max(0, box.bottom + KEYBOARD_GAP_PX - area.bottom);
+				: Math.max(0, box.bottom + KEYBOARD_GAP_PX - bottom);
 		if (move === 0) return;
 		const canScroll = scrollArea.scrollHeight - scrollArea.clientHeight - scrollArea.scrollTop;
 		if (move > canScroll) scrollArea.style.paddingBottom = `${move - canScroll}px`;
 		scrollArea.scrollTop += move;
-		probe.moved(move, move > canScroll ? move - canScroll : 0);
 	};
 	const ticking = window.setInterval(lift, 100);
 	const settled = window.setTimeout(() => window.clearInterval(ticking), KEYBOARD_SETTLE_MS);
@@ -73,55 +78,6 @@ function keepAboveKeyboard(field: HTMLElement, scrollArea: HTMLElement | null) {
 	};
 	field.addEventListener("blur", onBlur);
 	lift();
-}
-
-/**
- * WIP: a temporary readout for 0.8.0-beta.2, to find out why a field at the
- * end of the list still ends up behind the keyboard on a phone. Three
- * seconds after a field opens, a notice shows what keepAboveKeyboard saw at
- * the start, when it stopped at 1.5 seconds, and at 3 seconds. A list that
- * reaches below the visible area means the drawer does not shrink with the
- * keyboard. Numbers still changing after 1.5 seconds mean the keyboard is
- * slower than the wait. A scroll position lower than the one we set means
- * something undid it. Remove once the cause is known.
- */
-function keyboardProbe(field: HTMLElement, scrollArea: HTMLElement) {
-	const started = Date.now();
-	const rows: string[] = [];
-	let lifts = 0;
-	let total = 0;
-	let padded = 0;
-	let setTop = -1;
-	const sample = () => {
-		const area = scrollArea.getBoundingClientRect();
-		const box = field.getBoundingClientRect();
-		const vv = window.visualViewport;
-		const visible = vv ? vv.offsetTop + vv.height : window.innerHeight;
-		const kb = getComputedStyle(document.documentElement).getPropertyValue("--keyboard-height").trim() || "none";
-		const r = Math.round;
-		rows.push(
-			`${Date.now() - started}ms: kb ${kb}, visible to ${r(visible)}, list ${r(area.top)}-${r(area.bottom)}, field ${r(box.top)}-${r(box.bottom)}, scroll ${r(scrollArea.scrollTop)}`
-		);
-	};
-	sample();
-	window.setTimeout(sample, KEYBOARD_SETTLE_MS);
-	window.setTimeout(() => {
-		sample();
-		const lines = [
-			"Annotation Review keyboard check, please screenshot",
-			...rows,
-			`lifts ${lifts}, moved ${Math.round(total)}, padding ${Math.round(padded)}, last set scroll ${Math.round(setTop)}`
-		];
-		new Notice(createFragment(f => lines.forEach(line => f.createDiv({ text: line }))), 20000);
-	}, KEYBOARD_SETTLE_MS * 2);
-	return {
-		moved(move: number, padding: number) {
-			lifts++;
-			total += move;
-			padded = Math.max(padded, padding);
-			setTop = scrollArea.scrollTop;
-		}
-	};
 }
 
 /**
