@@ -2,6 +2,9 @@
 
 ## Current Sprint
 
+### Bug Fixes
+- [ ] Approve all on a linked set often needs several taps before it works, on the desktop and the phone (reported 2026-10-10, cause unknown, an error during an action now shows as a notice)
+
 ### Known gaps, accepted
 - [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
 - [ ] Anything in square brackets followed by a space at the start of a reply is read as the author, so `^[[1] see the appendix]` gets the author "1"
@@ -24,6 +27,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] A card that went stale no longer acts on another annotation with the same text. A repeated Approve all on a linked rename had left a reply on its own in the note. Approve all and Dismiss all are one edit with one undo, all members or none, and an error during an action shows as a notice (2026-10-11)
 - [x] On the phone, the edit box of the last card is brought above the keyboard. The drawer keeps its full height under the keyboard, so the keyboard's top is now the limit (2026-10-08)
 - [x] On the desktop, a note picked from the list of notes that is already open in another tab is brought to the front there. Open Tab Settings had sent the open to that tab without showing it (2026-10-08)
 - [x] The list of notes sorts by most annotations, or by most recently changed, through a sort button right of the filter button that is only there in the list. The choice stays on the device (2026-10-08)
@@ -38,4 +42,3 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [x] A link is written inside the author bracket behind a colon, `[Claude:L3]@@` or `[:L3]@@`, since a second bracket is a reference link in markdown and Obsidian draws it as one, and a colon never appears in a name. Links are numbers, only changes carry them, the set header names the link, and the thread stops with the last card (2026-08-29)
 - [x] The author filter and the author list count the author of every comment as well as the annotation's own, so a comment on a selection is filed under whoever wrote it instead of under No author (2026-08-29)
 - [x] Annotations can be linked, `[X][Lname]@@` or a `link` field in the metadata, and a linked set is drawn together in the sidebar on a thread, with a header that approves or dismisses all of it. Each member keeps its own card and buttons (2026-08-29)
-- [x] A line with several kinds of annotation shows a color for each, side by side in the order they appear, never above each other. The line grows with the number of colors and stays right aligned. Two settings in pixels: the thickness of one band, 1 to 10, and the space between two bands, 0 to 5 (2026-08-29)

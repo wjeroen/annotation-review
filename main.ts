@@ -1,7 +1,7 @@
 import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce, Platform } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
-import { computeAddReply, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
+import { computeAddReply, computeLinkedMutation, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
 import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openReply } from "./src/compose";
@@ -258,28 +258,33 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return editor ? editor.getValue() : await this.app.vault.read(file);
 	}
 
-	private async applyMutation(file: TFile, result: MutationResult): Promise<boolean> {
+	private async applyMutation(file: TFile, result: MutationResult) {
 		if (!result.ok) {
 			new Notice(`Annotation Review: ${result.reason}`);
 			await this.rescanActiveFile();
-			return false;
+			return;
 		}
 		const editor = this.getEditorFor(file.path);
 		if (editor) {
 			// Going through the editor keeps this in the undo history and
-			// leaves any unsaved edits elsewhere in the note untouched.
-			// Obsidian's own replaceRange always dispatches scrollIntoView,
-			// which sends the note to wherever the caret sits. On a phone that
-			// is often the very start, since a card tap there never focuses
-			// the note. The same change handed straight to CodeMirror carries
-			// no scroll, so the note stays where it is. The desktop keeps
-			// Obsidian's call, where a card tap has already put the caret and
-			// the focus on the annotation.
+			// leaves any unsaved edits elsewhere in the note untouched. Several
+			// changes, from a linked set, go in as one edit, so one undo takes
+			// them all back. Obsidian's own replaceRange always dispatches
+			// scrollIntoView, which sends the note to wherever the caret sits.
+			// On a phone that is often the very start, since a card tap there
+			// never focuses the note. The same change handed straight to
+			// CodeMirror carries no scroll, so the note stays where it is. The
+			// desktop keeps Obsidian's calls, where a card tap has already put
+			// the caret and the focus on the annotation.
+			const { changes } = result;
+			// The changes run from the last in the note to the first.
+			const first = changes[changes.length - 1];
 			const cm = Platform.isMobile ? (editor as EditorWithCm).cm : undefined;
 			if (cm) {
 				// Measured before the change, while the layout still matches the screen.
-				const offScreen = isOffScreen(cm, result.from);
-				cm.dispatch({ changes: { from: result.from, to: result.to, insert: result.replacement } });
+				const offScreen = isOffScreen(cm, first.from);
+				// CodeMirror reads every range in the note as it was before any of them.
+				cm.dispatch({ changes: changes.map(c => ({ from: c.from, to: c.to, insert: c.replacement })) });
 				// A card acted on straight from the list, with the note showing
 				// another part of the file, would otherwise change text nobody
 				// can see. This brings the change on screen, and only when it
@@ -289,16 +294,37 @@ export default class AnnotationReviewPlugin extends Plugin {
 				// miss. Focus stays in the sidebar, so the keyboard stays down.
 				if (offScreen) {
 					const yMargin = Math.round(cm.scrollDOM.clientHeight / 3);
-					cm.dispatch({ effects: EditorView.scrollIntoView(result.from, { y: "start", yMargin }) });
+					cm.dispatch({ effects: EditorView.scrollIntoView(first.from, { y: "start", yMargin }) });
 				}
+			} else if (changes.length === 1) {
+				editor.replaceRange(first.replacement, editor.offsetToPos(first.from), editor.offsetToPos(first.to));
 			} else {
-				editor.replaceRange(result.replacement, editor.offsetToPos(result.from), editor.offsetToPos(result.to));
+				editor.transaction({
+					changes: changes.map(c => ({ from: editor.offsetToPos(c.from), to: editor.offsetToPos(c.to), text: c.replacement }))
+				});
 			}
 		} else {
 			await this.app.vault.modify(file, result.newContent);
 		}
 		await this.rescanActiveFile();
-		return true;
+	}
+
+	/**
+	 * Reads the note, works out the change from what it says now, and writes
+	 * it. Nothing waits on a sidebar button, so an error would vanish without
+	 * a trace, and a phone has no console to find it in. It is shown as a
+	 * notice instead, one that stays until tapped so it can be read in full.
+	 */
+	private async mutate(filePath: string, compute: (content: string) => MutationResult) {
+		try {
+			const file = this.fileFor(filePath);
+			if (!file) return;
+			const content = await this.readContent(file);
+			await this.applyMutation(file, compute(content));
+		} catch (error) {
+			console.error("Annotation Review:", error);
+			new Notice(`Annotation Review ran into an error: ${error instanceof Error ? error.message : String(error)}`, 0);
+		}
 	}
 
 	private fileFor(filePath: string): TFile | null {
@@ -386,23 +412,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 	}
 
 	async applyAction(annotation: Annotation, action: AnnotationAction) {
-		const file = this.fileFor(annotation.filePath);
-		if (!file) return;
-		const content = await this.readContent(file);
-		await this.applyMutation(file, computeMutation(content, annotation, action));
+		await this.mutate(annotation.filePath, content => computeMutation(content, annotation, action));
 	}
 
-	/**
-	 * Every annotation on one link, in one go. The note is rewritten from the
-	 * last of them backwards, so the ones still to come keep their place while
-	 * the ones behind them are replaced. A comment cannot be approved, so an
-	 * approve steps over it and leaves it in the note.
-	 */
+	/** Every annotation on one link, as one edit, or none of them when one has gone. */
 	async applyLinkedAction(annotations: Annotation[], action: AnnotationAction) {
-		for (const annotation of [...annotations].sort((a, b) => b.matchStart - a.matchStart)) {
-			if (action === "approve" && annotation.type === "comment") continue;
-			await this.applyAction(annotation, action);
-		}
+		if (annotations.length === 0) return;
+		await this.mutate(annotations[0].filePath, content => computeLinkedMutation(content, annotations, action));
 	}
 
 	/**
@@ -415,25 +431,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const author = m ? m[1].trim() : "";
 		const text = (m ? replyText.slice(m[0].length) : replyText).trim();
 		if (!text) return;
-		const file = this.fileFor(annotation.filePath);
-		if (!file) return;
-		const content = await this.readContent(file);
-		await this.applyMutation(file, computeAddReply(content, annotation, author, text));
+		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text));
 	}
 
 	/** Replaces a span inside an annotation, or inserts when start equals end. */
 	async replaceSpan(annotation: Annotation, start: number, end: number, replacement: string) {
-		const file = this.fileFor(annotation.filePath);
-		if (!file) return;
-		const content = await this.readContent(file);
-		await this.applyMutation(file, computeSpanReplace(content, annotation, start, end, replacement));
+		await this.mutate(annotation.filePath, content => computeSpanReplace(content, annotation, start, end, replacement));
 	}
 
 	async deleteAdmonition(block: AdmonitionBlock) {
-		const file = this.fileFor(block.filePath);
-		if (!file) return;
-		const content = await this.readContent(file);
-		await this.applyMutation(file, computeRemoval(content, block.matchStart, block.raw));
+		await this.mutate(block.filePath, content => computeRemoval(content, block.matchStart, block.raw));
 	}
 
 	/** Opens a note in the main area, and returns its view when that is a markdown one. */

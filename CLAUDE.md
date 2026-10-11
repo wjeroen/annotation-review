@@ -19,6 +19,9 @@ npm run dev       # rebuild on save
 - Read and write a note through its open editor when there is one (`readContent`, `applyMutation`).
 - Only the newest scan may publish (`rescanActiveFile`). Do not try to predict which events matter.
 - Spans are relative to the annotation's own text, never absolute file offsets.
+- A card acts only on its annotation where the last scan found it, replies included. Never search the note for the same text.
+- Approve all and Dismiss all are one edit: every member or none.
+- Sidebar actions go through `mutate`, so an error shows as a notice.
 - Never trim text between operator marks, in the parser or in the sidebar's edit fields.
 - Never force a sidebar redraw on every event. Mark the active card without a redraw.
 - A rejected pairing consumes only its opening delimiter, never both.

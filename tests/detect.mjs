@@ -5,7 +5,7 @@ const built = await esbuild.build({
 	stdin: {
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
-			export { computeMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
+			export { computeMutation, computeLinkedMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composePointComment, openReply, replyEntry } from "./src/compose";
 		`,
 		resolveDir: ".",
@@ -28,6 +28,7 @@ const {
 	detectAdmonitionBlocks,
 	getInsertContext,
 	computeMutation,
+	computeLinkedMutation,
 	computeAddReply,
 	computeSpanReplace,
 	computeRemoval,
@@ -350,6 +351,37 @@ check("a comment carries none either", one('{>>{"author":"Claude","link":3}@@a n
 check("a word is not a link", one('{--{"author":"Claude","link":"move"}@@gone--}').link ?? null, null);
 check("one end can still be approved on its own", computeMutation(MOVE, all(MOVE)[0], "approve").newContent, "and later {++[Claude:L3]@@gone ++}here.");
 check("and the other end after it", computeMutation(computeMutation(MOVE, all(MOVE)[1], "approve").newContent, all(MOVE)[0], "approve").newContent, "and later gone here.");
+
+console.log("\n=== A card acts only on its own annotation, where it was found ===");
+// A linked rename, reported from a phone. Approve all ran a second time with
+// the old cards, took the first member's wrapper for the second member, and
+// left the first member's reply on its own in the note.
+const R = "%%~~[Claude:L1]@@phone notification~>Telegram message~~%%";
+const RENAME = `send a ${R}^[[Claude] Both or neither.] with the reason\n\nthen send a ${R} that it is ready.`;
+const [renameFirst, renameSecond] = all(RENAME);
+const afterSecond = computeMutation(RENAME, renameSecond, "approve").newContent;
+check("a card whose annotation is gone is refused", computeMutation(afterSecond, renameSecond, "approve").ok, false);
+check("so the other member keeps its reply", computeMutation(afterSecond, renameFirst, "approve").newContent, "send a Telegram message with the reason\n\nthen send a Telegram message that it is ready.");
+const TWINS = `A ${R} B ${R} C`;
+const twins = all(TWINS);
+check("a card whose identical twin is still there is refused", computeMutation(computeMutation(TWINS, twins[1], "approve").newContent, twins[1], "dismiss").ok, false);
+check("an annotation that gained a reply since the scan is refused", computeMutation("{--x--}^[[J] wait]", one("{--x--}"), "approve").ok, false);
+check("and one that moved, until the next scan", computeMutation("Typed. {--x--}", one("{--x--}"), "approve").ok, false);
+check("a stale reply is not added to another annotation", computeAddReply(afterSecond, renameSecond, "J", "ok").ok, false);
+check("a stale edit is refused", computeSpanReplace(afterSecond, renameSecond, renameSecond.replacementSpan.start, renameSecond.replacementSpan.end, "text").ok, false);
+const blocks = "```ad-c\nSame.\n```\n\n```ad-c\nSame.\n```";
+const [, laterBlock] = detectAdmonitionBlocks(blocks, "t.md");
+const afterBlock = computeRemoval(blocks, laterBlock.matchStart, laterBlock.raw).newContent;
+check("a removed admonition block is not looked for elsewhere", computeRemoval(afterBlock, laterBlock.matchStart, laterBlock.raw).ok, false);
+
+console.log("\n=== Approve all and Dismiss all are one edit ===");
+const both = [renameFirst, renameSecond];
+check("approving a set takes the reply along", computeLinkedMutation(RENAME, both, "approve").newContent, "send a Telegram message with the reason\n\nthen send a Telegram message that it is ready.");
+check("as one change per member, the last in the note first", computeLinkedMutation(RENAME, both, "approve").changes.map(c => c.from), [renameSecond.matchStart, renameFirst.matchStart]);
+check("dismissing a set", computeLinkedMutation(RENAME, both, "dismiss").newContent, "send a phone notification with the reason\n\nthen send a phone notification that it is ready.");
+check("with one member gone nothing changes", computeLinkedMutation(afterSecond, both, "approve").ok, false);
+check("the order the members come in does not matter", computeLinkedMutation(MOVE, all(MOVE).reverse(), "approve").newContent, "and later gone here.");
+check("members inside each other are refused", (d => computeLinkedMutation(d, all(d), "approve").ok)("{++[:L1]@@a {--[:L1]@@b--} c++}"), false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

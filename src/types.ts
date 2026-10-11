@@ -23,10 +23,10 @@ export type MetaChannel = "footnote" | "brace";
 
 /**
  * A range inside an annotation's `fullMatch` string, never an absolute file
- * offset. Keeping spans relative to fullMatch means an edit stays correct even
- * when typing elsewhere in the note has shifted the annotation's position,
- * since fullMatch gets relocated first and the span is applied to wherever it
- * actually landed.
+ * offset. Offsets recorded at scan time go stale as soon as anything earlier
+ * in the note changes, while a range inside the annotation does not. An
+ * action applies it from where the annotation starts, once it has checked
+ * that the annotation is still there.
  */
 export interface TextSpan {
 	start: number;

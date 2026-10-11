@@ -124,7 +124,7 @@ A move is two annotations, a deletion in one place and an insertion in another, 
 
 The lighter form writes it beside the name behind a colon, `[Claude:L3]@@`, or on its own, `[L3]@@`, when nobody is signing it. A marker is known by its shape, a letter and digits, so the order inside the bracket does not matter and a name like Lisa is never mistaken for one. A link is a number, counted per note, and any number of annotations can share one. Only changes carry links, since a comment is never approved. A second bracket is not used for this, because `[Claude][L3]` is a reference link in markdown and Obsidian draws it as one.
 
-In the sidebar they are drawn together where the first of them sits, however far apart they are in the note, on a thread with a header that approves or dismisses all of them at once. Each keeps its own card, line number and buttons, so a set can still be taken apart on purpose. A link with nobody else on it shows as an ordinary card.
+In the sidebar they are drawn together where the first of them sits, however far apart they are in the note, on a thread with a header that approves or dismisses all of them at once. That is one edit, so one undo brings the whole set back, and when one of them has changed since the sidebar last read the note, none of them change. Each keeps its own card, line number and buttons, so a set can still be taken apart on purpose. A link with nobody else on it shows as an ordinary card.
 
 ## Settings
 
@@ -149,6 +149,8 @@ Everything above follows the vault through sync, and is picked up the moment it 
 ## How edits reach the note
 
 While a note is open, Obsidian keeps your typing in memory and only writes it to disk a second or two later. So the plugin reads from the open editor rather than from the file on disk, which is what keeps the sidebar in step with what you are actually looking at, and it writes through the editor too, so its changes join the normal undo history and never overwrite unsaved typing.
+
+A button only acts on its annotation where the sidebar last found it. If that annotation has changed or moved since then, for instance right after typing earlier in the note, the button does nothing, says so in a notice, and the sidebar reads the note again, so the next tap works. An unexpected error shows as a notice that stays until you tap it.
 
 Refreshing rebuilds the panel, which would otherwise lose your scroll position and close whatever field you had open, so a refresh is skipped entirely when the annotations haven't actually changed, and while a field inside the panel has focus. Scroll position is restored across the rebuilds that do happen.
 
