@@ -164,6 +164,6 @@ npm test
 
 `npm test` covers the parsing and rewriting rules, plus the note-switching behavior. The latter matters because scanning a note is asynchronous while several Obsidian events can ask for a scan at once, and an older read landing after a newer one used to leave the panel showing a different note's annotations.
 
-Changes ship as pre-releases (`0.6.0-beta.1` and so on) so they can be tested through BRAT before being called a version. `ARCHITECTURE.md` has the codebase map and the reasoning behind the syntax, `CLAUDE.md` the gotchas worth knowing before changing the parser or the sidebar.
+Changes ship as pre-releases (`0.6.0-beta.1` and so on) so they can be tested through BRAT before being called a version. `ARCHITECTURE.md` has the codebase map, the reasoning behind the syntax and the pitfalls worth knowing before changing the parser or the sidebar, `CLAUDE.md` the few rules that protect notes, settings and releases.
 
 `skills/annotation-review/SKILL.md` is the syntax reference written to be handed to an AI tool as a skill or system prompt, so its output is readable by the plugin.

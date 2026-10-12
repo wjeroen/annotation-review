@@ -1,6 +1,6 @@
 # Architecture
 
-How the plugin is put together, and why the syntax is the way it is. `README.md` is the user guide, `CLAUDE.md` holds the working rules, `TODO.md` is tasks only. The bugs behind the rules are under Pitfalls at the end of this file.
+How the plugin is put together, and why the syntax is the way it is. `README.md` is the user guide, `CLAUDE.md` holds the few rules that protect notes, settings and releases, `TODO.md` is tasks only. The bugs that shaped the code are under Pitfalls at the end of this file.
 
 ## Codebase map
 
@@ -60,7 +60,7 @@ The author is drawn as a colored underline, a chip, or nothing, chosen in settin
 
 ## Pitfalls
 
-Real bugs that shipped once. The rules in `CLAUDE.md` come from these.
+Real bugs that shipped once. Read the ones for any part you change. The few rules in `CLAUDE.md` come from some of these.
 
 **Generated code and piped builds.** A patch script that wrote code through a raw template escaped a `${`. `String.raw` keeps the backslash, so the file got a literal `${...}` instead of the value, the build stayed green, and the wrong string shipped. Separately, `npm run build | tail` reports tail's status, so a failed build once shipped the previous `main.js` under a new version.
 
