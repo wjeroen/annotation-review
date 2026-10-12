@@ -4,6 +4,7 @@
 
 ### Bug Fixes
 - [ ] Approve all on a linked set often needs several taps before it works, on the desktop and the phone (reported 2026-10-10, cause unknown, an error during an action now shows as a notice)
+- [ ] A line of equals signs under a title is read as bare highlights, and with no blank line after it the real highlight on the next line is lost (found 2026-10-11)
 
 ### Known gaps, accepted
 - [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
