@@ -1008,10 +1008,10 @@ export class AnnotationReviewView extends ItemView {
 						replyPrefill
 					);
 
-		// The row of buttons is left out, so a click that just misses a button
-		// does nothing rather than jump the note.
+		// The line number and the space around the buttons open the annotation
+		// too. They are the largest spots on a card that hold no button or text.
 		card.addEventListener("click", evt => {
-			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author, .annotation-review-actions")) return;
+			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author")) return;
 			// The card clicked is the one being looked at, so it is marked
 			// before the caret gets there and the list stays where it is.
 			this.plugin.activeAnnotationId = annotation.id;

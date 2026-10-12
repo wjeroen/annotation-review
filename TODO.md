@@ -28,7 +28,8 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
-- [x] The list no longer jumps while a card or a button is clicked. It only scrolls when the caret goes into a different annotation, a click next to the buttons does nothing, and two annotations that touch no longer steal each other's mark (2026-10-11)
+- [x] Clicking the line number or the space beside the buttons opens the annotation in the note again, as it did before 0.8.0-beta.5 (2026-10-11)
+- [x] The list no longer jumps while a card or a button is clicked. It only scrolls when the caret goes into a different annotation, and two annotations that touch no longer steal each other's mark (2026-10-11)
 - [x] A card that went stale no longer acts on another annotation with the same text. A repeated Approve all on a linked rename had left a reply on its own in the note. Approve all and Dismiss all are one edit with one undo, all members or none, and an error during an action shows as a notice (2026-10-11)
 - [x] On the phone, the edit box of the last card is brought above the keyboard. The drawer keeps its full height under the keyboard, so the keyboard's top is now the limit (2026-10-08)
 - [x] On the desktop, a note picked from the list of notes that is already open in another tab is brought to the front there. Open Tab Settings had sent the open to that tab without showing it (2026-10-08)
@@ -42,4 +43,3 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [x] The defaults a fresh install starts with: braces everywhere with footnote replies, authors underlined on changes and chipped on comments, gutter in the margin with 4 pixel bands, 2 between them and 5 beside the line, author chips at 85 percent (2026-08-30)
 - [x] The gutter line only reaches into the next line when that line draws the same colors, so a line with three bands no longer leaves its leftmost band hanging over the line below it (2026-08-29)
 - [x] A link is written inside the author bracket behind a colon, `[Claude:L3]@@` or `[:L3]@@`, since a second bracket is a reference link in markdown and Obsidian draws it as one, and a colon never appears in a name. Links are numbers, only changes carry them, the set header names the link, and the thread stops with the last card (2026-08-29)
-- [x] The author filter and the author list count the author of every comment as well as the annotation's own, so a comment on a selection is filed under whoever wrote it instead of under No author (2026-08-29)
