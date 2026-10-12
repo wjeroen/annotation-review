@@ -110,7 +110,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.registerEditorExtension(
 			EditorView.updateListener.of(update => {
 				if (update.selectionSet || update.docChanged) {
-					this.syncCursor(update.view, update.state.selection.main.head);
+					const { from, to } = update.state.selection.main;
+					this.syncCursor(update.view, from, to);
 				}
 			})
 		);
@@ -369,7 +370,9 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.scannedPath = file.path;
 		// Offsets are fresh now, so work out the active card again before drawing.
 		const editor = this.getEditorFor(file.path);
-		this.activeAnnotationId = editor ? (innermostAt(this.annotations, editor.posToOffset(editor.getCursor()))?.id ?? null) : null;
+		this.activeAnnotationId = editor
+			? (innermostAt(this.annotations, editor.posToOffset(editor.getCursor("from")), editor.posToOffset(editor.getCursor("to")))?.id ?? null)
+			: null;
 		this.refreshView();
 
 		// The note on screen changed while this one was being read, so nothing
@@ -399,10 +402,16 @@ export default class AnnotationReviewPlugin extends Plugin {
 		return anyKnown ? null : this.app.workspace.getActiveFile()?.path ?? null;
 	}
 
-	/** Marks the card whose annotation the caret sits in, and scrolls it into view. */
-	private syncCursor(cm: EditorView, offset: number) {
+	/**
+	 * Marks the card whose annotation the caret or the selection sits in, and
+	 * scrolls it into view. The whole selection counts, not only its end: a
+	 * card click selects its annotation, and the end of that selection is
+	 * also the start of an annotation that follows without a space, which
+	 * would otherwise take the mark.
+	 */
+	private syncCursor(cm: EditorView, from: number, to: number) {
 		if (this.pathForEditorView(cm) !== this.scannedPath) return;
-		const id = innermostAt(this.annotations, offset)?.id ?? null;
+		const id = innermostAt(this.annotations, from, to)?.id ?? null;
 		if (id === this.activeAnnotationId) return;
 		this.activeAnnotationId = id;
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {

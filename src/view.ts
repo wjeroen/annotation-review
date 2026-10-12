@@ -180,6 +180,8 @@ export class AnnotationReviewView extends ItemView {
 	private notesToken = 0;
 	/** False while the panel is off screen, which on a phone means the drawer is closed. */
 	private onScreen = true;
+	/** The card the list last scrolled to, so the same card never moves the list twice. */
+	private scrolledTo: string | null = null;
 	private visibility: IntersectionObserver | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
@@ -222,8 +224,15 @@ export class AnnotationReviewView extends ItemView {
 		return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 	}
 
-	/** Highlights the card the caret is in, without redrawing anything. */
-	setActiveAnnotation(id: string | null) {
+	/**
+	 * Highlights the card the caret is in, without redrawing anything. The
+	 * list scrolls to it only when the caret has moved into a different
+	 * annotation, or with `force`. Every rescan calls this, and rescans run at
+	 * moments nobody notices, such as the sidebar becoming the active pane, so
+	 * scrolling each time moved the list under the pointer while Approve was
+	 * being clicked.
+	 */
+	setActiveAnnotation(id: string | null, force = false) {
 		const cards = Array.from(this.containerEl.querySelectorAll<HTMLElement>(".annotation-review-annotation-card"));
 		let target: HTMLElement | null = null;
 		for (const card of cards) {
@@ -231,11 +240,16 @@ export class AnnotationReviewView extends ItemView {
 			card.toggleClass("is-active", on);
 			if (on) target = card;
 		}
+		if (id === null) this.scrolledTo = null;
+		if (!force && id === this.scrolledTo) return;
 		// A panel that is off screen has no place to scroll in, so the scroll
 		// waits for the moment it comes back. Without that, tapping an
 		// annotation in the note with the drawer closed left the list wherever
 		// it stood, until some later event scrolled it.
-		if (target && this.onScreen) target.scrollIntoView({ block: "nearest" });
+		if (target && this.onScreen) {
+			target.scrollIntoView({ block: "nearest" });
+			this.scrolledTo = id;
+		}
 	}
 
 	getViewType() {
@@ -258,7 +272,7 @@ export class AnnotationReviewView extends ItemView {
 		// the first tap in it used to be the one that got left behind.
 		this.visibility = new IntersectionObserver(entries => {
 			this.onScreen = entries.some(entry => entry.isIntersecting);
-			if (this.onScreen) this.setActiveAnnotation(this.plugin.activeAnnotationId);
+			if (this.onScreen) this.setActiveAnnotation(this.plugin.activeAnnotationId, true);
 		});
 		this.visibility.observe(this.containerEl);
 	}
@@ -994,8 +1008,15 @@ export class AnnotationReviewView extends ItemView {
 						replyPrefill
 					);
 
+		// The row of buttons is left out, so a click that just misses a button
+		// does nothing rather than jump the note.
 		card.addEventListener("click", evt => {
-			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author")) return;
+			if ((evt.target as HTMLElement).closest("button, input, textarea, .annotation-review-editable, .annotation-review-author, .annotation-review-actions")) return;
+			// The card clicked is the one being looked at, so it is marked
+			// before the caret gets there and the list stays where it is.
+			this.plugin.activeAnnotationId = annotation.id;
+			this.scrolledTo = annotation.id;
+			this.setActiveAnnotation(annotation.id);
 			this.plugin.revealRange(annotation.filePath, annotation.matchStart, annotation.matchEnd);
 		});
 
