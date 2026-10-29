@@ -5,7 +5,7 @@ const built = await esbuild.build({
 	stdin: {
 		contents: `
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
-			export { computeMutation, computeLinkedMutation, computeAddReply, computeSpanReplace, computeRemoval } from "./src/actions";
+			export { computeMutation, computeLinkedMutation, computeAddReply, computeAuthorEdit, computeSpanReplace, computeRemoval, noteOf } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composePointComment, openReply, replyEntry } from "./src/compose";
 		`,
 		resolveDir: ".",
@@ -30,8 +30,10 @@ const {
 	computeMutation,
 	computeLinkedMutation,
 	computeAddReply,
+	computeAuthorEdit,
 	computeSpanReplace,
 	computeRemoval,
+	noteOf,
 	composeComment,
 	composeDelete,
 	composeReplace,
@@ -157,24 +159,9 @@ check("an inner annotation keeps its own replies", all(nested).map(shape), [["in
 check("approving the inner one", computeMutation(nested, all(nested)[1], "approve").newContent, `{++a  c++}`);
 
 console.log("\n=== Author editing ===");
-const rewrite = (current, author, meta) => {
-	if (current.startsWith("{")) {
-		const fields = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
-		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
-	}
-	if (!author) return "";
-	if (current.endsWith("@@")) return `[${author}]@@`;
-	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
-};
 function setAuthor(doc, value, target) {
 	const ann = one(doc);
-	const tgt = target ? target(ann) : ann;
-	if (tgt.authorSpan) {
-		const current = ann.fullMatch.slice(tgt.authorSpan.start, tgt.authorSpan.end);
-		return computeSpanReplace(doc, ann, tgt.authorSpan.start, tgt.authorSpan.end, rewrite(current, value, tgt.authorMeta)).newContent;
-	}
-	const p = tgt.authorInsert;
-	return computeSpanReplace(doc, ann, p.at, p.at, `${p.prefix}${value}${p.suffix}`).newContent;
+	return computeAuthorEdit(doc, ann, target ? target(ann) : ann, value).newContent;
 }
 check("change, metadata", setAuthor(`{--${C}T--}`, "Joe"), `{--{"author":"Joe"}@@T--}`);
 check("change keeps other metadata fields", setAuthor(`{--{"author":"Claude","time":5}@@T--}`, "Joe"), `{--{"author":"Joe","time":5}@@T--}`);
@@ -194,6 +181,21 @@ const withBraceReply = `{--T--}{>>why<<}`;
 check("add to a brace reply, as metadata", setAuthor(withBraceReply, "Alex", a => a.replies[0]), `{--T--}{>>{"author":"Alex"}@@why<<}`);
 check("change a reply's label", setAuthor(`{--T--}^[[Alex] why]`, "Joe", a => a.replies[0]), `{--T--}^[[Joe] why]`);
 check("clear a reply's label", setAuthor(`{--T--}^[[Alex] why]`, "", a => a.replies[0]), `{--T--}^[why]`);
+
+console.log("\n=== A change and its reason share one name ===");
+check("renaming a change renames its reason", setAuthor(`%%++[Claude]@@text ++%%^[[Claude] reason]`, "Joe"), `%%++[Joe]@@text ++%%^[[Joe] reason]`);
+check("in braces, both as metadata", setAuthor(`{++${C}is ++}{>>${C}why<<}`, "Joe"), `{++{"author":"Joe"}@@is ++}{>>{"author":"Joe"}@@why<<}`);
+check("on a replacement", setAuthor(`==~~[Claude]@@a~>b~~==^[[Claude] why]`, "Joe"), `==~~[Joe]@@a~>b~~==^[[Joe] why]`);
+check("as one edit", (d => { const a = one(d); return computeAuthorEdit(d, a, a, "Joe").changes.length; })(`{--${C}T--}^[[Claude] why]`), 2);
+check("clearing clears both", setAuthor(`{--${C}T--}^[[Claude] why]`, ""), `{--T--}^[why]`);
+check("the link stays on the change", setAuthor(`%%++[Claude:L1]@@x++%%^[[Claude] why]`, "Joe"), `%%++[Joe:L1]@@x++%%^[[Joe] why]`);
+check("a first reply by someone else is a comment and keeps its name", setAuthor(`{--${C}T--}^[[Alex] ok]`, "Joe"), `{--{"author":"Joe"}@@T--}^[[Alex] ok]`);
+check("only the first reply is the reason", setAuthor(`{--${C}T--}^[[Claude] why]^[[Claude] more]`, "Joe"), `{--{"author":"Joe"}@@T--}^[[Joe] why]^[[Claude] more]`);
+check("renaming a reply leaves the change alone", setAuthor(`{--${C}T--}^[[Claude] why]`, "Joe", a => a.replies[0]), `{--${C}T--}^[[Joe] why]`);
+check("a comment on a spot keeps its replies' names", setAuthor(`A{>>${C}note<<}{>>${C}more<<}`, "Joe"), `A{>>{"author":"Joe"}@@note<<}{>>${C}more<<}`);
+check("a comment on a selection is its first reply", noteOf(one(`==T==^[[Claude] note]`))?.text, "note");
+check("a change's reason is a first reply by its author", noteOf(one(`{--${C}T--}^[[Claude] why]`))?.text, "why");
+check("a comment on a spot has no reason, so a reply by its author stays a reply", noteOf(one(`A{>>${C}note<<}{>>${C}more<<}`)), undefined);
 
 console.log("\n=== Editing the annotated text ===");
 function setSpan(doc, spanName, value) {

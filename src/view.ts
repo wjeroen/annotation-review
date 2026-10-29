@@ -1,8 +1,9 @@
 import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, TextSpan, AnnotationReply } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, TextSpan } from "./types";
 import { AnnotationFilters, NotesSort } from "./settings";
 import { applyChipColor } from "./authors";
+import { noteOf } from "./actions";
 
 /**
  * Sizes a textarea to its content, so it shows every line and grows as more
@@ -137,32 +138,6 @@ interface EditableOptions {
 	clearSpan?: TextSpan;
 	/** Save the text exactly as typed. Annotated text carries its own spaces. */
 	keepWhitespace?: boolean;
-}
-
-/**
- * Rewrites an author mark in whatever spelling it already has: metadata stays
- * metadata with its other fields intact, `[X]@@` stays `[X]@@`, and a label
- * keeps the whitespace after it. An empty author removes the mark, unless
- * metadata has other fields worth keeping.
- */
-function rewriteAuthor(current: string, author: string, meta?: Record<string, unknown>): string {
-	if (current.startsWith("{")) {
-		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
-		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
-	}
-	// The markers are not part of the name, so they stay put. They are known
-	// by their shape, a letter and digits, wherever in the bracket they sit.
-	const label = /^\[([^\]]*)\]@@$/.exec(current);
-	if (label) {
-		const markers = label[1]
-			.split(":")
-			.map(part => part.trim())
-			.filter(part => /^[LT]\d+$/.test(part));
-		const tail = markers.length ? `:${markers.join(":")}` : "";
-		return author || tail ? `[${author}${tail}]@@` : "";
-	}
-	if (!author) return "";
-	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
 }
 
 export class AnnotationReviewView extends ItemView {
@@ -373,7 +348,7 @@ export class AnnotationReviewView extends ItemView {
 				const names = authorsOf(a);
 				for (const name of names) authors.add(name);
 				if (names.length === 0) hasNoAuthor = true;
-				const extra = a.replies.length - (this.noteOf(a) ? 1 : 0);
+				const extra = a.replies.length - (noteOf(a) ? 1 : 0);
 				if (extra > 1) hasMoreReplies = true;
 			}
 			const sortedAuthors = Array.from(authors).sort((a, b) => a.localeCompare(b));
@@ -714,17 +689,6 @@ export class AnnotationReviewView extends ItemView {
 		return el;
 	}
 
-	/** Sets, changes or clears an author, in whatever spelling it already has. */
-	private saveAuthor(annotation: Annotation, target: Authored, newAuthor: string) {
-		if (target.authorSpan) {
-			const current = annotation.fullMatch.slice(target.authorSpan.start, target.authorSpan.end);
-			this.plugin.replaceSpan(annotation, target.authorSpan.start, target.authorSpan.end, rewriteAuthor(current, newAuthor, target.authorMeta));
-		} else if (newAuthor) {
-			const p = target.authorInsert;
-			this.plugin.replaceSpan(annotation, p.at, p.at, `${p.prefix}${newAuthor}${p.suffix}`);
-		}
-	}
-
 	/** An author chip that turns into an inline editor on click. */
 	private renderAuthorBadge(container: Element, author: string | undefined, extraCls: string, onSave: (author: string) => void) {
 		const el = container.createEl("span", { cls: `annotation-review-author ${extraCls}` });
@@ -871,20 +835,6 @@ export class AnnotationReviewView extends ItemView {
 		return row;
 	}
 
-	/**
-	 * The entry shown as the annotation's own text rather than as a comment
-	 * on it. For a comment on a selection that is the first reply, which is
-	 * the comment itself. For a change it is the first reply when the
-	 * change's author wrote it, since that is the reason for the change. A
-	 * reply by someone else, or on an unauthored change, is a comment.
-	 */
-	private noteOf(annotation: Annotation): AnnotationReply | undefined {
-		const first = annotation.replies[0];
-		if (!first) return undefined;
-		if (annotation.type === "comment" && !annotation.isPoint) return first;
-		return annotation.author && first.author === annotation.author ? first : undefined;
-	}
-
 	private renderAnnotationItem(container: Element, annotation: Annotation) {
 		const card = container.createEl("div", {
 			cls: `annotation-review-card annotation-review-annotation-card annotation-type-${annotation.type} annotation-wrapper-${annotation.wrapper}`
@@ -929,7 +879,7 @@ export class AnnotationReviewView extends ItemView {
 		// reply's author goes in the header, and only later replies are
 		// replies. A bare selection has no first reply, and no badge either,
 		// since nothing says it is a comment.
-		const note = this.noteOf(annotation);
+		const note = noteOf(annotation);
 		const replies = note ? annotation.replies.slice(1) : annotation.replies;
 		const isSelectionComment = annotation.type === "comment" && !annotation.isPoint;
 
@@ -941,9 +891,9 @@ export class AnnotationReviewView extends ItemView {
 		if (!annotation.isPlain) header.createEl("span", { cls: "annotation-review-badge", text: TYPE_LABELS[annotation.type] });
 		if (isSelectionComment) {
 			// An unsigned comment shows no chip. Only a reply says No author.
-			if (note?.author) this.renderAuthorBadge(header, note.author, "", a => this.saveAuthor(annotation, note, a));
+			if (note?.author) this.renderAuthorBadge(header, note.author, "", a => this.plugin.editAuthor(annotation, note, a));
 		} else if (annotation.author) {
-			this.renderAuthorBadge(header, annotation.author, "", a => this.saveAuthor(annotation, annotation, a));
+			this.renderAuthorBadge(header, annotation.author, "", a => this.plugin.editAuthor(annotation, annotation, a));
 		}
 
 		// The comment itself, on its own line: a comment on a spot carries it
@@ -964,7 +914,7 @@ export class AnnotationReviewView extends ItemView {
 					repliesEl,
 					"annotation-review-reply",
 					reply.author,
-					a => this.saveAuthor(annotation, reply, a),
+					a => this.plugin.editAuthor(annotation, reply, a),
 					row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
 				);
 				const removeBtn = replyEl.createEl("button", { cls: "clickable-icon annotation-review-reply-dismiss" });

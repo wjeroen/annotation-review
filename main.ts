@@ -1,8 +1,8 @@
 import { Editor, EditorPosition, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, debounce, Platform } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { detectAdmonitionBlocks, detectAnnotations, getInsertContext } from "./src/detect";
-import { computeAddReply, computeLinkedMutation, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
-import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, Wrapper } from "./src/types";
+import { computeAddReply, computeAuthorEdit, computeLinkedMutation, computeMutation, computeRemoval, computeSpanReplace, AnnotationAction, MutationResult } from "./src/actions";
+import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, Wrapper } from "./src/types";
 import { AuthorModal, AnnotationTypePicker } from "./src/modals";
 import { Composed, composeComment, composeDelete, composeInsert, composePointComment, composeReplace, openReply } from "./src/compose";
 import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
@@ -441,6 +441,11 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const text = (m ? replyText.slice(m[0].length) : replyText).trim();
 		if (!text) return;
 		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text));
+	}
+
+	/** Sets, changes or clears the author of an annotation or of one of its replies. */
+	async editAuthor(annotation: Annotation, target: Authored, author: string) {
+		await this.mutate(annotation.filePath, content => computeAuthorEdit(content, annotation, target, author));
 	}
 
 	/** Replaces a span inside an annotation, or inserts when start equals end. */

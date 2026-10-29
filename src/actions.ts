@@ -1,4 +1,4 @@
-import { Annotation } from "./types";
+import { Annotation, AnnotationReply, Authored } from "./types";
 import { replyEntry } from "./compose";
 import { detectAnnotations } from "./detect";
 
@@ -127,6 +127,81 @@ export function computeAddReply(content: string, annotation: Annotation, author:
 	if (start === null) return { ok: false, reason: NOT_FOUND };
 	const end = start + annotation.fullMatch.length;
 	return applyChanges(content, [{ from: end, to: end, replacement: replyEntry(author, text, annotation.nextChannel) }]);
+}
+
+/**
+ * The entry a card shows as the annotation's own text rather than as a
+ * comment on it. For a comment on a selection that is the first reply, which
+ * is the comment itself. For a change it is the first reply when the change's
+ * author wrote it, since that is the reason for the change. A reply by
+ * someone else, or on an unauthored change, is a comment. A comment on a spot
+ * carries its own text, so every reply on it is a reply, and taking the first
+ * one as its text hid that reply from the card.
+ */
+export function noteOf(annotation: Annotation): AnnotationReply | undefined {
+	const first = annotation.replies[0];
+	if (!first) return undefined;
+	if (annotation.type === "comment") return annotation.isPoint ? undefined : first;
+	return annotation.author && first.author === annotation.author ? first : undefined;
+}
+
+/**
+ * Rewrites an author mark in whatever spelling it already has: metadata stays
+ * metadata with its other fields intact, `[X]@@` stays `[X]@@`, and a label
+ * keeps the whitespace after it. An empty author removes the mark, unless
+ * metadata has other fields worth keeping.
+ */
+function rewriteAuthor(current: string, author: string, meta?: Record<string, unknown>): string {
+	if (current.startsWith("{")) {
+		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
+		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
+	}
+	// The markers are not part of the name, so they stay put. They are known
+	// by their shape, a letter and digits, wherever in the bracket they sit.
+	const label = /^\[([^\]]*)\]@@$/.exec(current);
+	if (label) {
+		const markers = label[1]
+			.split(":")
+			.map(part => part.trim())
+			.filter(part => /^[LT]\d+$/.test(part));
+		const tail = markers.length ? `:${markers.join(":")}` : "";
+		return author || tail ? `[${author}${tail}]@@` : "";
+	}
+	if (!author) return "";
+	return `[${author}]` + current.replace(/^\[[^\]]*\]/, "");
+}
+
+/** The change that sets, changes or clears one author, inside fullMatch, or null when there is nothing to do. */
+function authorChange(annotation: Annotation, target: Authored, author: string): TextChange | null {
+	if (target.authorSpan) {
+		const { start, end } = target.authorSpan;
+		return { from: start, to: end, replacement: rewriteAuthor(annotation.fullMatch.slice(start, end), author, target.authorMeta) };
+	}
+	if (!author) return null;
+	const p = target.authorInsert;
+	return { from: p.at, to: p.at, replacement: `${p.prefix}${author}${p.suffix}` };
+}
+
+/**
+ * Sets, changes or clears the author of an annotation or of one of its
+ * replies. A change and its reason share the one name on the card, so
+ * renaming the change renames the reason too, as one edit. Renaming only the
+ * change left the reason signed by the old name, and the reason then fell off
+ * the card as a comment by someone else.
+ */
+export function computeAuthorEdit(content: string, annotation: Annotation, target: Authored, author: string): MutationResult {
+	const start = locate(content, annotation);
+	if (start === null) return { ok: false, reason: NOT_FOUND };
+	const targets: Authored[] = [target];
+	const reason = target === annotation && annotation.type !== "comment" ? noteOf(annotation) : undefined;
+	if (reason) targets.push(reason);
+	const changes = targets
+		.map(t => authorChange(annotation, t, author))
+		.filter((c): c is TextChange => c !== null)
+		.map(c => ({ from: start + c.from, to: start + c.to, replacement: c.replacement }))
+		.sort((a, b) => b.from - a.from);
+	if (changes.length === 0) return { ok: false, reason: "There is no author to clear." };
+	return applyChanges(content, changes);
 }
 
 /**
