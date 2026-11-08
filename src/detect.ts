@@ -15,7 +15,8 @@ import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedR
  * Each entry after the wrapper is a footnote `^[...]` or a brace comment
  * `{>>...<<}`, attached by adjacency, and every one of them is a reply with
  * its own author. A `{>>...<<}` with nothing in front of it is a comment on
- * that spot rather than a reply.
+ * that spot rather than a reply. A footnote ends at the bracket that balances
+ * its opening one, so a link inside it is part of it.
  *
  * Nothing inside backticks, a link, an HTML comment, a fenced block or the
  * text of an entry is a delimiter. Those ranges are stepped over whole, so an
@@ -61,7 +62,6 @@ interface Body {
 
 const FENCE_REGEX = /^[\s>]*(`{3,}|~{3,})\s*(\S*)/;
 const BRACE_OPEN_REGEX = /\{(--|\+\+|~~|==|>>)/g;
-const FOOTNOTE_REGEX = /\^\[((?:\[[^\]]*\])?[^\]]*)\]/g;
 const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
 /**
  * An author terminated by `@@`, in either spelling. The bracket may be empty,
@@ -74,7 +74,8 @@ const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])@@/;
 /** A plain `[Author] ` label, only meaningful at the start of prose. */
 const LABEL_REGEX = /^\[([^\]]+)\]\s*/;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
-const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(([^)]*)\)/g;
+/** The address may hold one pair of parentheses, as Wikipedia addresses do. */
+const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(((?:[^()]|\([^()]*\))*)\)/g;
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
 
 const BRACE_OPENERS = new Set(["{--", "{++", "{~~", "{==", "{>>"]);
@@ -264,20 +265,75 @@ function collectRanges(content: string, pattern: RegExp): ExcludedRange[] {
 }
 
 /**
- * Reads the run of entries attached at `from`: footnotes and brace comments in
- * any mix, each one starting exactly where the previous one ended.
+ * Where the footnote opened by the `^[` at `start` ends, just past its closing
+ * bracket, or null when it does not close. Brackets are counted, so a link, a
+ * wikilink or a `[sic]` inside the footnote does not end it, which is how
+ * Obsidian reads it too. A bracket inside backticks or after a backslash is
+ * text. A blank line ends the paragraph, so a footnote still open there is not
+ * one, and a stray bracket cannot swallow the rest of the note.
  */
-function extractMeta(content: string, from: number): MetaEntry[] {
+function scanFootnote(content: string, start: number, code: ExcludedRange[]): number | null {
+	let depth = 1;
+	let i = start + 2;
+	while (i < content.length) {
+		const skip = rangeAt(i, code);
+		if (skip) {
+			i = skip.end;
+			continue;
+		}
+		const ch = content[i];
+		if (ch === "\\") {
+			i += 2;
+			continue;
+		}
+		if (ch === "[") depth++;
+		else if (ch === "]" && --depth === 0) return i + 1;
+		else if (ch === "\n") {
+			let j = i + 1;
+			while (content[j] === " " || content[j] === "\t" || content[j] === "\r") j++;
+			if (content[j] === "\n") return null;
+		}
+		i++;
+	}
+	return null;
+}
+
+/** Every footnote in the note. A `^[` inside backticks is text. */
+function collectFootnotes(content: string, code: ExcludedRange[]): ExcludedRange[] {
+	const ranges: ExcludedRange[] = [];
+	let pos = 0;
+	while ((pos = content.indexOf("^[", pos)) !== -1) {
+		const skip = rangeAt(pos, code);
+		if (skip) {
+			pos = skip.end;
+			continue;
+		}
+		const end = scanFootnote(content, pos, code);
+		if (end === null) {
+			pos += 2;
+			continue;
+		}
+		ranges.push({ start: pos, end });
+		pos = end;
+	}
+	return ranges;
+}
+
+/**
+ * Reads the run of entries attached at `from`: footnotes and brace comments in
+ * any mix, each one starting exactly where the previous one ended. A footnote
+ * is taken from `footnoteEnds`, the footnotes of the whole note by where they
+ * start, so an entry and the ranges every scan steps over always agree.
+ */
+function extractMeta(content: string, from: number, footnoteEnds: Map<number, number>): MetaEntry[] {
 	const entries: MetaEntry[] = [];
-	const footnote = new RegExp(FOOTNOTE_REGEX.source, "y");
 	const braceComment = new RegExp(BRACE_COMMENT_REGEX.source, "y");
 	let pos = from;
 	for (;;) {
 		let entry: MetaEntry | null = null;
 		if (content.startsWith("^[", pos)) {
-			footnote.lastIndex = pos;
-			const m = footnote.exec(content);
-			if (m) entry = { channel: "footnote", contentStart: pos + 2, contentEnd: pos + 2 + m[1].length, fullStart: pos, fullEnd: pos + m[0].length };
+			const end = footnoteEnds.get(pos);
+			if (end !== undefined) entry = { channel: "footnote", contentStart: pos + 2, contentEnd: end - 1, fullStart: pos, fullEnd: end };
 		} else if (content.startsWith("{>>", pos)) {
 			braceComment.lastIndex = pos;
 			const m = braceComment.exec(content);
@@ -494,6 +550,7 @@ interface Built {
 
 function buildAnnotation(
 	content: string,
+	footnoteEnds: Map<number, number>,
 	filePath: string,
 	fullStart: number,
 	wrapperEnd: number,
@@ -509,7 +566,7 @@ function buildAnnotation(
 	selfEntry?: MetaEntry
 ): Built {
 	// An HTML comment takes no replies, so nothing after it is claimed.
-	const entries = wrapper === "html" ? [] : extractMeta(content, wrapperEnd);
+	const entries = wrapper === "html" ? [] : extractMeta(content, wrapperEnd, footnoteEnds);
 	const matchEnd = entries.length ? entries[entries.length - 1].fullEnd : wrapperEnd;
 	const fullMatch = content.slice(fullStart, matchEnd);
 	const relative = entries.map(e => ({
@@ -601,6 +658,7 @@ function buildAnnotation(
 /** A highlight or percent mark annotation, which is a comment on a spot when its operator is `>>`. */
 function buildWrapped(
 	content: string,
+	footnoteEnds: Map<number, number>,
 	filePath: string,
 	fullStart: number,
 	wrapperEnd: number,
@@ -611,9 +669,9 @@ function buildWrapped(
 ): Built {
 	if (body.pointSpan) {
 		const self: MetaEntry = { channel, contentStart: body.pointSpan.start, contentEnd: body.pointSpan.end, fullStart: 0, fullEnd: wrapperEnd - fullStart };
-		return buildAnnotation(content, filePath, fullStart, wrapperEnd, { type: "comment" }, wrapper, true, insideAdBlock, channel, self);
+		return buildAnnotation(content, footnoteEnds, filePath, fullStart, wrapperEnd, { type: "comment" }, wrapper, true, insideAdBlock, channel, self);
 	}
-	return buildAnnotation(content, filePath, fullStart, wrapperEnd, body, wrapper, false, insideAdBlock, channel);
+	return buildAnnotation(content, footnoteEnds, filePath, fullStart, wrapperEnd, body, wrapper, false, insideAdBlock, channel);
 }
 
 export interface DetectOptions {
@@ -627,7 +685,8 @@ export function detectAnnotations(content: string, filePath: string, options: De
 	const inlineCode = collectRanges(content, INLINE_CODE_REGEX);
 	const links = collectRanges(content, MARKDOWN_LINK_REGEX);
 	const htmlComments = collectRanges(content, HTML_COMMENT_REGEX);
-	const footnotes = collectRanges(content, FOOTNOTE_REGEX);
+	const footnotes = collectFootnotes(content, inlineCode);
+	const footnoteEnds = new Map(footnotes.map(r => [r.start, r.end]));
 	const braceComments = collectRanges(content, BRACE_COMMENT_REGEX);
 	const nonAdFences = fenceRanges.filter(r => !r.isAdBlock);
 
@@ -664,7 +723,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		const body = braceBody(m[1], start, scan);
 		if (!body) continue;
 		if (m[1] === "==") braceEqMarks.push({ start, end: start + 3 }, { start: scan.closeStart, end: scan.closeEnd });
-		publish(buildAnnotation(content, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start), channel));
+		publish(buildAnnotation(content, footnoteEnds, filePath, start, scan.closeEnd, body, "brace", false, isInsideAdBlock(start), channel));
 	}
 
 	// Highlights. The == of a {==...==} belongs to the braces, so those marks
@@ -688,7 +747,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		}
 		// An ordinary highlight with nothing attached counts too, as a bare
 		// selection, so the sidebar can list it or filter it out.
-		const built = buildWrapped(content, filePath, h.start, h.end, body, "highlight", isInsideAdBlock(h.start), channel);
+		const built = buildWrapped(content, footnoteEnds, filePath, h.start, h.end, body, "highlight", isInsideAdBlock(h.start), channel);
 		publish(built);
 		from = built.annotation.matchEnd;
 	}
@@ -701,7 +760,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 	while ((p = findWrapped(content, from, "%%", percentExcluded)) !== null) {
 		const inner = content.slice(p.start + p.delim, p.closeStart);
 		const body = classifyInner(inner, p.delim, p.split === undefined ? undefined : p.split - p.start);
-		const built = buildWrapped(content, filePath, p.start, p.end, body, "percent", false, channel);
+		const built = buildWrapped(content, footnoteEnds, filePath, p.start, p.end, body, "percent", false, channel);
 		publish(built);
 		from = built.annotation.matchEnd;
 	}
@@ -715,7 +774,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		const note = trimmedSpan(content, c.start + 4, c.end - 3);
 		if (note.end === note.start) continue;
 		const body: Body = { type: "comment", originalSpan: { start: note.start - c.start, end: note.end - c.start } };
-		publish(buildAnnotation(content, filePath, c.start, c.end, body, "html", false, isInsideAdBlock(c.start), channel));
+		publish(buildAnnotation(content, footnoteEnds, filePath, c.start, c.end, body, "html", false, isInsideAdBlock(c.start), channel));
 	}
 
 	// Point comments: whatever {>>...<<} is left over once the ones attached to
@@ -729,7 +788,7 @@ export function detectAnnotations(content: string, filePath: string, options: De
 		const own = pointBody.exec(content);
 		if (!own) continue;
 		const self: MetaEntry = { channel: "brace", contentStart: 3, contentEnd: 3 + own[1].length, fullStart: 0, fullEnd: own[0].length };
-		const built = buildAnnotation(content, filePath, start, start + own[0].length, { type: "comment" }, "brace", true, isInsideAdBlock(start), channel, self);
+		const built = buildAnnotation(content, footnoteEnds, filePath, start, start + own[0].length, { type: "comment" }, "brace", true, isInsideAdBlock(start), channel, self);
 		publish(built);
 		pointRegex.lastIndex = built.annotation.matchEnd;
 	}
@@ -771,12 +830,13 @@ export function getInsertContext(content: string, offset: number): InsertContext
 
 	// The same ranges detectAnnotations steps over for percent marks, so the
 	// two agree on where an annotation ends.
+	const inlineCode = collectRanges(content, INLINE_CODE_REGEX);
 	const excluded: ExcludedRange[] = [
 		...fenceRanges,
-		...collectRanges(content, INLINE_CODE_REGEX),
+		...inlineCode,
 		...collectRanges(content, MARKDOWN_LINK_REGEX),
 		...collectRanges(content, HTML_COMMENT_REGEX),
-		...collectRanges(content, FOOTNOTE_REGEX),
+		...collectFootnotes(content, inlineCode),
 		...collectRanges(content, BRACE_COMMENT_REGEX)
 	];
 	let from = 0;

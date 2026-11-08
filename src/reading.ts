@@ -242,6 +242,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 	}
 
 	// Footnote bodies at the bottom: the label at the start becomes the author.
+	// The underline runs over the whole body, links and formatting included,
+	// up to the link back to the text and without the space in front of it.
 	for (const li of Array.from(root.querySelectorAll(".footnotes li, section.footnotes li"))) {
 		const first = li.querySelector("p") ?? li;
 		const node = first.firstChild;
@@ -251,8 +253,16 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		node.data = rest;
 		if (commentStyle === "chip") first.prepend(chip(author));
 		else if (commentStyle === "underline") {
-			const span = piece("", rest, author, commentStyle);
-			node.replaceWith(span);
+			const body: Node[] = [];
+			for (let n: Node | null = node; n && !(n instanceof Element && n.matches(".footnote-backref")); n = n.nextSibling) body.push(n);
+			while (body.length > 1) {
+				const last = body[body.length - 1];
+				if (!(last instanceof Text) || last.data.trim()) break;
+				body.pop();
+			}
+			const span = piece("", "", author, commentStyle);
+			node.before(span);
+			span.append(...body);
 		}
 	}
 }

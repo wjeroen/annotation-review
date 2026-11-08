@@ -114,6 +114,18 @@ const t = one(threaded);
 check("dismissing one reply", computeSpanReplace(threaded, t, t.replies[0].fullSpan.start, t.replies[0].fullSpan.end, "").newContent, `{--${C}is --}^[[Alex] Agreed.]`);
 check("approving takes the replies with it", approve(threaded), "");
 
+console.log("\n=== A footnote ends at the bracket that closes it ===");
+const linked = "{==T==}^[[Claude] When he joined, [he wrote](https://a.com/b) that it is bad.]";
+check("a link inside a reply is part of it", one(linked).replies.map(r => [r.author, r.text]), [["Claude", "When he joined, [he wrote](https://a.com/b) that it is bad."]]);
+check("so a new reply goes after the whole footnote", computeAddReply(`${linked} Next.`, one(`${linked} Next.`), "Jeroen", "agree").newContent, `${linked}^[[Jeroen] agree] Next.`);
+check("a wikilink or a [sic] is part of it too", one("==T==^[[C] see [[Other note]] and [sic] here]").replies[0].text, "see [[Other note]] and [sic] here");
+check("a bracket in backticks does not count", one("==T==^[[C] type `]` to close it]").replies[0].text, "type `]` to close it");
+check("nor one after a backslash", one("==T==^[[C] a \\] b]").replies[0].text, "a \\] b");
+check("the rest of the reply is not read as annotations", all("==T==^[[C] see [x](https://a.com) and ==y== here]").length, 1);
+check("a footnote still open at a blank line is not one", one("==T==^[[C] open\n\nlater] text").replies.length, 0);
+check("a footnote opener in backticks is text", all("Type `^[` to open one. ==T==^[c]").map(shape), [["comment", null, "T", null, null, [[null, "c"]]]]);
+check("a link address may hold parentheses", all("==T== [w](https://e.org/A_(b)?x==y) ==U==^[c]").map(a => a.originalText), ["T", "U"]);
+
 console.log("\n=== Comments on a spot ===");
 for (const w of ["{>>What?<<}", "%%>>What?<<%%"]) {
 	check(`>> is an operator, ${w}`, [one(`This is a test${w}.`).type, one(`This is a test${w}.`).isPoint, one(`This is a test${w}.`).commentText], ["comment", true, "What?"]);
