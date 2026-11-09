@@ -5,7 +5,6 @@
 ### Bug Fixes
 - [ ] Approve all on a linked set often needs several taps before it works, on the desktop and the phone (reported 2026-10-10, check whether 0.8.0-beta.5 fixed it, an error during an action now shows as a notice)
 - [ ] A line of equals signs under a title is read as bare highlights, and with no blank line after it the real highlight on the next line is lost (found 2026-10-11)
-- [ ] A reply that starts with a link or a wikilink is read as signed by it: `^[[he wrote](https://...) that ...]` gets the author "he wrote", and `^[[[Note]] says so]` gets "[Note" (found 2026-11-07)
 
 ### Known gaps, accepted
 - [ ] A highlight form insert nested inside another one is not detected. Highlights cannot nest. Braces do, and percent marks chain by closing and reopening, so those are the forms to use
@@ -29,6 +28,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] A reply that starts with a link or a wikilink is unsigned. It was signed by the link text, and signing it with a real name replaced the link text with that name (2026-11-09)
 - [x] A footnote reply holding a link, a wikilink or other brackets is read whole. It was cut at the first `]`, so its card text stopped early and a new reply landed inside it. In reading view the author's underline covers the whole footnote, and a link address may hold parentheses (2026-11-07)
 - [x] Changing or clearing the author chip on a change also renames its reason, as one edit. Renaming only the change had turned the reason into a comment by the old name (2026-10-29)
 - [x] A reply on a comment on a spot by the same author shows on the card. It was hidden completely (2026-10-29)

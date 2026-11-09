@@ -71,8 +71,12 @@ const BRACE_COMMENT_REGEX = /\{>>([\s\S]*?)<<\}/g;
  * eats the brackets and draws the name as a link.
  */
 const META_REGEX = /^(\{[^}]*\}|\[[^\]]*\])@@/;
-/** A plain `[Author] ` label, only meaningful at the start of prose. */
-const LABEL_REGEX = /^\[([^\]]+)\]\s*/;
+/**
+ * A plain `[Author] ` label, only meaningful at the start of prose. A bracket
+ * followed by `(` or `[` is a link, and one holding a `[` is a wikilink, so a
+ * reply that starts with either is unsigned rather than signed by the link.
+ */
+const LABEL_REGEX = /^\[([^[\]]+)\](?![([])\s*/;
 const INLINE_CODE_REGEX = /`([^`\n]+?)`/g;
 /** The address may hold one pair of parentheses, as Wikipedia addresses do. */
 const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(((?:[^()]|\([^()]*\))*)\)/g;

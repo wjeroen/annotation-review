@@ -41,7 +41,7 @@ Whitespace inside the markers is kept exactly as written, so `{++is ++}` inserts
 
 Both spellings are read in every wrapper. From the metadata only `author` is used (`a` works too). Other fields such as `time` are kept as written and ignored. An annotation is authored by the author inside its wrapper, or by nobody. That is the whole rule.
 
-**Every entry after the wrapper is a reply.** A footnote `^[...]` or a CriticMarkup comment `{>>...<<}`, written directly after the wrapper with no space in between, in any mix. There is no separate word for a reason: the reason for a change is simply its first reply, the way Google Docs does it. A reply's author is `{"author":"X"}@@` at the start, which is what the plugin writes in a brace comment, or `[X] `, which is what it writes in a footnote. `^[[Claude]]` is an empty reply by Claude and nothing more.
+**Every entry after the wrapper is a reply.** A footnote `^[...]` or a CriticMarkup comment `{>>...<<}`, written directly after the wrapper with no space in between, in any mix. There is no separate word for a reason: the reason for a change is simply its first reply, the way Google Docs does it. A reply's author is `{"author":"X"}@@` at the start, which is what the plugin writes in a brace comment, or `[X] `, which is what it writes in a footnote. `^[[Claude]]` is an empty reply by Claude and nothing more. A reply that starts with a link or a wikilink is unsigned, not signed by the link.
 
 ```
 This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}{>>{"author":"Alex"}@@Agreed.<<}a test.

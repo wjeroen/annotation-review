@@ -126,6 +126,14 @@ check("a footnote still open at a blank line is not one", one("==T==^[[C] open\n
 check("a footnote opener in backticks is text", all("Type `^[` to open one. ==T==^[c]").map(shape), [["comment", null, "T", null, null, [[null, "c"]]]]);
 check("a link address may hold parentheses", all("==T== [w](https://e.org/A_(b)?x==y) ==U==^[c]").map(a => a.originalText), ["T", "U"]);
 
+console.log("\n=== A reply may start with a link ===");
+const replyOf = doc => one(doc).replies.map(r => [r.author ?? null, r.text]);
+check("a link is not an author", replyOf("==T==^[[he wrote](https://x.org) that it is bad.]"), [[null, "[he wrote](https://x.org) that it is bad."]]);
+check("nor a wikilink", replyOf("==T==^[[[Note]] says so.]"), [[null, "[[Note]] says so."]]);
+check("nor a reference link", replyOf("==T==^[[he wrote][1] that.]"), [[null, "[he wrote][1] that."]]);
+check("a signed reply may start with a link", replyOf("==T==^[[Claude] [he wrote](https://x.org) that.]"), [["Claude", "[he wrote](https://x.org) that."]]);
+check("signing it keeps the link", setAuthor("==T==^[[he wrote](https://x.org) ok]", "Joe", a => a.replies[0]), "==T==^[[Joe] [he wrote](https://x.org) ok]");
+
 console.log("\n=== Comments on a spot ===");
 for (const w of ["{>>What?<<}", "%%>>What?<<%%"]) {
 	check(`>> is an operator, ${w}`, [one(`This is a test${w}.`).type, one(`This is a test${w}.`).isPoint, one(`This is a test${w}.`).commentText], ["comment", true, "What?"]);
