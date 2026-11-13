@@ -1,9 +1,10 @@
-import { ItemView, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
+import { ItemView, Keymap, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
 import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, TextSpan } from "./types";
 import { AnnotationFilters, NotesSort } from "./settings";
 import { applyChipColor } from "./authors";
 import { noteOf } from "./actions";
+import { linkPieces } from "./links";
 
 /**
  * Sizes a textarea to its content, so it shows every line and grows as more
@@ -615,6 +616,30 @@ export class AnnotationReviewView extends ItemView {
 		return out + text.slice(pos);
 	}
 
+	/**
+	 * Card text with its links drawn the way live preview draws them, the
+	 * link text clickable and the address hidden. A click on a link follows
+	 * it. A click anywhere else on the text opens the edit box, which holds
+	 * the text exactly as written.
+	 */
+	private renderWithLinks(el: HTMLElement, text: string, sourcePath: string) {
+		for (const piece of linkPieces(text)) {
+			const target = piece.url ?? piece.note;
+			if (target === undefined) {
+				el.appendText(piece.text);
+				continue;
+			}
+			const link = el.createEl("a", { cls: piece.url ? "external-link" : "internal-link", text: piece.text, attr: { href: target } });
+			setTooltip(link, target);
+			link.addEventListener("click", evt => {
+				evt.preventDefault();
+				evt.stopPropagation();
+				if (piece.url) window.open(piece.url, "_blank");
+				else void this.app.workspace.openLinkText(target, sourcePath, Keymap.isModEvent(evt));
+			});
+		}
+	}
+
 	/** A text field that turns into an inline editor on click. */
 	private renderEditableText(
 		container: Element,
@@ -639,7 +664,7 @@ export class AnnotationReviewView extends ItemView {
 				el.setText(shown.includes("\n") ? "(blank line)" : "(space)");
 				el.addClass("annotation-review-whitespace");
 			} else {
-				el.setText(shown);
+				this.renderWithLinks(el, shown, annotation.filePath);
 			}
 		};
 		showDisplay();

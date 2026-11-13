@@ -7,6 +7,7 @@ const built = await esbuild.build({
 			export { detectAnnotations, detectAdmonitionBlocks, getInsertContext } from "./src/detect";
 			export { computeMutation, computeLinkedMutation, computeAddReply, computeAuthorEdit, computeSpanReplace, computeRemoval, noteOf } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composePointComment, openReply, replyEntry } from "./src/compose";
+			export { linkPieces } from "./src/links";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -40,7 +41,8 @@ const {
 	composeInsert,
 	composePointComment,
 	openReply,
-	replyEntry
+	replyEntry,
+	linkPieces
 } = mod.exports;
 
 let pass = 0, fail = 0;
@@ -133,6 +135,14 @@ check("nor a wikilink", replyOf("==T==^[[[Note]] says so.]"), [[null, "[[Note]] 
 check("nor a reference link", replyOf("==T==^[[he wrote][1] that.]"), [[null, "[he wrote][1] that."]]);
 check("a signed reply may start with a link", replyOf("==T==^[[Claude] [he wrote](https://x.org) that.]"), [["Claude", "[he wrote](https://x.org) that."]]);
 check("signing it keeps the link", setAuthor("==T==^[[he wrote](https://x.org) ok]", "Joe", a => a.replies[0]), "==T==^[[Joe] [he wrote](https://x.org) ok]");
+
+console.log("\n=== Links on the cards ===");
+check("text without links is one piece", linkPieces("no links here"), [{ text: "no links here" }]);
+check("a markdown link shows its text", linkPieces("see [he wrote](https://a.com/b) here"), [{ text: "see " }, { text: "he wrote", url: "https://a.com/b" }, { text: " here" }]);
+check("its address may hold parentheses", linkPieces("[w](https://e.org/A_(b))"), [{ text: "w", url: "https://e.org/A_(b)" }]);
+check("a wikilink shows its alias", linkPieces("in [[Some note|that note]]."), [{ text: "in " }, { text: "that note", note: "Some note" }, { text: "." }]);
+check("or its name", linkPieces("[[Some note]]"), [{ text: "Some note", note: "Some note" }]);
+check("a bare address leaves the full stop after it", linkPieces("at https://a.com/x."), [{ text: "at " }, { text: "https://a.com/x", url: "https://a.com/x" }, { text: "." }]);
 
 console.log("\n=== Comments on a spot ===");
 for (const w of ["{>>What?<<}", "%%>>What?<<%%"]) {

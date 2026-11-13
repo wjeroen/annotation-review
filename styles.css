@@ -318,6 +318,18 @@
 	background-color: var(--background-modifier-hover);
 }
 
+/* Links in card text, drawn as in live preview. A click on one follows it,
+   a click on the text around it opens the edit box. */
+.annotation-review-editable a {
+	color: var(--link-external-color);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.annotation-review-editable a.internal-link {
+	color: var(--link-color);
+}
+
 .annotation-review-edit-input {
 	width: 100%;
 	font-size: inherit;

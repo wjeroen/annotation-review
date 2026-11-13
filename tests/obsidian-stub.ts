@@ -89,6 +89,11 @@ export class TFile {
 export class MarkdownView {}
 export class WorkspaceLeaf {}
 export class Menu {}
+export const Keymap = {
+	isModEvent() {
+		return false;
+	}
+};
 export const MarkdownRenderer = {
 	async render() {}
 };

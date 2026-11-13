@@ -11,6 +11,7 @@ How the plugin is put together, and why the syntax is the way it is. `README.md`
 | `src/compose.ts` | Writing. The syntax for each annotation type, used by the editor commands. |
 | `src/actions.ts` | Rewriting. Works out what text changes for an approve, dismiss, edit, reply, or removal, and for a whole linked set at once. Pure functions, no Obsidian imports. |
 | `src/view.ts` | The sidebar. All rendering and interaction. |
+| `src/links.ts` | Finds the links in card text, so the sidebar can draw them as live preview does. |
 | `src/editor.ts` | Live preview decorations and the diff gutter, as CodeMirror extensions. Reads the same parser output as the sidebar. |
 | `src/reading.ts` | Reading view, as a markdown post processor over the rendered HTML. Same classes as live preview, but its own small parser, since there is no source text to decorate. |
 | `src/authors.ts` | The author color, shared by the sidebar chips and the editor. A color chosen in settings wins over the computed one. |

@@ -28,6 +28,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Links on the cards are drawn as in live preview and open on a click. A click elsewhere on the text still opens the edit box with the raw text (2026-11-13)
 - [x] A reply that starts with a link or a wikilink is unsigned. It was signed by the link text, and signing it with a real name replaced the link text with that name (2026-11-09)
 - [x] A footnote reply holding a link, a wikilink or other brackets is read whole. It was cut at the first `]`, so its card text stopped early and a new reply landed inside it. In reading view the author's underline covers the whole footnote, and a link address may hold parentheses (2026-11-07)
 - [x] Changing or clearing the author chip on a change also renames its reason, as one edit. Renaming only the change had turned the reason into a comment by the old name (2026-10-29)
