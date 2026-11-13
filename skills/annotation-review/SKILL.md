@@ -1,7 +1,8 @@
 ---
 name: markdown-annotations
-description: Always read this skill when leaving comments and suggestions on something the user wrote in a Markdown file, built for the Annotation Review Obsidian plugin.
+description: "Always read this skill when leaving comments and suggestions on something the user wrote in a Markdown file, built for the Annotation Review Obsidian plugin."
 ---
+
 # How it works
 
 Every annotation appears in a sidebar through an Obsidian plugin called Annotation Review. Each operation is either dismissed or approved. Comments can only be dismissed.
@@ -73,6 +74,8 @@ A selection with nothing attached. Nothing is known beyond the selection itself.
 - {==This is a test==}
 - ==This is a test==
 - %%This is a test%%
+
+An HTML comment, `<!-- like this -->`, is a bare selection too. Never annotate inside it.
 
 ## Delete text
 
@@ -216,10 +219,10 @@ Admonitions are the only fenced blocks the plugin scans for annotations, because
 ```ad-info
 Subject: Greeting
 
-This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
-This ==++[ChatGPT]@@is ++==a test.
-==Hello, this is highlighted text.==^[[Alex] This is a comment.]
-This {~~{"author":"Claude"}@@isn't~>is~~}^[[Claude] Wrong, this is in fact a test.] a test.
+- This is {--{"author":"Claude"}@@is --}{>>{"author":"Claude"}@@The word is repeated.<<}a test.
+- This ==++[ChatGPT]@@is ++==a test.
+- ==Hello, this is highlighted text.==^[[Alex] This is a comment.]
+- This {~~{"author":"Claude"}@@isn't~>is~~}^[[Claude] Wrong, this is in fact a test.] a test.
 ```
 
 An annotation inside any other fenced block, a python one for instance, is ignored completely by the plugin, and so is anything between backticks.
