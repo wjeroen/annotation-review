@@ -9,9 +9,9 @@ import { InsertContext, MetaChannel, Wrapper } from "./types";
  * annotation straight into the note and leave the caret wherever text still
  * needs typing, instead of asking for it in a dialog first.
  *
- * The author goes inside the wrapper, right after the opening operator marks,
- * so every operation carries its own. Only a comment opens a reply for
- * typing, since its text is the point of it.
+ * The author and the time go inside the wrapper, right after the opening
+ * operator marks, so every operation carries its own. Only a comment opens a
+ * reply for typing, since its text is the point of it.
  */
 
 export interface Composed {
@@ -28,19 +28,38 @@ function wrap(wrapper: Wrapper, inner: string): string {
 }
 
 /**
- * The author as it goes inside a wrapper: the CriticMarkup plugin's metadata
- * in braces, so that plugin agrees on every author, and the lighter `[X]@@`
- * elsewhere. Nothing at all when there is no author.
+ * The author and the time in the CriticMarkup plugin's metadata,
+ * `{"author":"X","time":1763065440}@@`, the time in seconds since 1970 in
+ * UTC, as that plugin writes it. Nothing at all when there is neither.
  */
-export function authorPrefix(author: string, wrapper: Wrapper): string {
-	if (!author) return "";
-	return wrapper === "brace" ? JSON.stringify({ author }) + "@@" : `[${author}]@@`;
+function metadata(author: string, time?: number): string {
+	const fields: Record<string, unknown> = {};
+	if (author) fields.author = author;
+	if (time !== undefined) fields.time = time;
+	return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 }
 
-/** The author at the start of a reply: metadata in a brace comment, a label in a footnote. */
-export function replyAuthor(author: string, channel: MetaChannel): string {
-	if (!author) return "";
-	return channel === "brace" ? JSON.stringify({ author }) + "@@" : `[${author}] `;
+/** The inside of a label, `Claude:T1763065440`, empty when there is neither. */
+function label(author: string, time?: number): string {
+	return [author, time === undefined ? "" : `T${time}`].filter(Boolean).join(":");
+}
+
+/**
+ * The author and the time as they go inside a wrapper: metadata in braces,
+ * so the CriticMarkup plugin agrees on both, and the lighter
+ * `[X:T1763065440]@@` elsewhere.
+ */
+export function authorPrefix(author: string, wrapper: Wrapper, time?: number): string {
+	if (wrapper === "brace") return metadata(author, time);
+	const inside = label(author, time);
+	return inside ? `[${inside}]@@` : "";
+}
+
+/** The author and the time at the start of a reply: metadata in a brace comment, a label in a footnote. */
+export function replyAuthor(author: string, channel: MetaChannel, time?: number): string {
+	if (channel === "brace") return metadata(author, time);
+	const inside = label(author, time);
+	return inside ? `[${inside}] ` : "";
 }
 
 function replyMarks(channel: MetaChannel): [string, string] {
@@ -48,15 +67,15 @@ function replyMarks(channel: MetaChannel): [string, string] {
 }
 
 /** A finished reply in the given channel. */
-export function replyEntry(author: string, text: string, channel: MetaChannel): string {
+export function replyEntry(author: string, text: string, channel: MetaChannel, time?: number): string {
 	const [open, close] = replyMarks(channel);
-	return open + replyAuthor(author, channel) + text + close;
+	return open + replyAuthor(author, channel, time) + text + close;
 }
 
 /** A reply left open for typing, with the caret just before its closing marks. */
-export function openReply(author: string, channel: MetaChannel): Composed {
+export function openReply(author: string, channel: MetaChannel, time?: number): Composed {
 	const [open, close] = replyMarks(channel);
-	const head = open + replyAuthor(author, channel);
+	const head = open + replyAuthor(author, channel, time);
 	return { text: head + close, cursor: head.length };
 }
 
@@ -67,21 +86,21 @@ export function openReply(author: string, channel: MetaChannel): Composed {
  * mean nothing. With percent marks the span is hidden and the reply shows,
  * which is the accepted cost.
  */
-export function composeComment(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel): Composed {
+export function composeComment(selected: string, author: string, wrapper: Wrapper, channel: MetaChannel, time?: number): Composed {
 	const body = wrapper === "brace" ? `{==${selected}==}` : wrap(wrapper, selected);
-	const reply = openReply(author, channel);
+	const reply = openReply(author, channel, time);
 	return { text: body + reply.text, cursor: body.length + reply.cursor };
 }
 
 /** Caret at the end. */
-export function composeDelete(selected: string, author: string, wrapper: Wrapper): Composed {
-	const text = wrap(wrapper, `--${authorPrefix(author, wrapper)}${selected}--`);
+export function composeDelete(selected: string, author: string, wrapper: Wrapper, time?: number): Composed {
+	const text = wrap(wrapper, `--${authorPrefix(author, wrapper, time)}${selected}--`);
 	return { text, cursor: text.length };
 }
 
 /** Caret after the arrow, ready for the replacement text. CriticMarkup's `~~old~>new~~` in every wrapper. */
-export function composeReplace(selected: string, author: string, wrapper: Wrapper): Composed {
-	const head = `${OPEN[wrapper]}~~${authorPrefix(author, wrapper)}${selected}~>`;
+export function composeReplace(selected: string, author: string, wrapper: Wrapper, time?: number): Composed {
+	const head = `${OPEN[wrapper]}~~${authorPrefix(author, wrapper, time)}${selected}~>`;
 	return { text: `${head}~~${CLOSE[wrapper]}`, cursor: head.length };
 }
 
@@ -94,15 +113,15 @@ export function composeReplace(selected: string, author: string, wrapper: Wrappe
  * Percent marks do not render inside a fenced block, so `fallback` stands in
  * for them there.
  */
-export function composeInsert(selected: string, author: string, context: InsertContext, wrapper: Wrapper, fallback: Wrapper): Composed {
+export function composeInsert(selected: string, author: string, context: InsertContext, wrapper: Wrapper, fallback: Wrapper, time?: number): Composed {
 	let head: string;
 	let tail: string;
 	if (context.kind === "nested") {
-		head = `${context.marker}%%%%++${authorPrefix(author, "percent")}`;
+		head = `${context.marker}%%%%++${authorPrefix(author, "percent", time)}`;
 		tail = `++%%%%${context.marker}`;
 	} else {
 		const w = context.kind === "fenced" && wrapper === "percent" ? fallback : wrapper;
-		head = `${OPEN[w]}++${authorPrefix(author, w)}`;
+		head = `${OPEN[w]}++${authorPrefix(author, w, time)}`;
 		tail = `++${CLOSE[w]}`;
 	}
 	const text = head + selected + tail;
@@ -117,10 +136,10 @@ export function composeInsert(selected: string, author: string, context: InsertC
  * `>>` operator in braces or percent marks, `{>>note<<}` or `%%>>note<<%%`,
  * the author written the way it is for any other operation.
  */
-export function composePointComment(author: string, wrapper: Wrapper): Composed {
+export function composePointComment(author: string, wrapper: Wrapper, time?: number): Composed {
 	// A highlight cannot hold one, Obsidian never opens a highlight that
 	// starts with >, so anything but percent marks means braces.
-	if (wrapper !== "percent") return openReply(author, "brace");
-	const head = `${OPEN[wrapper]}>>${authorPrefix(author, wrapper)}`;
+	if (wrapper !== "percent") return openReply(author, "brace", time);
+	const head = `${OPEN[wrapper]}>>${authorPrefix(author, wrapper, time)}`;
 	return { text: `${head}<<${CLOSE[wrapper]}`, cursor: head.length };
 }

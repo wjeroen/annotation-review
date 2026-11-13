@@ -184,9 +184,31 @@
 
 .annotation-review-header {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 6px;
+	gap: 2px 6px;
 	margin-top: 4px;
+}
+
+/* When it was written, beside the author. A click or a tap shows it in full.
+   A comment's date may be kept for the selected card. */
+.annotation-review-date {
+	font-size: 0.85em;
+	color: var(--text-faint);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.annotation-review-date.is-selected-only {
+	display: none;
+}
+
+.annotation-review-annotation-card.is-active .annotation-review-date.is-selected-only {
+	display: inline;
+}
+
+.annotation-review-reply-byline .annotation-review-date {
+	margin-left: 4px;
 }
 
 .annotation-review-filter-toggle.is-active,
@@ -371,10 +393,9 @@
 	font-size: 0.9em;
 }
 
-.annotation-review-reply.is-stacked .annotation-review-reply-author {
+.annotation-review-reply.is-stacked .annotation-review-reply-byline {
 	display: block;
 	margin-bottom: 2px;
-	width: fit-content;
 }
 
 .annotation-review-reply-text {

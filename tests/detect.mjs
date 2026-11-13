@@ -8,6 +8,7 @@ const built = await esbuild.build({
 			export { computeMutation, computeLinkedMutation, computeAddReply, computeAuthorEdit, computeSpanReplace, computeRemoval, noteOf } from "./src/actions";
 			export { composeComment, composeDelete, composeReplace, composeInsert, composePointComment, openReply, replyEntry } from "./src/compose";
 			export { linkPieces } from "./src/links";
+			export { compactDate, fullDate } from "./src/dates";
 		`,
 		resolveDir: ".",
 		loader: "ts"
@@ -42,7 +43,9 @@ const {
 	composePointComment,
 	openReply,
 	replyEntry,
-	linkPieces
+	linkPieces,
+	compactDate,
+	fullDate
 } = mod.exports;
 
 let pass = 0, fail = 0;
@@ -143,6 +146,39 @@ check("its address may hold parentheses", linkPieces("[w](https://e.org/A_(b))")
 check("a wikilink shows its alias", linkPieces("in [[Some note|that note]]."), [{ text: "in " }, { text: "that note", note: "Some note" }, { text: "." }]);
 check("or its name", linkPieces("[[Some note]]"), [{ text: "Some note", note: "Some note" }]);
 check("a bare address leaves the full stop after it", linkPieces("at https://a.com/x."), [{ text: "at " }, { text: "https://a.com/x", url: "https://a.com/x" }, { text: "." }]);
+
+console.log("\n=== Times ===");
+// 13 November 2026, 20:24 UTC.
+const T = 1794601440;
+const timeOf = doc => (a => [a.author ?? null, a.link ?? null, a.time ?? null])(one(doc));
+const repliesWithTimes = doc => one(doc).replies.map(r => [r.author ?? null, r.time ?? null, r.text]);
+check("a time beside the author", timeOf(`==--[Claude:T${T}]@@x--==`), ["Claude", null, T]);
+check("a time with nobody signing", timeOf(`%%++[T${T}]@@x++%%`), [null, null, T]);
+check("and the text after it is the text", one(`%%++[T${T}]@@x++%%`).insertedText, "x");
+check("beside a link, in any order", timeOf(`==~~[T${T}:Claude:L2]@@a~>b~~==`), ["Claude", "2", T]);
+check("the time field in braces", timeOf(`{--{"author":"Claude","time":${T}}@@x--}`), ["Claude", null, T]);
+check("on a footnote reply", repliesWithTimes(`==T==^[[Claude:T${T}] note]`), [["Claude", T, "note"]]);
+check("on an unsigned footnote reply", repliesWithTimes(`==T==^[[T${T}] note]`), [[null, T, "note"]]);
+check("on a brace reply", repliesWithTimes(`{--x--}{>>{"author":"Alex","time":${T}}@@ok<<}`), [["Alex", T, "ok"]]);
+check("written in braces", composeDelete("x", "Claude", "brace", T).text, `{--{"author":"Claude","time":${T}}@@x--}`);
+check("written in a highlight", composeDelete("x", "Claude", "highlight", T).text, `==--[Claude:T${T}]@@x--==`);
+check("written with no author", composeInsert("x", "", PLAIN, "percent", "brace", T).text, `%%++[T${T}]@@x++%%`);
+check("written on a footnote reply", replyEntry("Joe", "ok", "footnote", T), `^[[Joe:T${T}] ok]`);
+check("written on a brace reply", replyEntry("Joe", "ok", "brace", T), `{>>{"author":"Joe","time":${T}}@@ok<<}`);
+check("a comment on a selection carries it on the comment", composeComment("Sel.", "C", "highlight", "footnote", T).text, `==Sel.==^[[C:T${T}] ]`);
+const stamped = computeAddReply("{--x--}", one("{--x--}"), "Joe", "ok", T).newContent;
+check("a comment added from the sidebar", stamped, `{--x--}^[[Joe:T${T}] ok]`);
+check("reads back", repliesWithTimes(stamped), [["Joe", T, "ok"]]);
+check("renaming keeps the time", setAuthor(`==--[Claude:T${T}]@@x--==`, "Joe"), `==--[Joe:T${T}]@@x--==`);
+check("clearing the author keeps it too", setAuthor(`==--[Claude:T${T}]@@x--==`, ""), `==--[T${T}]@@x--==`);
+check("renaming a footnote reply keeps it", setAuthor(`{--x--}^[[Alex:T${T}] why]`, "Joe", a => a.replies[0]), `{--x--}^[[Joe:T${T}] why]`);
+check("clearing one keeps it", setAuthor(`{--x--}^[[Alex:T${T}] why]`, "", a => a.replies[0]), `{--x--}^[[T${T}] why]`);
+check("signing an unsigned reply keeps it", setAuthor(`{--x--}^[[T${T}] why]`, "Joe", a => a.replies[0]), `{--x--}^[[Joe:T${T}] why]`);
+check("dismissing takes it along", dismiss(`A ==--[Claude:T${T}]@@x--==^[[Claude:T${T}] why] B`), "A x B");
+check("a date this year has no year", compactDate(T, false, T * 1000, "en-GB", "UTC"), "13 Nov");
+check("another year has one", compactDate(T - 365 * 86400, false, T * 1000, "en-GB", "UTC"), "13 Nov 2025");
+check("the time shows in the reader's time zone", compactDate(T, true, T * 1000, "en-GB", "America/Los_Angeles").includes("12:24"), true);
+check("in full with the zone", (s => s.includes("November 2026") && s.includes("20:24") && s.includes("UTC"))(fullDate(T, "en-GB", "UTC")), true);
 
 console.log("\n=== Comments on a spot ===");
 for (const w of ["{>>What?<<}", "%%>>What?<<%%"]) {

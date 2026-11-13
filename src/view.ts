@@ -5,6 +5,7 @@ import { AnnotationFilters, NotesSort } from "./settings";
 import { applyChipColor } from "./authors";
 import { noteOf } from "./actions";
 import { linkPieces } from "./links";
+import { compactDate, fullDate } from "./dates";
 
 /**
  * Sizes a textarea to its content, so it shows every line and grows as more
@@ -838,18 +839,41 @@ export class AnnotationReviewView extends ItemView {
 	}
 
 	/**
-	 * An author chip followed by text, the way a reply reads. The chip moves
-	 * onto its own line when the text needs more than one.
+	 * When an annotation or a comment was written, short, beside its author.
+	 * Hovering shows the full date and time, and a click or a tap swaps the
+	 * two, since a phone has no hover. A comment's date can be kept for the
+	 * selected card, which a tap on a phone selects too.
+	 */
+	private renderDate(container: Element, time: number | undefined, selectedOnly = false) {
+		const style = this.plugin.settings.dateStyle;
+		if (time === undefined || style === "off") return;
+		const short = compactDate(time, style === "datetime");
+		const full = fullDate(time);
+		const el = container.createEl("span", { cls: `annotation-review-date${selectedOnly ? " is-selected-only" : ""}`, text: short });
+		setTooltip(el, full);
+		el.addEventListener("click", evt => {
+			evt.stopPropagation();
+			el.setText(el.textContent === short ? full : short);
+		});
+	}
+
+	/**
+	 * An author chip and the date, followed by text, the way a reply reads.
+	 * The chip and the date move onto their own line when the text needs more
+	 * than one.
 	 */
 	private renderAuthoredLine(
 		container: Element,
 		cls: string,
 		author: string | undefined,
+		time: number | undefined,
 		onAuthor: (author: string) => void,
 		renderText: (row: HTMLElement) => HTMLElement
 	): HTMLElement {
 		const row = container.createEl("div", { cls });
-		this.renderAuthorBadge(row, author, `${cls}-author`, onAuthor);
+		const byline = row.createEl("span", { cls: `${cls}-byline` });
+		this.renderAuthorBadge(byline, author, `${cls}-author`, onAuthor);
+		this.renderDate(byline, time, !this.plugin.settings.commentDates);
 		row.appendText(" ");
 		const textEl = renderText(row);
 		// An inline span reports one rect per line it occupies, so more than
@@ -920,6 +944,9 @@ export class AnnotationReviewView extends ItemView {
 		} else if (annotation.author) {
 			this.renderAuthorBadge(header, annotation.author, "", a => this.plugin.editAuthor(annotation, annotation, a));
 		}
+		// When it was written, beside who wrote it. For a comment on a
+		// selection that is the comment, its first reply.
+		this.renderDate(header, isSelectionComment ? (note?.time ?? annotation.time) : (annotation.time ?? note?.time));
 
 		// The comment itself, on its own line: a comment on a spot carries it
 		// inside, a comment on a selection in its first reply.
@@ -939,6 +966,7 @@ export class AnnotationReviewView extends ItemView {
 					repliesEl,
 					"annotation-review-reply",
 					reply.author,
+					reply.time,
 					a => this.plugin.editAuthor(annotation, reply, a),
 					row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
 				);

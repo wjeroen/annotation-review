@@ -440,7 +440,13 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const author = m ? m[1].trim() : "";
 		const text = (m ? replyText.slice(m[0].length) : replyText).trim();
 		if (!text) return;
-		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text));
+		const time = this.stamp();
+		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text, time));
+	}
+
+	/** The time written into a new annotation or reply, in seconds since 1970 in UTC, unless that is switched off. */
+	stamp(): number | undefined {
+		return this.settings.writeTimes ? Math.floor(Date.now() / 1000) : undefined;
 	}
 
 	/** Sets, changes or clears the author of an annotation or of one of its replies. */
@@ -596,14 +602,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 				label: "Delete",
 				icon: "strikethrough",
 				description: "Propose removing the selected text",
-				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperFor("delete", editor)))
+				run: editor => this.annotate(editor, sel => composeDelete(sel, author(), this.wrapperFor("delete", editor), this.stamp()))
 			},
 			{
 				id: "replace",
 				label: "Replace",
 				icon: "replace",
 				description: "Propose new wording for the selected text",
-				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperFor("replace", editor)))
+				run: editor => this.annotate(editor, sel => composeReplace(sel, author(), this.wrapperFor("replace", editor), this.stamp()))
 			},
 			{
 				id: "insert",
@@ -704,7 +710,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const at = editor.posToOffset(editor.getCursor("from"));
 		const context = getInsertContext(editor.getValue(), at);
 		const { wrappers, fencedFallback, defaultAuthor } = this.settings;
-		const build = (sel: string) => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback);
+		const time = this.stamp();
+		const build = (sel: string) => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, time);
 		// With nothing selected the insertion is empty and the caret lands
 		// inside it, ready to type, the way a comment on a spot works.
 		if (!editor.getSelection()) {
@@ -742,17 +749,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 */
 	private comment(editor: Editor) {
 		const { defaultAuthor: author, channel } = this.settings;
+		const time = this.stamp();
 		const target = this.annotationAtCaret(editor);
 		if (target?.wrapper === "html") {
 			new Notice("Annotation Review: an HTML comment takes no comments.");
 			return;
 		}
 		if (target) {
-			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel));
+			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel, time));
 			return;
 		}
 		if (editor.getSelection()) {
-			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel));
+			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel, time));
 			return;
 		}
 		// Percent marks do not render inside a fenced block, and a highlight
@@ -760,7 +768,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const at = editor.posToOffset(editor.getCursor());
 		const chosen = this.settings.pointCommentWrapper;
 		const wrapper: Wrapper = chosen === "percent" && getInsertContext(editor.getValue(), at).kind === "fenced" ? "brace" : chosen;
-		this.insertAtCaret(editor, at, composePointComment(author, wrapper));
+		this.insertAtCaret(editor, at, composePointComment(author, wrapper, time));
 	}
 
 	private pickAnnotationType(editor: Editor) {

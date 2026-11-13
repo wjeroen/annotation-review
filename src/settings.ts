@@ -3,6 +3,7 @@ import type AnnotationReviewPlugin from "../main";
 import { AnnotationType, MetaChannel, Wrapper } from "./types";
 import { AuthorColors, applyChipColor, defaultColorHex } from "./authors";
 import { MobileColorPicker } from "./colorpicker";
+import { DateStyle } from "./dates";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
 export type AuthorStyle = "underline" | "chip" | "none";
@@ -43,6 +44,12 @@ export interface AnnotationReviewSettings {
 	fencedFallback: "brace" | "highlight";
 	/** How replies are written when an annotation has none yet. */
 	channel: MetaChannel;
+	/** Write the time, in UTC, into every new annotation and reply. */
+	writeTimes: boolean;
+	/** How a card shows when its annotation was written, beside the author. */
+	dateStyle: DateStyle;
+	/** Show the date of every comment on a card. Without it, only the selected card shows them. */
+	commentDates: boolean;
 	filters: AnnotationFilters;
 	/** Hide the syntax and color the text in live preview. */
 	renderInEditor: boolean;
@@ -88,6 +95,9 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	pointCommentWrapper: "brace",
 	fencedFallback: "brace",
 	channel: "footnote",
+	writeTimes: true,
+	dateStyle: "date",
+	commentDates: false,
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
 	renderInEditor: true,
 	changeAuthorStyle: "underline",
@@ -204,6 +214,38 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			}
 		);
+
+		new Setting(containerEl).setName("Dates").setHeading();
+
+		new Setting(containerEl)
+			.setName("Add the time")
+			.setDesc("Written into every new annotation and comment, in UTC, beside the author. Shown in this device's time zone.")
+			.addToggle(t =>
+				t.setValue(settings.writeTimes).onChange(async value => {
+					settings.writeTimes = value;
+					await this.plugin.saveSettings();
+				})
+			);
+		addDropdown(
+			new Setting(containerEl).setName("Dates on the cards").setDesc("Beside the author. Hover over the date, or tap it, for the full date and time."),
+			{ date: "Date", datetime: "Date and time", off: "Not shown" },
+			settings.dateStyle,
+			async value => {
+				settings.dateStyle = value as DateStyle;
+				await this.plugin.saveSettings();
+				this.plugin.refreshViews();
+			}
+		);
+		new Setting(containerEl)
+			.setName("Dates on comments")
+			.setDesc("Show when every comment was written. Without this, only the selected card shows them.")
+			.addToggle(t =>
+				t.setValue(settings.commentDates).onChange(async value => {
+					settings.commentDates = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshViews();
+				})
+			);
 
 		new Setting(containerEl).setName("Editor").setHeading();
 

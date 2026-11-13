@@ -1,5 +1,6 @@
 import { AuthorColors, applyChipColor, authorColor } from "./authors";
 import { AuthorStyle } from "./settings";
+import { readLabel } from "./detect";
 
 /*
  * Styling annotations in reading view.
@@ -31,10 +32,11 @@ let changeStyle: AuthorStyle = "chip";
 let commentStyle: AuthorStyle = "underline";
 
 const META_PREFIX = /^(\{[^}]*\}|\[[^\]]+\])@@/;
-const LABEL_PREFIX = /^\[([^\]]+)\]\s+/;
+const LABEL_PREFIX = /^\[([^[\]]+)\]\s+/;
 
+/** The name in a label or in metadata. The link and the time in a label are not part of it. */
 function readAuthor(raw: string): string | undefined {
-	if (raw.startsWith("[")) return raw.slice(1, -1);
+	if (raw.startsWith("[")) return readLabel(raw).author;
 	try {
 		const parsed = JSON.parse(raw) as Record<string, unknown>;
 		const value = parsed?.author ?? parsed?.a;
@@ -44,13 +46,17 @@ function readAuthor(raw: string): string | undefined {
 	}
 }
 
-/** Splits an `@@` author prefix, or in prose a `[Author] ` label, off the front of `text`. */
+/**
+ * Splits an `@@` author prefix, or in prose a `[Author] ` label, off the front
+ * of `text`. A prefix holding only a link or a time is split off too, with no
+ * author.
+ */
 function splitAuthor(text: string, allowLabel: boolean): { author?: string; rest: string } {
 	const m = META_PREFIX.exec(text);
 	if (m) return { author: readAuthor(m[1]), rest: text.slice(m[0].length) };
 	if (allowLabel) {
 		const l = LABEL_PREFIX.exec(text);
-		if (l) return { author: l[1], rest: text.slice(l[0].length) };
+		if (l) return { author: readAuthor(`[${l[1]}]`), rest: text.slice(l[0].length) };
 	}
 	return { rest: text };
 }
@@ -170,8 +176,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			// {==text==}: CriticMarkup's own comment span, which keeps
 			// Obsidian's yellow the way a commented highlight does.
 			const { author, rest } = splitAuthor(text, false);
+			if (rest !== text) mark.textContent = rest;
 			if (author) {
-				mark.textContent = rest;
 				if (commentStyle === "chip") mark.before(chip(author));
 				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
@@ -190,8 +196,8 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 			// A comment on a highlighted span, or a plain highlight: Obsidian's
 			// yellow stays. Only an author prefix, if any, is taken off.
 			const { author, rest } = splitAuthor(text, false);
+			if (rest !== text) mark.textContent = rest;
 			if (author) {
-				mark.textContent = rest;
 				if (commentStyle === "chip") mark.before(chip(author));
 				else if (commentStyle === "underline") {
 					mark.classList.add("arv-author");
@@ -249,8 +255,9 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		const node = first.firstChild;
 		if (!(node instanceof Text)) continue;
 		const { author, rest } = splitAuthor(node.data, true);
-		if (!author) continue;
+		if (rest === node.data) continue;
 		node.data = rest;
+		if (!author) continue;
 		if (commentStyle === "chip") first.prepend(chip(author));
 		else if (commentStyle === "underline") {
 			const body: Node[] = [];

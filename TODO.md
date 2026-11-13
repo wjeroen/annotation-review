@@ -24,10 +24,10 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 ### Agreed for a next version
 
 - [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
-- [ ] **Timestamps**, as a marker behind a colon, `[Author:T1755000000]@@`, beside a link when there is one, `[Author:L3:T1755000000]@@`. The CriticMarkup plugin's `time` field maps to the same thing. Read it, show it on cards, sort replies by it. Decided in format, not built. A bracket holding only a marker is that marker with nobody signing it, and the parser already keeps `T` and digits out of the name.
 - [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] Times: written in UTC into every new annotation and comment, `[Claude:T1763065440]@@` or a `time` field in braces, and shown beside the author in the device's time zone, with the full date on hover or tap. Settings for writing them, for date or date and time, and for comment dates on every card (2026-11-13)
 - [x] Links on the cards are drawn as in live preview and open on a click. A click elsewhere on the text still opens the edit box with the raw text (2026-11-13)
 - [x] A reply that starts with a link or a wikilink is unsigned. It was signed by the link text, and signing it with a real name replaced the link text with that name (2026-11-09)
 - [x] A footnote reply holding a link, a wikilink or other brackets is read whole. It was cut at the first `]`, so its card text stopped early and a new reply landed inside it. In reading view the author's underline covers the whole footnote, and a link address may hold parentheses (2026-11-07)

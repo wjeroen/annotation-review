@@ -56,6 +56,11 @@ export interface Authored {
 	 * move is a deletion in one place and an insertion in another.
 	 */
 	link?: string;
+	/**
+	 * When it was written, in seconds since 1970 in UTC, from `[X:T1763065440]`
+	 * or a `time` field in the metadata. Shown in the computer's own time zone.
+	 */
+	time?: number;
 	/** Where an author goes when there is none, and the syntax to wrap it in. */
 	authorInsert: InsertPoint;
 }
