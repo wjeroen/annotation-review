@@ -5,7 +5,7 @@ import { AuthorColors, applyChipColor, defaultColorHex } from "./authors";
 import { MobileColorPicker } from "./colorpicker";
 import { DateStyle } from "./dates";
 
-/** How a new time is written outside braces: a date and time, or Unix time, the seconds since 1970. */
+/** How a new time is written: Unix time, the seconds since 1970, or a date and time. */
 export type TimeNotation = "date" | "unix";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
@@ -49,7 +49,7 @@ export interface AnnotationReviewSettings {
 	channel: MetaChannel;
 	/** Write the time, in UTC, into every new annotation and reply. */
 	writeTimes: boolean;
-	/** How that time is written outside braces. Braces always get Unix time, which the CriticMarkup plugin reads. */
+	/** How that time is written, the same in every wrapper and reply so they never disagree. */
 	timeNotation: TimeNotation;
 	/** How a card shows when its annotation was written, beside the author. */
 	dateStyle: DateStyle;
@@ -101,7 +101,7 @@ export const DEFAULT_SETTINGS: AnnotationReviewSettings = {
 	fencedFallback: "brace",
 	channel: "footnote",
 	writeTimes: true,
-	timeNotation: "date",
+	timeNotation: "unix",
 	dateStyle: "date",
 	commentDates: false,
 	filters: { comment: true, delete: true, insert: true, replace: true, noAuthor: true, plain: true },
@@ -235,8 +235,8 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		addDropdown(
 			new Setting(containerEl)
 				.setName("Time notation")
-				.setDesc("How the time is written in highlights, percent marks and footnotes. Braces always get Unix time, the seconds since 1970, since the CriticMarkup plugin reads nothing else there."),
-			{ date: "Date and time, 2026-11-13T20:24:00Z", unix: "Unix time, T1794601440" },
+				.setDesc("How the time is written, the same in every wrapper and reply. Unix time counts the seconds since 1970. Inside braces the CriticMarkup plugin only reads Unix time."),
+			{ unix: "Unix time, T1794601440", date: "Date and time, 2026-11-13T20:24:00Z" },
 			settings.timeNotation,
 			async value => {
 				settings.timeNotation = value as TimeNotation;

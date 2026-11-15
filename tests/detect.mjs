@@ -162,15 +162,18 @@ check("the time field in braces", timeOf(`{--{"author":"Claude","time":${T}}@@x-
 check("on a footnote reply", repliesWithTimes(`==T==^[[Claude:T${T}] note]`), [["Claude", T, "note"]]);
 check("on an unsigned footnote reply", repliesWithTimes(`==T==^[[T${T}] note]`), [[null, T, "note"]]);
 check("on a brace reply", repliesWithTimes(`{--x--}{>>{"author":"Alex","time":${T}}@@ok<<}`), [["Alex", T, "ok"]]);
-// What the plugin writes: the date and time in UTC by default, Unix time when asked for.
+// What the plugin writes: one notation in every wrapper and reply, Unix time or a date and time.
 const NOW = { time: T };
 const UNIX = { time: T, unix: true };
+check("written as Unix time in a highlight", composeDelete("x", "Claude", "highlight", UNIX).text, `==--[Claude:T${T}]@@x--==`);
+check("and in braces", composeDelete("x", "Claude", "brace", UNIX).text, `{--{"author":"Claude","time":${T}}@@x--}`);
+check("and on a footnote reply", replyEntry("Joe", "ok", "footnote", UNIX), `^[[Joe:T${T}] ok]`);
 check("written as a date and time in a highlight", composeDelete("x", "Claude", "highlight", NOW).text, "==--[Claude:2026-11-13T20:24:00Z]@@x--==");
-check("written as Unix time when asked", composeDelete("x", "Claude", "highlight", UNIX).text, `==--[Claude:T${T}]@@x--==`);
-check("braces always get Unix time", composeDelete("x", "Claude", "brace", NOW).text, `{--{"author":"Claude","time":${T}}@@x--}`);
+check("and in braces too, in quotes", composeDelete("x", "Claude", "brace", NOW).text, '{--{"author":"Claude","time":"2026-11-13T20:24:00Z"}@@x--}');
+check("which reads back", timeOf('{--{"author":"Claude","time":"2026-11-13T20:24:00Z"}@@x--}'), ["Claude", null, T]);
 check("written with no author", composeInsert("x", "", PLAIN, "percent", "brace", NOW).text, "%%++[2026-11-13T20:24:00Z]@@x++%%");
 check("written on a footnote reply", replyEntry("Joe", "ok", "footnote", NOW), "^[[Joe:2026-11-13T20:24:00Z] ok]");
-check("written on a brace reply, in Unix time", replyEntry("Joe", "ok", "brace", NOW), `{>>{"author":"Joe","time":${T}}@@ok<<}`);
+check("written on a brace reply", replyEntry("Joe", "ok", "brace", NOW), '{>>{"author":"Joe","time":"2026-11-13T20:24:00Z"}@@ok<<}');
 check("a comment on a selection carries it on the comment", composeComment("Sel.", "C", "highlight", "footnote", NOW).text, "==Sel.==^[[C:2026-11-13T20:24:00Z] ]");
 const stamped = computeAddReply("{--x--}", one("{--x--}"), "Joe", "ok", NOW).newContent;
 check("a comment added from the sidebar", stamped, "{--x--}^[[Joe:2026-11-13T20:24:00Z] ok]");

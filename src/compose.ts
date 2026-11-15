@@ -29,21 +29,23 @@ function wrap(wrapper: Wrapper, inner: string): string {
 }
 
 /**
- * The author and the time in the CriticMarkup plugin's metadata,
- * `{"author":"X","time":1794601440}@@`. The time is always Unix time here,
- * the seconds since 1970, since that plugin reads nothing else. Nothing at
- * all when there is neither.
+ * The author and the time in the CriticMarkup plugin's metadata, in the same
+ * notation as everywhere else: `{"author":"X","time":1794601440}@@` in Unix
+ * time, which that plugin reads, or `{"author":"X","time":"2026-11-13T20:24:00Z"}@@`
+ * as a date and time in quotes, which it cannot. Nothing at all when there
+ * is neither.
  */
 function metadata(author: string, stamp?: Stamp): string {
 	const fields: Record<string, unknown> = {};
 	if (author) fields.author = author;
-	if (stamp) fields.time = stamp.time;
+	if (stamp) fields.time = stamp.unix ? stamp.time : formatTime(stamp.time);
 	return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 }
 
 /**
- * The inside of a label, `Claude:2026-11-13T20:24:00Z`, or `Claude:T1794601440`
- * when Unix time is asked for. Empty when there is neither.
+ * The inside of a label, `Claude:T1794601440` in Unix time or
+ * `Claude:2026-11-13T20:24:00Z` as a date and time. Empty when there is
+ * neither.
  */
 function label(author: string, stamp?: Stamp): string {
 	const time = !stamp ? "" : stamp.unix ? `T${stamp.time}` : formatTime(stamp.time);
@@ -53,7 +55,7 @@ function label(author: string, stamp?: Stamp): string {
 /**
  * The author and the time as they go inside a wrapper: metadata in braces,
  * so the CriticMarkup plugin agrees on both, and the lighter
- * `[X:2026-11-13T20:24:00Z]@@` elsewhere.
+ * `[X:T1794601440]@@` elsewhere.
  */
 export function authorPrefix(author: string, wrapper: Wrapper, stamp?: Stamp): string {
 	if (wrapper === "brace") return metadata(author, stamp);
