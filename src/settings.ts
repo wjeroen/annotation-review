@@ -5,8 +5,8 @@ import { AuthorColors, applyChipColor, defaultColorHex } from "./authors";
 import { MobileColorPicker } from "./colorpicker";
 import { DateStyle } from "./dates";
 
-/** How a new time is written outside braces: a date and time, or seconds since 1970. */
-export type TimeNotation = "date" | "seconds";
+/** How a new time is written outside braces: a date and time, or Unix time, the seconds since 1970. */
+export type TimeNotation = "date" | "unix";
 
 /** A colored line under the text, the name as a chip, or nothing at all. */
 export type AuthorStyle = "underline" | "chip" | "none";
@@ -49,7 +49,7 @@ export interface AnnotationReviewSettings {
 	channel: MetaChannel;
 	/** Write the time, in UTC, into every new annotation and reply. */
 	writeTimes: boolean;
-	/** How that time is written outside braces. Braces always get seconds, which the CriticMarkup plugin reads. */
+	/** How that time is written outside braces. Braces always get Unix time, which the CriticMarkup plugin reads. */
 	timeNotation: TimeNotation;
 	/** How a card shows when its annotation was written, beside the author. */
 	dateStyle: DateStyle;
@@ -235,8 +235,8 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 		addDropdown(
 			new Setting(containerEl)
 				.setName("Time notation")
-				.setDesc("How the time is written in highlights, percent marks and footnotes. Braces always get seconds, since the CriticMarkup plugin reads nothing else there."),
-			{ date: "Date and time, 2026-11-13T20:24:00Z", seconds: "Seconds since 1970, T1794601440" },
+				.setDesc("How the time is written in highlights, percent marks and footnotes. Braces always get Unix time, the seconds since 1970, since the CriticMarkup plugin reads nothing else there."),
+			{ date: "Date and time, 2026-11-13T20:24:00Z", unix: "Unix time, T1794601440" },
 			settings.timeNotation,
 			async value => {
 				settings.timeNotation = value as TimeNotation;

@@ -150,6 +150,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 		// Before 0.6.2 a comment on a spot took the comment wrapper. Percent
 		// marks carry over, a highlight cannot, so that becomes braces.
 		if (saved.pointCommentWrapper === undefined && saved.wrappers?.comment === "percent") this.settings.pointCommentWrapper = "percent";
+		// 0.9.0-beta.3 called Unix time "seconds", which the readable form has too.
+		if ((saved.timeNotation as string | undefined) === "seconds") this.settings.timeNotation = "unix";
 		// Sidebar state is per device. Whatever data.json still carries from
 		// before 0.6.2 seeds it, and the local copy wins once there is one.
 		const local = (this.app.loadLocalStorage?.(LOCAL_STATE_KEY) ?? null) as Partial<LocalState> | null;
@@ -492,7 +494,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 	/** The time written into a new annotation or reply, now, in the notation chosen, unless that is switched off. */
 	stamp(): Stamp | undefined {
 		if (!this.settings.writeTimes) return undefined;
-		return { time: Math.floor(Date.now() / 1000), seconds: this.settings.timeNotation === "seconds" };
+		return { time: Math.floor(Date.now() / 1000), unix: this.settings.timeNotation === "unix" };
 	}
 
 	/** Sets, changes or clears the author of an annotation or of one of its replies. */

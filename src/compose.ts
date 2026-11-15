@@ -30,9 +30,9 @@ function wrap(wrapper: Wrapper, inner: string): string {
 
 /**
  * The author and the time in the CriticMarkup plugin's metadata,
- * `{"author":"X","time":1794601440}@@`. The time is always seconds since
- * 1970 in UTC here, since that plugin reads nothing else. Nothing at all when
- * there is neither.
+ * `{"author":"X","time":1794601440}@@`. The time is always Unix time here,
+ * the seconds since 1970, since that plugin reads nothing else. Nothing at
+ * all when there is neither.
  */
 function metadata(author: string, stamp?: Stamp): string {
 	const fields: Record<string, unknown> = {};
@@ -43,10 +43,10 @@ function metadata(author: string, stamp?: Stamp): string {
 
 /**
  * The inside of a label, `Claude:2026-11-13T20:24:00Z`, or `Claude:T1794601440`
- * when seconds are asked for. Empty when there is neither.
+ * when Unix time is asked for. Empty when there is neither.
  */
 function label(author: string, stamp?: Stamp): string {
-	const time = !stamp ? "" : stamp.seconds ? `T${stamp.time}` : formatTime(stamp.time);
+	const time = !stamp ? "" : stamp.unix ? `T${stamp.time}` : formatTime(stamp.time);
 	return [author, time].filter(Boolean).join(":");
 }
 

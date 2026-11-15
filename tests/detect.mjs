@@ -162,15 +162,15 @@ check("the time field in braces", timeOf(`{--{"author":"Claude","time":${T}}@@x-
 check("on a footnote reply", repliesWithTimes(`==T==^[[Claude:T${T}] note]`), [["Claude", T, "note"]]);
 check("on an unsigned footnote reply", repliesWithTimes(`==T==^[[T${T}] note]`), [[null, T, "note"]]);
 check("on a brace reply", repliesWithTimes(`{--x--}{>>{"author":"Alex","time":${T}}@@ok<<}`), [["Alex", T, "ok"]]);
-// What the plugin writes: the date and time in UTC by default, seconds when asked for.
+// What the plugin writes: the date and time in UTC by default, Unix time when asked for.
 const NOW = { time: T };
-const SECONDS = { time: T, seconds: true };
+const UNIX = { time: T, unix: true };
 check("written as a date and time in a highlight", composeDelete("x", "Claude", "highlight", NOW).text, "==--[Claude:2026-11-13T20:24:00Z]@@x--==");
-check("written as seconds when asked", composeDelete("x", "Claude", "highlight", SECONDS).text, `==--[Claude:T${T}]@@x--==`);
-check("braces always get seconds", composeDelete("x", "Claude", "brace", NOW).text, `{--{"author":"Claude","time":${T}}@@x--}`);
+check("written as Unix time when asked", composeDelete("x", "Claude", "highlight", UNIX).text, `==--[Claude:T${T}]@@x--==`);
+check("braces always get Unix time", composeDelete("x", "Claude", "brace", NOW).text, `{--{"author":"Claude","time":${T}}@@x--}`);
 check("written with no author", composeInsert("x", "", PLAIN, "percent", "brace", NOW).text, "%%++[2026-11-13T20:24:00Z]@@x++%%");
 check("written on a footnote reply", replyEntry("Joe", "ok", "footnote", NOW), "^[[Joe:2026-11-13T20:24:00Z] ok]");
-check("written on a brace reply, in seconds", replyEntry("Joe", "ok", "brace", NOW), `{>>{"author":"Joe","time":${T}}@@ok<<}`);
+check("written on a brace reply, in Unix time", replyEntry("Joe", "ok", "brace", NOW), `{>>{"author":"Joe","time":${T}}@@ok<<}`);
 check("a comment on a selection carries it on the comment", composeComment("Sel.", "C", "highlight", "footnote", NOW).text, "==Sel.==^[[C:2026-11-13T20:24:00Z] ]");
 const stamped = computeAddReply("{--x--}", one("{--x--}"), "Joe", "ok", NOW).newContent;
 check("a comment added from the sidebar", stamped, "{--x--}^[[Joe:2026-11-13T20:24:00Z] ok]");
@@ -209,7 +209,7 @@ check("renaming keeps a written date", setAuthor("==--[Claude:T2026-11-13 20:24]
 check("clearing keeps it too", setAuthor("==--[Claude:T2026-11-13 20:24]@@x--==", ""), "==--[T2026-11-13 20:24]@@x--==");
 check("on a footnote reply as well", setAuthor("{--x--}^[[Alex:2026-11-13] why]", "Joe", a => a.replies[0]), "{--x--}^[[Joe:2026-11-13] why]");
 check("dismissing takes a written date along", dismiss("A ==--[Claude:T2026-11-13 20:24]@@x--== B"), "A x B");
-check("seconds in a label need their T", parseTime("1794601440"), undefined);
+check("Unix time in a label needs its T", parseTime("1794601440"), undefined);
 check("a field takes them bare", parseTime("1794601440", true), { time: T, dateOnly: false });
 check("an offset ahead of UTC", dated("==--[Claude:2026-11-13T21:24:00+01:00]@@x--=="), ["Claude", null, T, false]);
 check("an offset behind it", dated("==--[Claude:T2026-11-13 12:24-08:00]@@x--=="), ["Claude", null, T, false]);

@@ -152,9 +152,9 @@ export function labelMarkers(inside: string): string[] {
  * A label is a name and any number of markers, separated by colons. A marker
  * is known by its own shape rather than by where it sits, so the order does
  * not matter and `[L3]`, `[Claude:L3]` and `[L3:Claude]` all say set 3. The
- * time is when it was written, in UTC: seconds since 1970 behind a T,
- * `[Claude:T1794601440]`, or a date with or without a clock time,
- * `[Claude:T2026-11-13 20:24]`. A person called L3 has to use the metadata
+ * time is when it was written, in UTC: Unix time, the seconds since 1970,
+ * behind a T, `[Claude:T1794601440]`, or a date with or without a clock time,
+ * `[Claude:2026-11-13T20:24:00Z]`. A person called L3 has to use the metadata
  * form, which is the price of never guessing.
  */
 export function readLabel(raw: string): { author?: string; link?: string; time?: number; dateOnly?: boolean } {
@@ -203,8 +203,9 @@ function linkIn(meta?: Record<string, unknown>): string | undefined {
 
 /**
  * When a metadata annotation was written, `"time"` or `"t"` as the
- * CriticMarkup plugin reads it. That plugin writes seconds since 1970 in UTC,
- * a number, and a date in quotes is read too, `"time":"2026-11-13 20:24"`.
+ * CriticMarkup plugin reads it. That plugin writes Unix time, the seconds
+ * since 1970, as a number, and a date in quotes is read too,
+ * `"time":"2026-11-13 20:24"`.
  * It stays among the other fields, so editing the author keeps it.
  */
 function timeIn(meta?: Record<string, unknown>): ReadTime | undefined {

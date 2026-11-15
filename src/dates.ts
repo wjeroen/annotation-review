@@ -24,15 +24,15 @@ export interface ReadTime {
 const READABLE = /^[Tt]?(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?)?\s*([Zz]|([+-])(\d{2}):?(\d{2})?)?$/;
 
 /**
- * Reads a time written either as seconds since 1970 or as a date. Seconds
- * need their T, `T1794601440`, unless `bareSeconds` says the place cannot
- * hold a name, as a metadata field cannot. In a label a bare number could be
- * a name, and `[1]` would turn into a day in 1970.
+ * Reads a time written either as Unix time, the seconds since 1970, or as a
+ * date. Unix time needs its T, `T1794601440`, unless `bareUnix` says the
+ * place cannot hold a name, as a metadata field cannot. In a label a bare
+ * number could be a name, and `[1]` would turn into a day in 1970.
  */
-export function parseTime(text: string, bareSeconds = false): ReadTime | undefined {
+export function parseTime(text: string, bareUnix = false): ReadTime | undefined {
 	const value = text.trim();
-	const seconds = (bareSeconds ? /^[Tt]?(\d+)$/ : /^[Tt](\d+)$/).exec(value);
-	if (seconds) return { time: Number(seconds[1]), dateOnly: false };
+	const unix = (bareUnix ? /^[Tt]?(\d+)$/ : /^[Tt](\d+)$/).exec(value);
+	if (unix) return { time: Number(unix[1]), dateOnly: false };
 	const m = READABLE.exec(value);
 	if (!m) return undefined;
 	const [y, mo, d, h, mi, s] = m.slice(1, 7).map(part => (part === undefined ? 0 : Number(part)));
@@ -63,10 +63,10 @@ export function formatTime(time: number): string {
 	return new Date(time * 1000).toISOString().slice(0, 19) + "Z";
 }
 
-/** The time to write into a new annotation, and whether to write it as seconds since 1970 instead of a date. */
+/** The time to write into a new annotation, and whether to write it as Unix time, `T1794601440`, instead of a date. */
 export interface Stamp {
 	time: number;
-	seconds?: boolean;
+	unix?: boolean;
 }
 
 /** Short: the day and month, the year only when it is not this year, and the time when asked for. */

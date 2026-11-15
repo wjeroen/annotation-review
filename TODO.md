@@ -28,7 +28,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 ## Completed Recently
 - [x] With the Admonitions tab open, clicking an admonition in the note or putting the caret in it marks its card and scrolls to it (2026-11-14)
 - [x] Reading view and admonition blocks style a brace deletion, insertion or comment whose text holds a link or other formatting, instead of showing its raw syntax (2026-11-14)
-- [x] Times are written as the date and time in UTC, `[Claude:2026-11-13T20:24:00Z]@@`, with a setting for seconds, and braces keep seconds. Typed times may take many forms: a date alone, no seconds, a T in front or in the middle, a Z, an offset like +01:00, and `t` and `l` in braces (2026-11-14)
+- [x] Times are written as the date and time in UTC, `[Claude:2026-11-13T20:24:00Z]@@`, with a setting for Unix time, and braces keep Unix time. Typed times may take many forms: a date alone, no seconds, a T in front or in the middle, a Z, an offset like +01:00, and `t` and `l` in braces (2026-11-14)
 - [x] Times: written in UTC into every new annotation and comment, `[Claude:T1763065440]@@` or a `time` field in braces, and shown beside the author in the device's time zone, with the full date on hover or tap. Settings for writing them, for date or date and time, and for comment dates on every card (2026-11-13)
 - [x] Links on the cards are drawn as in live preview and open on a click. A click elsewhere on the text still opens the edit box with the raw text (2026-11-13)
 - [x] A reply that starts with a link or a wikilink is unsigned. It was signed by the link text, and signing it with a real name replaced the link text with that name (2026-11-09)

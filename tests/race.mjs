@@ -105,5 +105,14 @@ console.log("\n=== 4. A single ordinary scan still works ===");
 	check("annotations found", plugin.annotations.length, 1);
 }
 
+console.log("\n=== Settings saved under an older name ===");
+{
+	// 0.9.0-beta.3 saved Unix time as "seconds", a name the readable form fits too.
+	const { plugin } = makeHarness({});
+	plugin.loadData = async () => ({ timeNotation: "seconds" });
+	await plugin.loadSettings();
+	check("a saved \"seconds\" is Unix time", plugin.settings.timeNotation, "unix");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
