@@ -240,6 +240,6 @@ A footnote ends at the first closing square bracket that has no opening bracket 
 
 Highlighted text cannot start or end with a space in Obsidian. The operator marks take care of that: `==++is ++==` is fine, since the space sits inside the marks.
 
-A highlight cannot cross a blank line, so a highlighted annotation has to stay inside one paragraph. Braces and percent marks can cross one, which is the only way to insert or delete a paragraph break: `{++` on one line, a blank line, `++}` on the next. Braces that cross a blank line show their marks as raw text in reading view and inside admonition blocks, so to add or remove several paragraphs, write one annotation per paragraph.
+A highlight cannot cross a blank line, so a highlighted annotation has to stay inside one paragraph. Braces and percent marks can cross one, which is the only way to insert or delete a paragraph break: `{++` on one line, a blank line, `++}` on the next. Braces that cross a blank line show their marks as raw text in reading view, so to add or remove several paragraphs, write one annotation per paragraph.
 
 When writing about this syntax rather than using it, put the examples in backticks or a code block that is not an admonition. Two bare equals signs in running prose read as a delimiter.
