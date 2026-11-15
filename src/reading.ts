@@ -13,10 +13,11 @@ import { readLabel } from "./detect";
  * <mark> and <del>. This walks the rendered block and restyles those, using
  * the same classes as live preview so the two look the same.
  *
- * Only the simple cases are handled: an annotation whose text has no inline
- * formatting of its own. One split across elements, `{++**bold**++}`, is
- * left as it is rather than half-styled. Code blocks and inline code are
- * never touched.
+ * A deletion, an insertion or a comment in braces whose text holds a link or
+ * other formatting is split across elements, and is put back together when
+ * its pieces sit side by side in one parent. A replacement or a highlight
+ * split that way, or anything running over two paragraphs, is left as it is
+ * rather than half styled. Code blocks and inline code are never touched.
  */
 
 export interface ReadingSettings {
@@ -162,6 +163,71 @@ function stripBraces(el: Element): boolean {
 const BRACE_OP = /\{(--|\+\+)((?:\{[^}]*\}|\[[^\]]+\])@@)?([\s\S]*?)\1\}/g;
 const BRACE_COMMENT = /\{>>([\s\S]*?)<<\}/g;
 
+/** The opening marks of a deletion, an insertion or a comment in braces. */
+const OPENER = /\{(--|\+\+|>>)/;
+
+/** The closing marks for each opener, and the class its text gets. */
+const SPLIT: Record<string, { close: string; cls: string }> = {
+	"{--": { close: "--}", cls: "arv-del" },
+	"{++": { close: "++}", cls: "arv-ins" },
+	"{>>": { close: "<<}", cls: "arv-comment" }
+};
+
+/**
+ * One brace annotation that opens in `start` and closes in a later text node
+ * beside it, with a link or other formatting in between, styled as one. Its
+ * pieces go under one span, the elements between them included, so a link
+ * stays a link. It is left as it is when the closing marks are not among the
+ * nodes beside it, sit inside an element, or come after another opening, so
+ * an annotation that runs over two paragraphs or holds another one stays raw
+ * rather than half styled.
+ */
+function joinSplit(start: Text) {
+	const open = OPENER.exec(start.data);
+	if (!open) return;
+	const { close, cls } = SPLIT[open[0]];
+	if (start.data.includes(close, open.index + 3)) return;
+	const between: Node[] = [];
+	let end: Text | null = null;
+	let endAt = -1;
+	for (let n = start.nextSibling; n; n = n.nextSibling) {
+		if (n instanceof Text) {
+			const at = n.data.indexOf(close);
+			if (OPENER.test(at === -1 ? n.data : n.data.slice(0, at))) return;
+			if (at !== -1) {
+				end = n;
+				endAt = at;
+				break;
+			}
+		} else {
+			const inner = n.textContent ?? "";
+			if (inner.includes(close) || OPENER.test(inner)) return;
+		}
+		between.push(n);
+	}
+	if (!end) return;
+
+	const isComment = open[0] === "{>>";
+	const style = isComment ? commentStyle : changeStyle;
+	const { author, rest } = splitAuthor(start.data.slice(open.index + 3), isComment);
+	const span = piece(cls, "", author, style);
+	if (rest) span.append(rest);
+	span.append(...between);
+	const tail = end.data.slice(0, endAt);
+	if (tail) span.append(tail);
+	start.data = start.data.slice(0, open.index);
+	end.data = end.data.slice(endAt + 3);
+	start.after(span);
+	const lead = author && style === "chip" ? chip(author) : null;
+	if (lead) span.before(lead);
+	// A comment in running text gets the small gap on both sides, as render
+	// gives it, the first one on whichever comes first.
+	if (isComment) {
+		(lead ?? span).classList.add("arv-attached");
+		span.classList.add("arv-gap-after");
+	}
+}
+
 export function processReadingView(root: HTMLElement, settings: ReadingSettings) {
 	if (!settings.renderInEditor) return;
 	colors = settings.authorColors;
@@ -246,6 +312,16 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 		fragment.appendChild(document.createTextNode(data.slice(last)));
 		node.replaceWith(fragment);
 	}
+
+	// What is left opens in one text node and closes in a later one, split
+	// by a link or other formatting inside it. Collected only now, so the
+	// text nodes the pass above made are among them.
+	const walkerSplit = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const openers: Text[] = [];
+	for (let node = walkerSplit.nextNode(); node; node = walkerSplit.nextNode()) {
+		if (node instanceof Text && !insideCode(node) && OPENER.test(node.data)) openers.push(node);
+	}
+	for (const node of openers) joinSplit(node);
 
 	// Footnote bodies at the bottom: the label at the start becomes the author.
 	// The underline runs over the whole body, links and formatting included,

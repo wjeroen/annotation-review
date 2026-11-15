@@ -1,4 +1,5 @@
 import { AdmonitionBlock, Annotation, AnnotationReply, AnnotationType, ExcludedRange, FoundWrapper, InsertContext, InsertPoint, MetaChannel, TextSpan, Wrapper } from "./types";
+import { ReadTime, parseTime } from "./dates";
 
 /*
  * The grammar, in one line:
@@ -115,31 +116,64 @@ function trimmedSpan(text: string, start: number, end: number): TextSpan {
 	return { start: s, end: e };
 }
 
+/** A date with its clock time and zone, which hold colons of their own, as one part of a label. */
+const LABEL_TIME = /^\s*[Tt]?\d{4}-\d{2}-\d{2}(?:[Tt ]\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?)?\s*(?:[Zz]|[+-]\d{2}(?::?\d{2})?)?\s*(?=:|$)/;
+
+/**
+ * The parts of a label between its colons. A date with a clock time,
+ * `2026-11-13 20:24`, stays one part although its clock holds colons.
+ */
+function labelParts(inside: string): string[] {
+	const parts: string[] = [];
+	let rest = inside;
+	while (rest.length > 0) {
+		const time = LABEL_TIME.exec(rest);
+		const part = time ? time[0] : rest.split(":", 1)[0];
+		parts.push(part.trim());
+		rest = rest.slice(part.length + 1);
+	}
+	return parts;
+}
+
+/** A link, `L3` or `l3`. */
+function linkMarker(piece: string): string | undefined {
+	return /^[Ll](\d+)$/.exec(piece)?.[1];
+}
+
+/**
+ * The markers of a label, the link and the time, exactly as written. They
+ * are not part of the name, so editing the author keeps them.
+ */
+export function labelMarkers(inside: string): string[] {
+	return labelParts(inside).filter(piece => linkMarker(piece) !== undefined || parseTime(piece) !== undefined);
+}
+
 /**
  * A label is a name and any number of markers, separated by colons. A marker
- * is known by its own shape rather than by where it sits, a letter and
- * digits, so the order does not matter and `[L3]`, `[Claude:L3]` and
- * `[L3:Claude]` all say set 3. `T` is when it was written, in seconds since
- * 1970 in UTC, `[Claude:T1763065440]`. A person called L3 has to use the
- * metadata form, which is the price of never guessing.
+ * is known by its own shape rather than by where it sits, so the order does
+ * not matter and `[L3]`, `[Claude:L3]` and `[L3:Claude]` all say set 3. The
+ * time is when it was written, in UTC: seconds since 1970 behind a T,
+ * `[Claude:T1794601440]`, or a date with or without a clock time,
+ * `[Claude:T2026-11-13 20:24]`. A person called L3 has to use the metadata
+ * form, which is the price of never guessing.
  */
-export function readLabel(raw: string): { author?: string; link?: string; time?: number } {
+export function readLabel(raw: string): { author?: string; link?: string; time?: number; dateOnly?: boolean } {
 	let author: string | undefined;
 	let link: string | undefined;
-	let time: number | undefined;
-	for (const part of raw.slice(1, -1).split(":")) {
-		const piece = part.trim();
+	let read: ReadTime | undefined;
+	for (const piece of labelParts(raw.slice(1, -1))) {
 		if (!piece) continue;
-		const m = /^([LT])(\d+)$/.exec(piece);
-		if (!m) author = author ?? piece;
-		else if (m[1] === "L") link = link ?? m[2];
-		else time = time ?? Number(m[2]);
+		const marker = linkMarker(piece);
+		const time = marker === undefined ? parseTime(piece) : undefined;
+		if (marker !== undefined) link = link ?? marker;
+		else if (time) read = read ?? time;
+		else author = author ?? piece;
 	}
-	return { author, link, time };
+	return { author, link, time: read?.time, dateOnly: read?.dateOnly || undefined };
 }
 
 /** Reads the author out of `{"author":"X"}` or `[X]`, keeping any other metadata fields. */
-function readMeta(raw: string): { author?: string; link?: string; time?: number; meta?: Record<string, unknown> } {
+function readMeta(raw: string): { author?: string; link?: string; time?: number; dateOnly?: boolean; meta?: Record<string, unknown> } {
 	if (raw.startsWith("[")) return readLabel(raw);
 	let parsed: unknown;
 	try {
@@ -152,7 +186,8 @@ function readMeta(raw: string): { author?: string; link?: string; time?: number;
 	const value = fields.author ?? fields.a;
 	delete fields.author;
 	delete fields.a;
-	return { author: typeof value === "string" && value ? value : undefined, link: linkIn(fields), time: timeIn(fields), meta: fields };
+	const read = timeIn(fields);
+	return { author: typeof value === "string" && value ? value : undefined, link: linkIn(fields), time: read?.time, dateOnly: read?.dateOnly || undefined, meta: fields };
 }
 
 /** A whole number at or above zero, given as a number or as digits. */
@@ -161,25 +196,28 @@ function wholeNumber(value: unknown): string | undefined {
 	return typeof value === "string" && /^\d+$/.test(value) ? value : undefined;
 }
 
-/** The set a metadata annotation belongs to, `{"author":"X","link":3}`. Numbers only. */
+/** The set a metadata annotation belongs to, `{"author":"X","link":3}` or `"l":3`. Numbers only. */
 function linkIn(meta?: Record<string, unknown>): string | undefined {
-	return wholeNumber(meta?.link);
+	return wholeNumber(meta?.link ?? meta?.l);
 }
 
 /**
- * When a metadata annotation was written, `{"author":"X","time":1763065440}`,
- * in seconds since 1970 in UTC, which is what the CriticMarkup plugin writes.
- * It stays among the other fields too, so editing the author keeps it.
+ * When a metadata annotation was written, `"time"` or `"t"` as the
+ * CriticMarkup plugin reads it. That plugin writes seconds since 1970 in UTC,
+ * a number, and a date in quotes is read too, `"time":"2026-11-13 20:24"`.
+ * It stays among the other fields, so editing the author keeps it.
  */
-function timeIn(meta?: Record<string, unknown>): number | undefined {
-	const value = wholeNumber(meta?.time);
-	return value === undefined ? undefined : Number(value);
+function timeIn(meta?: Record<string, unknown>): ReadTime | undefined {
+	const value = meta?.time ?? meta?.t;
+	if (typeof value === "number") return Number.isInteger(value) && value >= 0 ? { time: value, dateOnly: false } : undefined;
+	return typeof value === "string" ? parseTime(value, true) : undefined;
 }
 
 interface AuthorParse {
 	author?: string;
 	link?: string;
 	time?: number;
+	dateOnly?: boolean;
 	authorSpan?: TextSpan;
 	authorMeta?: Record<string, unknown>;
 	/** Where the text after the author begins. */
@@ -195,11 +233,12 @@ function parseAuthorAt(text: string, contentStart: number, contentEnd: number, a
 	const segment = text.slice(contentStart, contentEnd);
 	const m = META_REGEX.exec(segment);
 	if (m) {
-		const { author, link, time, meta } = readMeta(m[1]);
+		const { author, link, time, dateOnly, meta } = readMeta(m[1]);
 		return {
 			author,
 			link,
 			time,
+			dateOnly,
 			authorMeta: meta,
 			authorSpan: { start: contentStart, end: contentStart + m[0].length },
 			restStart: contentStart + m[0].length
@@ -210,8 +249,8 @@ function parseAuthorAt(text: string, contentStart: number, contentEnd: number, a
 		if (l) {
 			// Markers are read off a label as well, so a name with one behind
 			// it comes out as the name.
-			const { author, time } = readLabel(`[${l[1]}]`);
-			return { author, time, authorSpan: { start: contentStart, end: contentStart + l[0].length }, restStart: contentStart + l[0].length };
+			const { author, time, dateOnly } = readLabel(`[${l[1]}]`);
+			return { author, time, dateOnly, authorSpan: { start: contentStart, end: contentStart + l[0].length }, restStart: contentStart + l[0].length };
 		}
 	}
 	return { restStart: contentStart };
@@ -375,6 +414,7 @@ function parseReply(fullMatch: string, entry: MetaEntry): AnnotationReply {
 		author: a.author,
 		link: a.link,
 		time: a.time,
+		dateOnly: a.dateOnly,
 		authorSpan: a.authorSpan,
 		authorMeta: a.authorMeta,
 		authorInsert: authorInsertFor(entry.contentStart, entry.channel === "brace" ? "brace" : "label"),
@@ -607,6 +647,7 @@ function buildAnnotation(
 	let author: string | undefined;
 	let link: string | undefined;
 	let time: number | undefined;
+	let dateOnly: boolean | undefined;
 	let authorSpan: TextSpan | undefined;
 	let authorMeta: Record<string, unknown> | undefined;
 	let authorInsert: InsertPoint;
@@ -618,6 +659,7 @@ function buildAnnotation(
 		author = a.author;
 		link = a.link;
 		time = a.time;
+		dateOnly = a.dateOnly;
 		authorSpan = a.authorSpan;
 		authorMeta = a.authorMeta;
 		commentSpan = trimmedSpan(fullMatch, a.restStart, selfEntry.contentEnd);
@@ -633,6 +675,7 @@ function buildAnnotation(
 				author = a.author;
 				link = a.link;
 				time = a.time;
+				dateOnly = a.dateOnly;
 				authorSpan = a.authorSpan;
 				authorMeta = a.authorMeta;
 				lead.start = a.restStart;
@@ -666,6 +709,7 @@ function buildAnnotation(
 		// nothing to add to one and never carries a link.
 		link: body.type === "comment" ? undefined : link,
 		time,
+		dateOnly,
 		authorSpan,
 		authorMeta,
 		authorInsert,

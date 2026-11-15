@@ -57,10 +57,13 @@ export interface Authored {
 	 */
 	link?: string;
 	/**
-	 * When it was written, in seconds since 1970 in UTC, from `[X:T1763065440]`
-	 * or a `time` field in the metadata. Shown in the computer's own time zone.
+	 * When it was written, in seconds since 1970 in UTC, from `[X:T1794601440]`,
+	 * `[X:T2026-11-13 20:24]` or a `time` field in the metadata. Shown in the
+	 * computer's own time zone.
 	 */
 	time?: number;
+	/** The time was written as a date alone, so it is a day on the calendar and has no clock time to show. */
+	dateOnly?: boolean;
 	/** Where an author goes when there is none, and the syntax to wrap it in. */
 	authorInsert: InsertPoint;
 }

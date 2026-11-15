@@ -12,7 +12,7 @@
 
 ### Rendering, known limits
 - [ ] With underlines, an empty insertion or an empty comment has no text to underline and is invisible in the editor until the caret touches it. It still shows in the sidebar. Accepted as the cost of underlines
-- [ ] Reading view leaves an annotation alone when its text carries inline formatting of its own, since Obsidian splits that across elements. Handling that means reassembling text across siblings
+- [ ] Reading view leaves a replacement or a highlight alone when its text carries inline formatting of its own, and any annotation that runs over two paragraphs
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
 ### Needs checking in Obsidian
@@ -24,9 +24,11 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 ### Agreed for a next version
 
 - [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
-- [ ] Reading view: reassemble text across sibling elements so an annotation with bold or a link inside it is styled rather than left raw.
 
 ## Completed Recently
+- [x] With the Admonitions tab open, clicking an admonition in the note or putting the caret in it marks its card and scrolls to it (2026-11-14)
+- [x] Reading view and admonition blocks style a brace deletion, insertion or comment whose text holds a link or other formatting, instead of showing its raw syntax (2026-11-14)
+- [x] Times are written as the date and time in UTC, `[Claude:2026-11-13T20:24:00]@@`, with a setting for seconds, and braces keep seconds. Typed times may take many forms: a date alone, no seconds, a T in front or in the middle, a Z, an offset like +01:00, and `t` and `l` in braces (2026-11-14)
 - [x] Times: written in UTC into every new annotation and comment, `[Claude:T1763065440]@@` or a `time` field in braces, and shown beside the author in the device's time zone, with the full date on hover or tap. Settings for writing them, for date or date and time, and for comment dates on every card (2026-11-13)
 - [x] Links on the cards are drawn as in live preview and open on a click. A click elsewhere on the text still opens the edit box with the raw text (2026-11-13)
 - [x] A reply that starts with a link or a wikilink is unsigned. It was signed by the link text, and signing it with a real name replaced the link text with that name (2026-11-09)

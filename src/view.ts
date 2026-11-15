@@ -1,11 +1,11 @@
 import { ItemView, Keymap, MarkdownRenderer, Menu, Platform, WorkspaceLeaf, setIcon, setTooltip } from "obsidian";
 import type AnnotationReviewPlugin from "../main";
-import { AdmonitionBlock, Annotation, AnnotationType, NoteAnnotations, TextSpan } from "./types";
+import { AdmonitionBlock, Annotation, AnnotationType, Authored, NoteAnnotations, TextSpan } from "./types";
 import { AnnotationFilters, NotesSort } from "./settings";
 import { applyChipColor } from "./authors";
 import { noteOf } from "./actions";
 import { linkPieces } from "./links";
-import { compactDate, fullDate } from "./dates";
+import { dateTexts } from "./dates";
 
 /**
  * Sizes a textarea to its content, so it shows every line and grows as more
@@ -159,6 +159,8 @@ export class AnnotationReviewView extends ItemView {
 	private onScreen = true;
 	/** The card the list last scrolled to, so the same card never moves the list twice. */
 	private scrolledTo: string | null = null;
+	/** The same for the admonition cards. */
+	private scrolledToAdmonition: string | null = null;
 	private visibility: IntersectionObserver | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AnnotationReviewPlugin) {
@@ -178,6 +180,7 @@ export class AnnotationReviewView extends ItemView {
 		if (this.listingNotes()) return;
 		if (this.dataSignature() === this.lastSignature) {
 			this.setActiveAnnotation(this.plugin.activeAnnotationId);
+			this.setActiveAdmonition(this.plugin.activeAdmonitionId);
 			return;
 		}
 		if (this.isEditing()) return;
@@ -229,6 +232,27 @@ export class AnnotationReviewView extends ItemView {
 		}
 	}
 
+	/**
+	 * Marks the admonition card for the block the caret is in or that was
+	 * clicked in the note, by the same rules as the annotation cards. Its
+	 * cards only exist while the Admonitions tab is open.
+	 */
+	setActiveAdmonition(id: string | null, force = false) {
+		const cards = Array.from(this.containerEl.querySelectorAll<HTMLElement>(".annotation-review-admonition-card"));
+		let target: HTMLElement | null = null;
+		for (const card of cards) {
+			const on = id !== null && card.dataset.id === id;
+			card.toggleClass("is-active", on);
+			if (on) target = card;
+		}
+		if (id === null) this.scrolledToAdmonition = null;
+		if (!force && id === this.scrolledToAdmonition) return;
+		if (target && this.onScreen) {
+			target.scrollIntoView({ block: "nearest" });
+			this.scrolledToAdmonition = id;
+		}
+	}
+
 	getViewType() {
 		return VIEW_TYPE_ANNOTATION_REVIEW;
 	}
@@ -249,7 +273,10 @@ export class AnnotationReviewView extends ItemView {
 		// the first tap in it used to be the one that got left behind.
 		this.visibility = new IntersectionObserver(entries => {
 			this.onScreen = entries.some(entry => entry.isIntersecting);
-			if (this.onScreen) this.setActiveAnnotation(this.plugin.activeAnnotationId, true);
+			if (this.onScreen) {
+				this.setActiveAnnotation(this.plugin.activeAnnotationId, true);
+				this.setActiveAdmonition(this.plugin.activeAdmonitionId, true);
+			}
 		});
 		this.visibility.observe(this.containerEl);
 	}
@@ -844,11 +871,10 @@ export class AnnotationReviewView extends ItemView {
 	 * two, since a phone has no hover. A comment's date can be kept for the
 	 * selected card, which a tap on a phone selects too.
 	 */
-	private renderDate(container: Element, time: number | undefined, selectedOnly = false) {
+	private renderDate(container: Element, when: { time?: number; dateOnly?: boolean } | undefined, selectedOnly = false) {
 		const style = this.plugin.settings.dateStyle;
-		if (time === undefined || style === "off") return;
-		const short = compactDate(time, style === "datetime");
-		const full = fullDate(time);
+		if (when?.time === undefined || style === "off") return;
+		const { short, full } = dateTexts({ time: when.time, dateOnly: !!when.dateOnly }, style === "datetime");
 		const el = container.createEl("span", { cls: `annotation-review-date${selectedOnly ? " is-selected-only" : ""}`, text: short });
 		setTooltip(el, full);
 		el.addEventListener("click", evt => {
@@ -865,15 +891,14 @@ export class AnnotationReviewView extends ItemView {
 	private renderAuthoredLine(
 		container: Element,
 		cls: string,
-		author: string | undefined,
-		time: number | undefined,
+		who: Authored,
 		onAuthor: (author: string) => void,
 		renderText: (row: HTMLElement) => HTMLElement
 	): HTMLElement {
 		const row = container.createEl("div", { cls });
 		const byline = row.createEl("span", { cls: `${cls}-byline` });
-		this.renderAuthorBadge(byline, author, `${cls}-author`, onAuthor);
-		this.renderDate(byline, time, !this.plugin.settings.commentDates);
+		this.renderAuthorBadge(byline, who.author, `${cls}-author`, onAuthor);
+		this.renderDate(byline, who, !this.plugin.settings.commentDates);
 		row.appendText(" ");
 		const textEl = renderText(row);
 		// An inline span reports one rect per line it occupies, so more than
@@ -946,7 +971,9 @@ export class AnnotationReviewView extends ItemView {
 		}
 		// When it was written, beside who wrote it. For a comment on a
 		// selection that is the comment, its first reply.
-		this.renderDate(header, isSelectionComment ? (note?.time ?? annotation.time) : (annotation.time ?? note?.time));
+		const own = annotation.time !== undefined ? annotation : undefined;
+		const comment = note?.time !== undefined ? note : undefined;
+		this.renderDate(header, isSelectionComment ? (comment ?? own) : (own ?? comment));
 
 		// The comment itself, on its own line: a comment on a spot carries it
 		// inside, a comment on a selection in its first reply.
@@ -965,8 +992,7 @@ export class AnnotationReviewView extends ItemView {
 				const replyEl = this.renderAuthoredLine(
 					repliesEl,
 					"annotation-review-reply",
-					reply.author,
-					reply.time,
+					reply,
 					a => this.plugin.editAuthor(annotation, reply, a),
 					row => this.renderEditableText(row, "annotation-review-reply-text", annotation, reply.textSpan, reply.text, { inline: true })
 				);
@@ -1170,6 +1196,8 @@ export class AnnotationReviewView extends ItemView {
 
 	private renderAdmonitionItem(container: Element, block: AdmonitionBlock) {
 		const card = container.createEl("div", { cls: "annotation-review-card annotation-review-admonition-card" });
+		card.dataset.id = block.id;
+		if (block.id === this.plugin.activeAdmonitionId) card.addClass("is-active");
 
 		const header = card.createEl("div", { cls: "annotation-review-ad-header" });
 		header.createEl("span", { cls: "annotation-review-ad-type", text: block.adType });
@@ -1192,6 +1220,10 @@ export class AnnotationReviewView extends ItemView {
 
 		card.addEventListener("click", evt => {
 			if ((evt.target as HTMLElement).closest("button")) return;
+			// Marked before the caret gets there, so the list stays where it is.
+			this.plugin.activeAdmonitionId = block.id;
+			this.scrolledToAdmonition = block.id;
+			this.setActiveAdmonition(block.id);
 			this.plugin.revealRange(block.filePath, block.matchStart, block.matchEnd);
 		});
 	}

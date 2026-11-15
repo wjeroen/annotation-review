@@ -9,6 +9,7 @@ import { AnnotationReviewView, VIEW_TYPE_ANNOTATION_REVIEW } from "./src/view";
 import { AnnotationReviewSettings, AnnotationReviewSettingTab, DEFAULT_SETTINGS } from "./src/settings";
 import { editorExtensions } from "./src/editor";
 import { processReadingView } from "./src/reading";
+import { Stamp } from "./src/dates";
 import type { Extension } from "@codemirror/state";
 
 /** Sidebar state that stays on this device, see saveLocalState. */
@@ -61,6 +62,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 	scannedPath: string | null = null;
 	/** The annotation the caret is inside, if any. */
 	activeAnnotationId: string | null = null;
+	/** The admonition block the caret is inside or that was last clicked, if any. */
+	activeAdmonitionId: string | null = null;
 	/** Only the newest scan is allowed to publish its result. */
 	private scanToken = 0;
 	/**
@@ -112,6 +115,22 @@ export default class AnnotationReviewPlugin extends Plugin {
 				if (update.selectionSet || update.docChanged) {
 					const { from, to } = update.state.selection.main;
 					this.syncCursor(update.view, from, to);
+				}
+			})
+		);
+		// A click on an admonition drawn in live preview lands on the drawing,
+		// which leaves the caret where it was, so the click itself says which
+		// block it was. posAtDOM gives where that drawing sits in the note.
+		this.registerEditorExtension(
+			EditorView.domEventHandlers({
+				mousedown: (event, cm) => {
+					if (!(event.target instanceof Node) || !cm.contentDOM.contains(event.target)) return false;
+					try {
+						this.syncAdmonition(cm, cm.posAtDOM(event.target));
+					} catch {
+						// Not part of the document, such as a gutter. Nothing to mark.
+					}
+					return false;
 				}
 			})
 		);
@@ -373,6 +392,10 @@ export default class AnnotationReviewPlugin extends Plugin {
 		this.activeAnnotationId = editor
 			? (innermostAt(this.annotations, editor.posToOffset(editor.getCursor("from")), editor.posToOffset(editor.getCursor("to")))?.id ?? null)
 			: null;
+		// A block marked by a click on its drawing keeps its mark, since that
+		// click left the caret elsewhere. The caret inside a block wins.
+		const blockAtCaret = editor ? this.admonitionAt(editor.posToOffset(editor.getCursor("from"))) : null;
+		this.activeAdmonitionId = blockAtCaret ?? (this.admonitions.some(b => b.id === this.activeAdmonitionId) ? this.activeAdmonitionId : null);
 		this.refreshView();
 
 		// The note on screen changed while this one was being read, so nothing
@@ -411,12 +434,34 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 */
 	private syncCursor(cm: EditorView, from: number, to: number) {
 		if (this.pathForEditorView(cm) !== this.scannedPath) return;
+		this.syncAdmonition(cm, from);
 		const id = innermostAt(this.annotations, from, to)?.id ?? null;
 		if (id === this.activeAnnotationId) return;
 		this.activeAnnotationId = id;
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
 			const view = leaf.view;
 			if (view instanceof AnnotationReviewView) view.setActiveAnnotation(id);
+		}
+	}
+
+	/** The admonition block holding a spot in the scanned note, its closing fence included. */
+	private admonitionAt(pos: number): string | null {
+		return this.admonitions.find(b => pos >= b.matchStart && pos <= b.matchEnd)?.id ?? null;
+	}
+
+	/**
+	 * Marks the admonition card for the block at `pos`, the way the caret marks
+	 * an annotation card. The cards are only there while the Admonitions tab
+	 * is open, so nothing shows on the other tab.
+	 */
+	private syncAdmonition(cm: EditorView, pos: number) {
+		if (this.pathForEditorView(cm) !== this.scannedPath) return;
+		const id = this.admonitionAt(pos);
+		if (id === this.activeAdmonitionId) return;
+		this.activeAdmonitionId = id;
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_ANNOTATION_REVIEW)) {
+			const view = leaf.view;
+			if (view instanceof AnnotationReviewView) view.setActiveAdmonition(id);
 		}
 	}
 
@@ -440,13 +485,14 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const author = m ? m[1].trim() : "";
 		const text = (m ? replyText.slice(m[0].length) : replyText).trim();
 		if (!text) return;
-		const time = this.stamp();
-		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text, time));
+		const stamp = this.stamp();
+		await this.mutate(annotation.filePath, content => computeAddReply(content, annotation, author, text, stamp));
 	}
 
-	/** The time written into a new annotation or reply, in seconds since 1970 in UTC, unless that is switched off. */
-	stamp(): number | undefined {
-		return this.settings.writeTimes ? Math.floor(Date.now() / 1000) : undefined;
+	/** The time written into a new annotation or reply, now, in the notation chosen, unless that is switched off. */
+	stamp(): Stamp | undefined {
+		if (!this.settings.writeTimes) return undefined;
+		return { time: Math.floor(Date.now() / 1000), seconds: this.settings.timeNotation === "seconds" };
 	}
 
 	/** Sets, changes or clears the author of an annotation or of one of its replies. */
@@ -710,8 +756,8 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const at = editor.posToOffset(editor.getCursor("from"));
 		const context = getInsertContext(editor.getValue(), at);
 		const { wrappers, fencedFallback, defaultAuthor } = this.settings;
-		const time = this.stamp();
-		const build = (sel: string) => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, time);
+		const stamp = this.stamp();
+		const build = (sel: string) => composeInsert(sel, defaultAuthor, context, wrappers.insert, fencedFallback, stamp);
 		// With nothing selected the insertion is empty and the caret lands
 		// inside it, ready to type, the way a comment on a spot works.
 		if (!editor.getSelection()) {
@@ -749,18 +795,18 @@ export default class AnnotationReviewPlugin extends Plugin {
 	 */
 	private comment(editor: Editor) {
 		const { defaultAuthor: author, channel } = this.settings;
-		const time = this.stamp();
+		const stamp = this.stamp();
 		const target = this.annotationAtCaret(editor);
 		if (target?.wrapper === "html") {
 			new Notice("Annotation Review: an HTML comment takes no comments.");
 			return;
 		}
 		if (target) {
-			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel, time));
+			this.insertAtCaret(editor, target.matchEnd, openReply(author, target.nextChannel, stamp));
 			return;
 		}
 		if (editor.getSelection()) {
-			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel, time));
+			this.annotate(editor, sel => composeComment(sel, author, this.wrapperFor("comment", editor), channel, stamp));
 			return;
 		}
 		// Percent marks do not render inside a fenced block, and a highlight
@@ -768,7 +814,7 @@ export default class AnnotationReviewPlugin extends Plugin {
 		const at = editor.posToOffset(editor.getCursor());
 		const chosen = this.settings.pointCommentWrapper;
 		const wrapper: Wrapper = chosen === "percent" && getInsertContext(editor.getValue(), at).kind === "fenced" ? "brace" : chosen;
-		this.insertAtCaret(editor, at, composePointComment(author, wrapper, time));
+		this.insertAtCaret(editor, at, composePointComment(author, wrapper, stamp));
 	}
 
 	private pickAnnotationType(editor: Editor) {

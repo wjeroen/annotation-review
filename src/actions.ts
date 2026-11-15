@@ -1,6 +1,7 @@
 import { Annotation, AnnotationReply, Authored } from "./types";
 import { replyEntry } from "./compose";
-import { detectAnnotations } from "./detect";
+import { detectAnnotations, labelMarkers } from "./detect";
+import { Stamp } from "./dates";
 
 export type AnnotationAction = "approve" | "dismiss";
 
@@ -122,11 +123,11 @@ export function computeLinkedMutation(content: string, annotations: Annotation[]
 }
 
 /** A reply goes on the end, in the same channel as the entries already there. */
-export function computeAddReply(content: string, annotation: Annotation, author: string, text: string, time?: number): MutationResult {
+export function computeAddReply(content: string, annotation: Annotation, author: string, text: string, stamp?: Stamp): MutationResult {
 	const start = locate(content, annotation);
 	if (start === null) return { ok: false, reason: NOT_FOUND };
 	const end = start + annotation.fullMatch.length;
-	return applyChanges(content, [{ from: end, to: end, replacement: replyEntry(author, text, annotation.nextChannel, time) }]);
+	return applyChanges(content, [{ from: end, to: end, replacement: replyEntry(author, text, annotation.nextChannel, stamp) }]);
 }
 
 /**
@@ -157,16 +158,12 @@ function rewriteAuthor(current: string, author: string, meta?: Record<string, un
 		const fields: Record<string, unknown> = author ? { author, ...(meta ?? {}) } : { ...(meta ?? {}) };
 		return Object.keys(fields).length ? JSON.stringify(fields) + "@@" : "";
 	}
-	// Markers are known by their shape, a letter and digits, wherever in the
-	// bracket they sit, `[X:L3]@@` inside a wrapper or `[X:T1763065440] ` at
-	// the start of a reply.
+	// Markers are known by their shape wherever in the bracket they sit,
+	// `[X:L3]@@` inside a wrapper or `[X:T2026-11-13 20:24] ` at the start of a
+	// reply, and the parser says which parts they are.
 	const label = /^\[([^\]]*)\](@@|\s*)$/.exec(current);
 	if (!label) return author ? `[${author}]` + current.replace(/^\[[^\]]*\]/, "") : "";
-	const markers = label[1]
-		.split(":")
-		.map(part => part.trim())
-		.filter(part => /^[LT]\d+$/.test(part));
-	const inside = [author, ...markers].filter(Boolean).join(":");
+	const inside = [author, ...labelMarkers(label[1])].filter(Boolean).join(":");
 	return inside ? `[${inside}]${label[2]}` : "";
 }
 
