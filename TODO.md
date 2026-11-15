@@ -12,7 +12,7 @@
 
 ### Rendering, known limits
 - [ ] With underlines, an empty insertion or an empty comment has no text to underline and is invisible in the editor until the caret touches it. It still shows in the sidebar. Accepted as the cost of underlines
-- [ ] Reading view leaves a replacement or a highlight alone when its text carries inline formatting of its own, and any annotation that runs over two paragraphs
+- [ ] Reading view leaves a replacement or a highlight alone when its text carries inline formatting of its own, and an annotation over several paragraphs outside an admonition block, since it hands those over one paragraph at a time
 - [ ] `C:\dev\obsidian-criticmarkup` is a clone of Fevol's plugin for reference on the decorations and gutter
 
 ### Needs checking in Obsidian
@@ -26,6 +26,7 @@ The checklist with fixtures lives in the vault's Annotation Review Test note rat
 - [ ] P2 **Document-end footnotes as annotations**, the `[^1]` in the text with `[^1]: content` at the bottom, which the upstream highlights plugin also accepts. Worth doing, but note it is the first annotation type whose text lives somewhere else in the file, so approve and dismiss have to edit two places at once and the definition has to be removed without disturbing the numbering of the others. Expect this to be the most invasive of the four.
 
 ## Completed Recently
+- [x] Reading view and admonition blocks style a brace annotation that runs over several list items, and inside an admonition over several paragraphs too (2026-11-14)
 - [x] With the Admonitions tab open, clicking an admonition in the note or putting the caret in it marks its card and scrolls to it (2026-11-14)
 - [x] Reading view and admonition blocks style a brace deletion, insertion or comment whose text holds a link or other formatting, instead of showing its raw syntax (2026-11-14)
 - [x] Times are written in one notation in every wrapper and reply: Unix time, `[Claude:T1794601440]@@`, by default, or the date and time, `2026-11-13T20:24:00Z`, through a setting, in quotes in braces. Typed times may take many forms: a date alone, no seconds, a T in front or in the middle, a Z, an offset like +01:00, and `t` and `l` in braces (2026-11-14)

@@ -174,26 +174,32 @@ const SPLIT: Record<string, { close: string; cls: string }> = {
 };
 
 /**
- * One brace annotation that opens in `start` and closes in a later text node
- * beside it, with a link or other formatting in between, styled as one. Its
- * pieces go under one span, the elements between them included, so a link
- * stays a link. It is left as it is when the closing marks are not among the
- * nodes beside it, sit inside an element, or come after another opening, so
- * an annotation that runs over two paragraphs or holds another one stays raw
- * rather than half styled.
+ * One brace annotation that opens in `start` and closes in a later text node,
+ * split by a link or other formatting, or running over several blocks. It is
+ * left raw when another annotation opens on the way, rather than half styled.
  */
-function joinSplit(start: Text) {
+function joinSplit(start: Text, root: HTMLElement) {
 	const open = OPENER.exec(start.data);
 	if (!open) return;
+	if (start.data.includes(SPLIT[open[0]].close, open.index + 3)) return;
+	if (!joinSiblings(start, open)) colorAcross(start, open, root);
+}
+
+/**
+ * The pieces sit side by side in one parent: they go under one span, the
+ * elements between them included, so a link stays a link. False when the
+ * closing marks are not among the nodes beside the opening, so the caller
+ * looks further.
+ */
+function joinSiblings(start: Text, open: RegExpExecArray): boolean {
 	const { close, cls } = SPLIT[open[0]];
-	if (start.data.includes(close, open.index + 3)) return;
 	const between: Node[] = [];
 	let end: Text | null = null;
 	let endAt = -1;
 	for (let n = start.nextSibling; n; n = n.nextSibling) {
 		if (n instanceof Text) {
 			const at = n.data.indexOf(close);
-			if (OPENER.test(at === -1 ? n.data : n.data.slice(0, at))) return;
+			if (OPENER.test(at === -1 ? n.data : n.data.slice(0, at))) return true;
 			if (at !== -1) {
 				end = n;
 				endAt = at;
@@ -201,11 +207,12 @@ function joinSplit(start: Text) {
 			}
 		} else {
 			const inner = n.textContent ?? "";
-			if (inner.includes(close) || OPENER.test(inner)) return;
+			if (OPENER.test(inner)) return true;
+			if (inner.includes(close)) return false;
 		}
 		between.push(n);
 	}
-	if (!end) return;
+	if (!end) return false;
 
 	const isComment = open[0] === "{>>";
 	const style = isComment ? commentStyle : changeStyle;
@@ -225,6 +232,75 @@ function joinSplit(start: Text) {
 	if (isComment) {
 		(lead ?? span).classList.add("arv-attached");
 		span.classList.add("arv-gap-after");
+	}
+	return true;
+}
+
+/**
+ * The closing marks sit in a later block of the same drawing, a later list
+ * item or paragraph. One span cannot hold several blocks, so every piece of
+ * text between the marks gets a span of its own, which looks the same, and
+ * the marks and the author go. The line breaks between blocks are left out,
+ * and so is text an inner annotation already styled. Reading view hands over
+ * one paragraph at a time, so this only reaches a list there, while an
+ * admonition block arrives whole.
+ */
+function colorAcross(start: Text, open: RegExpExecArray, root: HTMLElement) {
+	const { close, cls } = SPLIT[open[0]];
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const between: Text[] = [];
+	let end: Text | null = null;
+	let endAt = -1;
+	// The walk starts at the top and counts from the opening node on, rather
+	// than starting at that node, so it does not depend on setting currentNode.
+	let after = false;
+	for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+		if (!after) {
+			after = n === start;
+			continue;
+		}
+		if (!(n instanceof Text) || insideCode(n)) continue;
+		const at = n.data.indexOf(close);
+		if (OPENER.test(at === -1 ? n.data : n.data.slice(0, at))) return;
+		if (at !== -1) {
+			end = n;
+			endAt = at;
+			break;
+		}
+		between.push(n);
+	}
+	if (!end) return;
+
+	const isComment = open[0] === "{>>";
+	const style = isComment ? commentStyle : changeStyle;
+	const { author, rest } = splitAuthor(start.data.slice(open.index + 3), isComment);
+	const pieces: HTMLElement[] = [];
+	start.data = start.data.slice(0, open.index);
+	if (rest) {
+		const first = piece(cls, rest, author, style);
+		start.after(first);
+		pieces.push(first);
+	}
+	for (const n of between) {
+		if (!n.data.trim() && n.data.includes("\n")) continue;
+		if (n.parentElement?.closest(".arv-del, .arv-ins, .arv-comment, .arv-chip")) continue;
+		const span = piece(cls, n.data, author, style);
+		n.replaceWith(span);
+		pieces.push(span);
+	}
+	const tail = end.data.slice(0, endAt);
+	end.data = end.data.slice(endAt + 3);
+	if (tail) {
+		const last = piece(cls, tail, author, style);
+		end.before(last);
+		pieces.push(last);
+	}
+	if (pieces.length === 0) return;
+	const lead = author && style === "chip" ? chip(author) : null;
+	if (lead) pieces[0].before(lead);
+	if (isComment) {
+		(lead ?? pieces[0]).classList.add("arv-attached");
+		pieces[pieces.length - 1].classList.add("arv-gap-after");
 	}
 }
 
@@ -321,7 +397,7 @@ export function processReadingView(root: HTMLElement, settings: ReadingSettings)
 	for (let node = walkerSplit.nextNode(); node; node = walkerSplit.nextNode()) {
 		if (node instanceof Text && !insideCode(node) && OPENER.test(node.data)) openers.push(node);
 	}
-	for (const node of openers) joinSplit(node);
+	for (const node of openers) joinSplit(node, root);
 
 	// Footnote bodies at the bottom: the label at the start becomes the author.
 	// The underline runs over the whole body, links and formatting included,
