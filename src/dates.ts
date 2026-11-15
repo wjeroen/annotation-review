@@ -55,11 +55,12 @@ export function parseTime(text: string, bareSeconds = false): ReadTime | undefin
 
 /**
  * How the plugin writes a time into a note: the date and the clock time in
- * UTC, to the second, `2026-11-13T20:24:00`, the RFC 3339 form without its
- * zone, since a time with no zone is UTC.
+ * UTC, to the second, `2026-11-13T20:24:00Z`, the RFC 3339 form. RFC 3339
+ * requires the zone, so the Z is written, although the plugin reads a time
+ * without one as UTC too.
  */
 export function formatTime(time: number): string {
-	return new Date(time * 1000).toISOString().slice(0, 19);
+	return new Date(time * 1000).toISOString().slice(0, 19) + "Z";
 }
 
 /** The time to write into a new annotation, and whether to write it as seconds since 1970 instead of a date. */

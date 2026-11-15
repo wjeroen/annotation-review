@@ -236,7 +236,7 @@ export class AnnotationReviewSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName("Time notation")
 				.setDesc("How the time is written in highlights, percent marks and footnotes. Braces always get seconds, since the CriticMarkup plugin reads nothing else there."),
-			{ date: "Date and time, 2026-11-13T20:24:00", seconds: "Seconds since 1970, T1794601440" },
+			{ date: "Date and time, 2026-11-13T20:24:00Z", seconds: "Seconds since 1970, T1794601440" },
 			settings.timeNotation,
 			async value => {
 				settings.timeNotation = value as TimeNotation;

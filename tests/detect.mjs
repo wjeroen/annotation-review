@@ -165,17 +165,17 @@ check("on a brace reply", repliesWithTimes(`{--x--}{>>{"author":"Alex","time":${
 // What the plugin writes: the date and time in UTC by default, seconds when asked for.
 const NOW = { time: T };
 const SECONDS = { time: T, seconds: true };
-check("written as a date and time in a highlight", composeDelete("x", "Claude", "highlight", NOW).text, "==--[Claude:2026-11-13T20:24:00]@@x--==");
+check("written as a date and time in a highlight", composeDelete("x", "Claude", "highlight", NOW).text, "==--[Claude:2026-11-13T20:24:00Z]@@x--==");
 check("written as seconds when asked", composeDelete("x", "Claude", "highlight", SECONDS).text, `==--[Claude:T${T}]@@x--==`);
 check("braces always get seconds", composeDelete("x", "Claude", "brace", NOW).text, `{--{"author":"Claude","time":${T}}@@x--}`);
-check("written with no author", composeInsert("x", "", PLAIN, "percent", "brace", NOW).text, "%%++[2026-11-13T20:24:00]@@x++%%");
-check("written on a footnote reply", replyEntry("Joe", "ok", "footnote", NOW), "^[[Joe:2026-11-13T20:24:00] ok]");
+check("written with no author", composeInsert("x", "", PLAIN, "percent", "brace", NOW).text, "%%++[2026-11-13T20:24:00Z]@@x++%%");
+check("written on a footnote reply", replyEntry("Joe", "ok", "footnote", NOW), "^[[Joe:2026-11-13T20:24:00Z] ok]");
 check("written on a brace reply, in seconds", replyEntry("Joe", "ok", "brace", NOW), `{>>{"author":"Joe","time":${T}}@@ok<<}`);
-check("a comment on a selection carries it on the comment", composeComment("Sel.", "C", "highlight", "footnote", NOW).text, "==Sel.==^[[C:2026-11-13T20:24:00] ]");
+check("a comment on a selection carries it on the comment", composeComment("Sel.", "C", "highlight", "footnote", NOW).text, "==Sel.==^[[C:2026-11-13T20:24:00Z] ]");
 const stamped = computeAddReply("{--x--}", one("{--x--}"), "Joe", "ok", NOW).newContent;
-check("a comment added from the sidebar", stamped, "{--x--}^[[Joe:2026-11-13T20:24:00] ok]");
+check("a comment added from the sidebar", stamped, "{--x--}^[[Joe:2026-11-13T20:24:00Z] ok]");
 check("reads back", repliesWithTimes(stamped), [["Joe", T, "ok"]]);
-check("a written time beside a link reads back", timeOf("%%++[Claude:L4:2026-11-13T20:24:00]@@x++%%"), ["Claude", "4", T]);
+check("a written time beside a link reads back", timeOf("%%++[Claude:L4:2026-11-13T20:24:00Z]@@x++%%"), ["Claude", "4", T]);
 check("renaming keeps the time", setAuthor(`==--[Claude:T${T}]@@x--==`, "Joe"), `==--[Joe:T${T}]@@x--==`);
 check("clearing the author keeps it too", setAuthor(`==--[Claude:T${T}]@@x--==`, ""), `==--[T${T}]@@x--==`);
 check("renaming a footnote reply keeps it", setAuthor(`{--x--}^[[Alex:T${T}] why]`, "Joe", a => a.replies[0]), `{--x--}^[[Joe:T${T}] why]`);
@@ -217,7 +217,7 @@ check("an offset without its colon", dated("==--[Claude:2026-11-13T21:24+0100]@@
 check("a fraction of a second", dated("==--[Claude:2026-11-13T20:24:00.87Z]@@x--=="), ["Claude", null, T, false]);
 check("an offset in a quoted field", dated('{--{"author":"Claude","time":"2026-11-13T21:24:00+01:00"}@@x--}'), ["Claude", null, T, false]);
 check("renaming keeps an offset", setAuthor("==--[Claude:2026-11-13T21:24:00+01:00]@@x--==", "Joe"), "==--[Joe:2026-11-13T21:24:00+01:00]@@x--==");
-check("the written form", formatTime(T), "2026-11-13T20:24:00");
+check("the written form", formatTime(T), "2026-11-13T20:24:00Z");
 check("a date alone shown in full has no clock", (s => s.includes("13 November 2026") && !s.includes("00:00"))(fullDate(DAY, true, "en-GB", "UTC")), true);
 
 console.log("\n=== Comments on a spot ===");

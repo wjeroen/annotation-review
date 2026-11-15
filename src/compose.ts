@@ -42,7 +42,7 @@ function metadata(author: string, stamp?: Stamp): string {
 }
 
 /**
- * The inside of a label, `Claude:2026-11-13T20:24:00`, or `Claude:T1794601440`
+ * The inside of a label, `Claude:2026-11-13T20:24:00Z`, or `Claude:T1794601440`
  * when seconds are asked for. Empty when there is neither.
  */
 function label(author: string, stamp?: Stamp): string {
@@ -53,7 +53,7 @@ function label(author: string, stamp?: Stamp): string {
 /**
  * The author and the time as they go inside a wrapper: metadata in braces,
  * so the CriticMarkup plugin agrees on both, and the lighter
- * `[X:2026-11-13T20:24:00]@@` elsewhere.
+ * `[X:2026-11-13T20:24:00Z]@@` elsewhere.
  */
 export function authorPrefix(author: string, wrapper: Wrapper, stamp?: Stamp): string {
 	if (wrapper === "brace") return metadata(author, stamp);
